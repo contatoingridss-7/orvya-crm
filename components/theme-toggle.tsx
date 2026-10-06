@@ -1,9 +1,9 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { MoonIcon, SunIcon } from "@/components/ui/icons";
+import { saveTheme } from "@/lib/auth/actions";
 
-// Preferência local. Na Fase 1 também passa a ser salva em profiles.theme (por usuário).
 export const THEME_STORAGE_KEY = "orvya-theme";
 
 type Theme = "light" | "dark";
@@ -32,7 +32,7 @@ function subscribe(onChange: () => void) {
   };
 }
 
-function setTheme(theme: Theme) {
+function applyTheme(theme: Theme) {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch {
@@ -42,7 +42,8 @@ function setTheme(theme: Theme) {
   listeners.forEach((l) => l());
 }
 
-export function ThemeToggle() {
+/** Botão claro/escuro. Com `persist`, a escolha também vai para o perfil do usuário. */
+export function ThemeToggle({ persist = false }: { persist?: boolean }) {
   // No servidor não sabemos o tema; o ícone aparece depois de montar.
   const theme = useSyncExternalStore<Theme | null>(subscribe, effectiveTheme, () => null);
   const next: Theme = theme === "dark" ? "light" : "dark";
@@ -51,13 +52,27 @@ export function ThemeToggle() {
     <button
       type="button"
       className="icon-btn"
-      onClick={() => setTheme(next)}
+      onClick={() => {
+        applyTheme(next);
+        if (persist) void saveTheme(next);
+      }}
       aria-label={next === "dark" ? "Mudar para o modo escuro" : "Mudar para o modo claro"}
       title={next === "dark" ? "Modo escuro" : "Modo claro"}
     >
       {theme === null ? null : theme === "dark" ? <SunIcon /> : <MoonIcon />}
     </button>
   );
+}
+
+/**
+ * Aplica o tema salvo no perfil ao entrar em outro aparelho.
+ * Sem preferência salva, segue o tema do aparelho (padrão da SPEC).
+ */
+export function ThemeSync({ theme }: { theme: Theme | null }) {
+  useEffect(() => {
+    if (theme && readStored() !== theme) applyTheme(theme);
+  }, [theme]);
+  return null;
 }
 
 /** Script que roda antes da pintura para aplicar o tema salvo sem piscar. */

@@ -1,98 +1,68 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Brand, Signature } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Notice } from "@/components/ui/notice";
-import { Panel } from "@/components/ui/panel";
-import { Pill } from "@/components/ui/pill";
-import { checkDatabase, type DbHealth } from "@/lib/supabase/health";
-import { ComponentShowcase } from "./component-showcase";
+import { homeSection, ROLE_LABEL } from "@/lib/auth/roles";
+import { requireViewer } from "@/lib/auth/viewer";
+import { firstName, monogram } from "@/lib/names";
 
-// Página provisória da Fase 0. Na Fase 1 vira o redirecionamento para /login ou para a empresa.
-export const dynamic = "force-dynamic";
-
-const TABLE_LABEL: Record<string, string> = {
-  companies: "Empresas",
-  pipelines: "Funis",
-  stages: "Etapas",
-  automation_rules: "Automações",
-  products: "Produtos no catálogo",
-  whatsapp_numbers: "Números de WhatsApp (vagas)",
-};
-
+/**
+ * Depois do login: quem tem uma empresa vai direto para ela;
+ * administrador e quem tem mais de uma escolhem aqui.
+ */
 export default async function Home() {
-  const health = await checkDatabase();
+  const viewer = await requireViewer();
+  const [only] = viewer.companies;
+
+  if (viewer.companies.length === 1 && only && !viewer.isAdmin) {
+    redirect(`/${only.slug}/${homeSection(only.role)}`);
+  }
 
   return (
-    <main className="mx-auto grid w-full max-w-[960px] gap-4 px-4 pt-6 pb-12 sm:px-7">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col justify-center gap-6 px-4 py-10">
       <header className="flex items-center gap-3">
         <Brand />
         <div className="flex-1" />
-        <ThemeToggle />
+        <ThemeToggle persist />
       </header>
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-[-0.03em]">Base do projeto</h1>
-        <p className="mt-0.5 text-[13px] text-muted">Fase 0 — conferência da conexão com o banco e dos componentes visuais.</p>
-      </div>
-
-      <Panel title="Banco de dados (Supabase)" subtitle="Projeto psewjkrpwnmrmiwwmcgw · região São Paulo">
-        <DatabaseStatus health={health} />
-      </Panel>
-
-      <ComponentShowcase />
-
-      <footer className="flex justify-center pt-4">
-        <Signature />
-      </footer>
-    </main>
-  );
-}
-
-function DatabaseStatus({ health }: { health: DbHealth }) {
-  if (health.state === "offline") {
-    return (
-      <Notice tone="bad">
-        Não foi possível falar com o Supabase: {health.message}. Confira a URL e a anon key em .env.local.
-      </Notice>
-    );
-  }
-
-  if (health.state === "no-schema") {
-    return (
-      <div className="grid gap-3">
-        <div className="flex flex-wrap gap-2">
-          <Pill tone="ok">Conectado</Pill>
-          <Pill tone="warn">Tabelas ainda não criadas</Pill>
+      <section className="panel grid gap-4 !p-6">
+        <div>
+          <h1 className="text-[22px] font-bold tracking-[-0.03em]">Olá, {firstName(viewer.fullName)}</h1>
+          <p className="mt-1 text-[13px] text-muted">
+            {viewer.companies.length ? "Escolha a empresa para continuar." : "Seu usuário ainda não foi ligado a nenhuma empresa."}
+          </p>
         </div>
-        <Notice tone="warn">
-          O projeto responde, mas o banco está vazio. Rode <b>supabase/migrations/0001_init.sql</b> e depois{" "}
-          <b>supabase/seed.sql</b> no SQL Editor do Supabase e recarregue esta página.
-        </Notice>
-      </div>
-    );
-  }
 
-  return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap gap-2">
-        <Pill tone="ok">Conectado</Pill>
-        <Pill tone="ok">Tabelas criadas</Pill>
-        {health.counts && <Pill tone={health.counts.companies ? "ok" : "warn"}>{health.counts.companies ? "Dados iniciais carregados" : "Seed pendente"}</Pill>}
+        {viewer.companies.length > 0 ? (
+          <div className="grid gap-2">
+            {viewer.companies.map((c) => (
+              <Link key={c.slug} href={`/${c.slug}/${homeSection(c.role)}`} className="co-btn !p-3.5">
+                <span className="mono" data-co={c.slug}>
+                  {monogram(c)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <b>{c.name}</b>
+                  {c.segment && <small>{c.segment}</small>}
+                </span>
+                <span className="pill">{ROLE_LABEL[c.role]}</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="empty m-0">Peça ao administrador para incluir você em uma empresa.</p>
+        )}
+
+        <form action="/auth/sair" method="post" className="justify-self-center">
+          <button type="submit" className="btn ghost sm">
+            Sair
+          </button>
+        </form>
+      </section>
+
+      <div className="flex justify-center">
+        <Signature />
       </div>
-      {health.counts ? (
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {Object.entries(health.counts).map(([table, count]) => (
-            <div key={table} className="rounded-[10px] border border-line bg-surface-2 px-3 py-2">
-              <dt className="text-[11px] text-muted">{TABLE_LABEL[table] ?? table}</dt>
-              <dd className="m-0 text-base font-bold text-title tabular-nums">{count}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <Notice>
-          Para conferir os dados iniciais (empresas, funis, catálogo), cole a <b>service_role key</b> em .env.local.
-          Sem login, o RLS esconde tudo — é o comportamento esperado.
-        </Notice>
-      )}
-    </div>
+    </main>
   );
 }

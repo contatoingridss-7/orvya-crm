@@ -10,6 +10,13 @@ export const ROLE_LABEL: Record<Role, string> = {
   vendedor: "Vendedor",
 };
 
+export const MEMBER_ROLES: MemberRole[] = ["gestor", "vendedor"];
+
 export function isManager(role: Role): boolean {
   return role === "admin" || role === "gestor";
+}
+
+/** Tela inicial de cada perfil: vendedor cai em Meu dia; admin e gestor no Painel. */
+export function homeSection(role: Role): string {
+  return role === "vendedor" ? "meu-dia" : "painel";
 }
