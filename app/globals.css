@@ -581,6 +581,75 @@ select option {
     border-left-color: var(--lost);
   }
 
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .tabs {
+    display: flex;
+    gap: 3px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 3px;
+    flex-wrap: wrap;
+  }
+  .tabs button {
+    border: 0;
+    background: none;
+    border-radius: 9px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .tabs button:hover {
+    color: var(--ink);
+  }
+  .tabs button[aria-pressed="true"] {
+    background: var(--grad);
+    color: #fff;
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0 12px;
+    min-width: 220px;
+    height: 40px;
+  }
+  .search svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 2;
+    flex: none;
+  }
+  .search input {
+    border: 0;
+    background: none;
+    outline: none;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+  }
+  .icon-btn svg,
+  .top form svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   .scroll-x {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

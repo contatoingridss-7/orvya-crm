@@ -15,8 +15,10 @@
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "next": "^15.5.27",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "read-excel-file": "^9.3.10",
     "server-only": "^0.0.1",
     "zod": "^4.6.5"
   },
