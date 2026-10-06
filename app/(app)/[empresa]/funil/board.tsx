@@ -21,7 +21,8 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import type { BoardLead, CatalogOption, CustomField, Option, Person, Pipeline, Stage } from "@/lib/crm/types";
 import { TEMPERATURE_LABEL } from "@/lib/crm/types";
-import { formatBRL, formatBRLShort, timeAgo } from "@/lib/format";
+import { TimeAgo } from "@/components/time-ago";
+import { formatBRL, formatBRLShort } from "@/lib/format";
 import { firstName, initials } from "@/lib/names";
 import { moveLead } from "./actions";
 import { LeadDrawer } from "./lead-drawer";
@@ -215,7 +216,8 @@ export function Board(props: BoardProps) {
         </p>
       )}
 
-      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+      {/* id fixo: sem ele a biblioteca gera ids de acessibilidade diferentes no servidor e no navegador */}
+      <DndContext id={`funil-${pipeline.id}`} sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
         <div className="board" aria-label={`Funil ${pipeline.name}`}>
           {stages.map((stage) => {
             const items = visible.filter((l) => l.stageId === stage.id);
@@ -349,7 +351,9 @@ function LeadCard({ lead: l, ownerName, onOpen, overlay, dragging, nodeRef, drag
         ) : (
           <Pill tone="warn">Sem responsável</Pill>
         )}
-        <span className="r">{l.lastContactAt ? timeAgo(l.lastContactAt) : timeAgo(l.createdAt)}</span>
+        <span className="r">
+          <TimeAgo date={l.lastContactAt ?? l.createdAt} />
+        </span>
       </span>
     </button>
   );

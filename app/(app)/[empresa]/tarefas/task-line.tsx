@@ -63,7 +63,9 @@ export function TaskLine({ task: t, slug, viewerId, manager, showLead = true, on
       {t.doneAt ? (
         <span className="text-xs text-muted">Concluída</span>
       ) : (
-        <Pill tone={group === "atrasadas" ? "bad" : group === "hoje" ? "warn" : "neutral"}>{dueLabel(t.dueAt)}</Pill>
+        <Pill tone={group === "atrasadas" ? "bad" : group === "hoje" ? "warn" : "neutral"}>
+          <span suppressHydrationWarning>{dueLabel(t.dueAt)}</span>
+        </Pill>
       )}
       {!t.doneAt && canChange && (
         <button type="button" className="text-xs font-semibold text-tint-ink hover:underline" disabled={pending} onClick={() => run(() => postponeTask(slug, t.id, 1))}>
