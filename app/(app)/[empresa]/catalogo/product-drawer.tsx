@@ -56,7 +56,6 @@ function ProductForm({ product, onClose, slug, canEdit, isLoc, categories }: Omi
         salePrice,
         rentPriceMonth: get("rentPriceMonth"),
         stock: get("stock") || "0",
-        rentedCount: get("rentedCount") || "0",
         promoLabel: get("promoLabel"),
         aiNotes: get("aiNotes"),
         isRental,
@@ -172,10 +171,14 @@ function ProductForm({ product, onClose, slug, canEdit, isLoc, categories }: Omi
             defaultValue={product?.stock ?? 0}
             hint={product?.stockUpdatedAt ? `Atualizado pela importação em ${formatDateTime(product.stockUpdatedAt)}` : undefined}
           />
-          {isRental ? (
-            <TextField label="Em locação agora" name="rentedCount" type="number" min={0} step={1} defaultValue={product?.rentedCount ?? 0} />
-          ) : (
-            <input type="hidden" name="rentedCount" value={product?.rentedCount ?? 0} />
+          {isRental && (
+            <TextField
+              label="Em locação agora"
+              value={String(product?.rentedCount ?? 0)}
+              disabled
+              readOnly
+              hint="Contado pelos contratos ativos no funil Locação."
+            />
           )}
           <TextField label="Campanha" name="promoLabel" defaultValue={product?.promoLabel ?? ""} placeholder="Ex.: Oferta de outubro" className={isRental ? "sm:col-span-2" : ""} />
           <TextAreaField

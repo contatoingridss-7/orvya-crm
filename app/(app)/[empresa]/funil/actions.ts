@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isManager } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { parseMoneyInput } from "@/lib/catalog/types";
+import { CONTRACT_SELECT, toContract, type ContractRow } from "@/lib/crm/rentals";
 import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import type { LeadDetail } from "@/lib/crm/types";
 import { toE164 } from "@/lib/phone";
@@ -367,7 +368,7 @@ export async function loadLeadDetail(slug: string, leadId: string): Promise<Acti
   const ctx = await context(slug);
   if (!ctx) return NO_ACCESS;
 
-  const [acts, tasks, prods] = await Promise.all([
+  const [acts, tasks, prods, contracts] = await Promise.all([
     ctx.supabase
       .from("activities")
       .select("id, kind, body, created_at, profiles(full_name)")
@@ -381,14 +382,16 @@ export async function loadLeadDetail(slug: string, leadId: string): Promise<Acti
       .select("mode, quantity, products(id, name, code, sale_price, rent_price_month, requires_human)")
       .eq("lead_id", leadId)
       .returns<LeadProductRow[]>(),
+    ctx.supabase.from("rental_contracts").select(CONTRACT_SELECT).eq("lead_id", leadId).order("start_date", { ascending: false }).returns<ContractRow[]>(),
   ]);
-  if (acts.error || tasks.error || prods.error) return { ok: false, error: "Não foi possível carregar o lead." };
+  if (acts.error || tasks.error || prods.error || contracts.error) return { ok: false, error: "Não foi possível carregar o lead." };
 
   return {
     ok: true,
     data: {
       activities: (acts.data ?? []).map((a) => ({ id: a.id, kind: a.kind, body: a.body, userName: a.profiles?.full_name ?? null, createdAt: a.created_at })),
       tasks: (tasks.data ?? []).map(toTask),
+      contracts: (contracts.data ?? []).map(toContract),
       products: (prods.data ?? []).flatMap((p) =>
         p.products
           ? [

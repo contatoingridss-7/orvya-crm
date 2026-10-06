@@ -9,7 +9,8 @@ import type { MemberRole } from "@/lib/auth/roles";
 import { requireRole } from "@/lib/auth/viewer";
 import { inPeriod, resolvePeriod } from "@/lib/crm/period";
 import type { Person, Pipeline, Stage, StageKind } from "@/lib/crm/types";
-import { daysSince, formatBRLShort, timeAgo } from "@/lib/format";
+import { daysUntil, dueText, dueTone } from "@/lib/crm/rentals";
+import { daysSince, formatBRL, formatBRLShort, timeAgo } from "@/lib/format";
 import { initials } from "@/lib/names";
 import { createClient } from "@/lib/supabase/server";
 import { PainelFilters } from "./filters";
@@ -34,6 +35,14 @@ type LeadRow = {
 };
 type StageRow = Stage & { pipeline_id: string };
 type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null };
+type ContractRow = {
+  id: string;
+  lead_id: string;
+  end_date: string;
+  monthly_value: number | string;
+  products: { name: string } | null;
+  leads: { owner_id: string | null; contacts: { name: string } | null; pipelines: { key: string } | null } | null;
+};
 
 export default async function PainelPage({
   params,
@@ -49,7 +58,7 @@ export default async function PainelPage({
   const isLoc = company.slug === "locpress";
   const supabase = await createClient();
 
-  const [pipelinesRes, stagesRes, sourcesRes, leadsRes, overdueRes, membersRes] = await Promise.all([
+  const [pipelinesRes, stagesRes, sourcesRes, leadsRes, overdueRes, membersRes, contractsRes] = await Promise.all([
     supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
     supabase.from("stages").select("id, key, name, kind, position, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
     supabase.from("lead_sources").select("id, name").eq("company_id", company.id).order("position").returns<{ id: string; name: string }[]>(),
@@ -69,6 +78,15 @@ export default async function PainelPage({
       .lt("due_at", new Date().toISOString())
       .returns<{ id: string; owner_id: string | null }[]>(),
     supabase.from("memberships").select("role, profiles(id, full_name, email, active)").eq("company_id", company.id).returns<MemberRow[]>(),
+    isLoc
+      ? supabase
+          .from("rental_contracts")
+          .select("id, lead_id, end_date, monthly_value, products(name), leads(owner_id, contacts(name), pipelines(key))")
+          .eq("company_id", company.id)
+          .eq("status", "ativo")
+          .order("end_date")
+          .returns<ContractRow[]>()
+      : Promise.resolve({ data: [] as ContractRow[], error: null }),
   ]);
 
   const people: Person[] = (membersRes.data ?? [])
@@ -92,12 +110,19 @@ export default async function PainelPage({
   const conversion = won.length + lost.length ? Math.round((won.length / (won.length + lost.length)) * 100) : 0;
   const periodText = period.label.toLowerCase();
 
+  // Locação (LocPress): contratos ativos do filtro escolhido
+  const contracts = (contractsRes.data ?? []).filter((c) => !owner || (owner === "sem" ? !c.leads?.owner_id : c.leads?.owner_id === owner));
+  const rentalRevenue = contracts.reduce((a, c) => a + (Number(c.monthly_value) || 0), 0);
+  const expiring = contracts.map((c) => ({ c, days: daysUntil(c.end_date) })).filter((x) => x.days <= 30);
+
   const kpis: [string, string, string][] = [
     ["Leads em aberto", String(open.length), `${needHuman.length} precisam de você agora`],
     ["Valor em negociação", formatBRLShort(sum(open)), "soma dos leads em aberto"],
     [isLoc ? "Fechado no período" : "Vendido no período", formatBRLShort(sum(won)), `${won.length} ${won.length === 1 ? "negócio ganho" : "negócios ganhos"} · ${periodText}`],
     ["Taxa de conversão", `${conversion}%`, `${won.length} ${won.length === 1 ? "ganho" : "ganhos"} e ${lost.length} ${lost.length === 1 ? "perdido" : "perdidos"}`],
-    ["Tarefas atrasadas", String(overdue.length), owner ? "do filtro escolhido" : "somando toda a equipe"],
+    isLoc
+      ? ["Receita de locação", formatBRLShort(rentalRevenue), `${contracts.length} ${contracts.length === 1 ? "contrato ativo" : "contratos ativos"} por mês`]
+      : ["Tarefas atrasadas", String(overdue.length), owner ? "do filtro escolhido" : "somando toda a equipe"],
   ];
 
   const pipelines = pipelinesRes.data ?? [];
@@ -242,7 +267,29 @@ export default async function PainelPage({
 
             {isLoc && (
               <Panel title="Contratos de locação vencendo" subtitle="Próximos 30 dias. Ofereça a renovação antes de a família procurar outra empresa.">
-                <ComingSoon phase="Etapa 2e">Os contratos de locação entram na próxima etapa.</ComingSoon>
+                {expiring.length === 0 ? (
+                  <div className="empty">Nenhum contrato vence nos próximos 30 dias.</div>
+                ) : (
+                  <div className="row-list">
+                    {expiring.map(({ c, days }) => (
+                      <div key={c.id} className="att">
+                        <span className="av" aria-hidden>
+                          {initials(c.leads?.contacts?.name ?? "?")}
+                        </span>
+                        <div className="grow">
+                          <b>{c.leads?.contacts?.name ?? "Sem nome"}</b>
+                          <small>
+                            {c.products?.name ?? "Equipamento"}, {formatBRL(Number(c.monthly_value))} por mês
+                          </small>
+                        </div>
+                        <Pill tone={dueTone(days)}>{dueText(days)}</Pill>
+                        <Link className="btn sm" href={`/${company.slug}/funil?funil=${c.leads?.pipelines?.key ?? ""}&lead=${c.lead_id}`}>
+                          Abrir
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Panel>
             )}
 

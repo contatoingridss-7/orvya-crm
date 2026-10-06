@@ -11,7 +11,10 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import type { BoardLead, LeadDetail, LeadProduct } from "@/lib/crm/types";
 import { formatBRL, formatDateTime } from "@/lib/format";
+import { daysUntil, dueText, dueTone, formatISODate, type RentalContract } from "@/lib/crm/rentals";
 import { NewTaskForm } from "../tarefas/new-task-form";
+import { ContractModal } from "./contract-modal";
+import { endContract } from "./rental-actions";
 import { TaskLine } from "../tarefas/task-line";
 import { initials } from "@/lib/names";
 import { formatPhone } from "@/lib/phone";
@@ -34,6 +37,7 @@ export function LeadDrawer(props: Props) {
   const [busy, startBusy] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string>();
+  const [contractModal, setContractModal] = useState<{ renewing: RentalContract | null } | null>(null);
 
   const canEdit = manager || lead.ownerId === viewerId;
   const stage = stages.find((s) => s.id === lead.stageId);
@@ -254,6 +258,18 @@ export function LeadDrawer(props: Props) {
           onChange={(items) => act(() => setLeadProducts(slug, lead.id, items))}
         />
 
+        {/* Contratos de locação (LocPress) */}
+        {props.hasRentals && (
+          <ContractsSection
+            contracts={detail?.contracts ?? null}
+            canEdit={canEdit}
+            busy={busy}
+            onNew={() => setContractModal({ renewing: null })}
+            onRenew={(c) => setContractModal({ renewing: c })}
+            onEnd={(c) => act(() => endContract(slug, lead.id, c.id))}
+          />
+        )}
+
         {/* Tarefas */}
         <section className="dr-sec">
           <h3>Tarefas</h3>
@@ -304,6 +320,22 @@ export function LeadDrawer(props: Props) {
         {/* Histórico */}
         <History detail={detail} lead={lead} canEdit={canEdit} onNote={(body, done) => act(() => addNote(slug, lead.id, body), done)} busy={busy} />
       </Drawer>
+
+      <ContractModal
+        open={contractModal !== null}
+        slug={slug}
+        leadId={lead.id}
+        leadName={lead.contact.name.split(" ")[0] ?? lead.contact.name}
+        catalog={catalog}
+        defaultAddress={lead.custom.endereco}
+        renewing={contractModal?.renewing ?? null}
+        onClose={() => setContractModal(null)}
+        onSaved={() => {
+          setContractModal(null);
+          reload();
+          router.refresh();
+        }}
+      />
 
       <Modal
         open={confirmDelete}
@@ -459,6 +491,89 @@ function ProductsSection({
           ))}
           {query.trim().length >= 2 && matches.length === 0 && <p className="m-0 text-xs text-muted">Nenhum produto ativo no catálogo com esse nome.</p>}
         </div>
+      )}
+    </section>
+  );
+}
+
+const STATUS_LABEL: Record<RentalContract["status"], string> = { ativo: "Ativo", encerrado: "Encerrado", renovado: "Renovado" };
+
+function ContractsSection({
+  contracts,
+  canEdit,
+  busy,
+  onNew,
+  onRenew,
+  onEnd,
+}: {
+  contracts: RentalContract[] | null;
+  canEdit: boolean;
+  busy: boolean;
+  onNew: () => void;
+  onRenew: (c: RentalContract) => void;
+  onEnd: (c: RentalContract) => void;
+}) {
+  const [confirmEnd, setConfirmEnd] = useState<string | null>(null);
+
+  return (
+    <section className="dr-sec">
+      <h3>Contratos de locação</h3>
+      {contracts === null ? (
+        <p className="m-0 text-[13px] text-muted">Carregando…</p>
+      ) : contracts.length === 0 ? (
+        <p className="m-0 text-[13px] text-muted">Nenhum contrato registrado.</p>
+      ) : (
+        <div className="row-list">
+          {contracts.map((c) => {
+            const days = daysUntil(c.endDate);
+            return (
+              <div key={c.id} className={`grid gap-1.5 py-2.5 text-[13px] ${c.status === "ativo" ? "" : "opacity-60"}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <b className="min-w-0 flex-1 font-semibold">{c.productName ?? "Equipamento fora do catálogo"}</b>
+                  {c.status === "ativo" ? (
+                    <Pill tone={dueTone(days)}>
+                      <span suppressHydrationWarning>{dueText(days)}</span>
+                    </Pill>
+                  ) : (
+                    <Pill>{STATUS_LABEL[c.status]}</Pill>
+                  )}
+                </div>
+                <small className="text-xs text-muted">
+                  {formatISODate(c.startDate)} a {formatISODate(c.endDate)} · {formatBRL(c.monthlyValue)} por mês
+                  {c.serialNumber && ` · nº de série ${c.serialNumber}`}
+                </small>
+                {c.deliveryAddress && <small className="text-xs text-muted">{c.deliveryAddress}</small>}
+                {canEdit && c.status === "ativo" && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button size="sm" variant="soft" disabled={busy} onClick={() => onRenew(c)}>
+                      Renovar
+                    </Button>
+                    {confirmEnd === c.id ? (
+                      <>
+                        <span className="text-xs">Encerrar e recolher o equipamento?</span>
+                        <Button size="sm" variant="danger" disabled={busy} onClick={() => onEnd(c)}>
+                          Sim, encerrar
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmEnd(null)}>
+                          Não
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirmEnd(c.id)}>
+                        Encerrar
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {canEdit && contracts !== null && (
+        <Button size="sm" className="mt-2.5" onClick={onNew}>
+          Registrar contrato
+        </Button>
       )}
     </section>
   );

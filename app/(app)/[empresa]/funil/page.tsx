@@ -15,6 +15,7 @@ import {
   type Pipeline,
   type Stage,
 } from "@/lib/crm/types";
+import { daysUntil } from "@/lib/crm/rentals";
 import { createClient } from "@/lib/supabase/server";
 import { Board } from "./board";
 
@@ -71,7 +72,7 @@ export default async function FunilPage({
   }
 
   const closedSince = subDays(new Date(), CLOSED_WINDOW_DAYS).toISOString();
-  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes] = await Promise.all([
+  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes] = await Promise.all([
     supabase.from("stages").select("id, key, name, kind, position").eq("pipeline_id", current.id).order("position").returns<Stage[]>(),
     supabase
       .from("leads")
@@ -105,10 +106,22 @@ export default async function FunilPage({
       .lt("due_at", new Date().toISOString())
       .not("lead_id", "is", null)
       .returns<{ lead_id: string }[]>(),
+    supabase
+      .from("rental_contracts")
+      .select("lead_id, end_date")
+      .eq("company_id", company.id)
+      .eq("status", "ativo")
+      .returns<{ lead_id: string; end_date: string }[]>(),
   ]);
 
   const overdue = new Set((overdueRes.data ?? []).map((t) => t.lead_id));
-  const leads = (leadsRes.data ?? []).map((r) => toBoardLead(r, overdue));
+  // Por lead, o contrato ativo que vence primeiro.
+  const rentalDays = new Map<string, number>();
+  for (const c of contractsRes.data ?? []) {
+    const d = daysUntil(c.end_date);
+    if (!rentalDays.has(c.lead_id) || d < rentalDays.get(c.lead_id)!) rentalDays.set(c.lead_id, d);
+  }
+  const leads = (leadsRes.data ?? []).map((r) => toBoardLead(r, overdue, rentalDays));
 
   const people: Person[] = (membersRes.data ?? [])
     .filter((m) => m.profiles?.active)
@@ -156,6 +169,7 @@ export default async function FunilPage({
           catalog={catalog}
           viewerId={viewer.id}
           manager={isManager(company.role)}
+          hasRentals={company.slug === "locpress"}
           initialLeadId={sp.lead ?? null}
           closedWindowDays={CLOSED_WINDOW_DAYS}
         />

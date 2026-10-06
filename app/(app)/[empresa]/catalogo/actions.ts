@@ -44,7 +44,6 @@ const productSchema = z.object({
   salePrice: money,
   rentPriceMonth: money,
   stock: z.coerce.number().int("Estoque precisa ser um número inteiro."),
-  rentedCount: z.coerce.number().int().min(0),
   promoLabel: z.string().trim().max(60).transform((v) => v || null),
   aiNotes: z.string().trim().max(1000).transform((v) => v || null),
   isRental: z.boolean(),
@@ -71,7 +70,7 @@ export async function saveProduct(slug: string, input: ProductInput): Promise<Ac
     sale_price: p.requiresHuman && p.isRental ? null : p.salePrice,
     rent_price_month: p.isRental ? p.rentPriceMonth : null,
     stock: p.stock,
-    rented_count: p.rentedCount,
+    // rented_count é contado pelos contratos ativos (migration 0005)
     promo_label: p.promoLabel,
     ai_notes: p.aiNotes,
     is_rental: p.isRental,

@@ -24,7 +24,9 @@ import { TEMPERATURE_LABEL } from "@/lib/crm/types";
 import { TimeAgo } from "@/components/time-ago";
 import { formatBRL, formatBRLShort } from "@/lib/format";
 import { firstName, initials } from "@/lib/names";
+import { dueText, dueTone } from "@/lib/crm/rentals";
 import { moveLead } from "./actions";
+import { ContractModal } from "./contract-modal";
 import { LeadDrawer } from "./lead-drawer";
 import { LostModal } from "./lost-modal";
 import { NewLeadModal } from "./new-lead-modal";
@@ -43,6 +45,8 @@ export type BoardProps = {
   catalog: CatalogOption[];
   viewerId: string;
   manager: boolean;
+  /** LocPress: contratos de locação. */
+  hasRentals: boolean;
   initialLeadId: string | null;
   closedWindowDays: number;
 };
@@ -73,6 +77,7 @@ export function Board(props: BoardProps) {
   const [lostTarget, setLostTarget] = useState<{ leadId: string; stageId: string } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [dragging, setDragging] = useState<BoardLead | null>(null);
+  const [contractLead, setContractLead] = useState<BoardLead | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
   const stageById = useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages]);
@@ -120,6 +125,11 @@ export function Board(props: BoardProps) {
       toast(`${firstName(lead.contact.name)} foi para ${stageById.get(stageId)?.name ?? "outra etapa"}.`);
       if (result.data?.tookLead) toast("Você virou o responsável por este lead.", "ok");
       for (const t of result.data?.tasks ?? []) toast(`Automação criou a tarefa “${t}”.`, "auto");
+      // LocPress: ao entrar em "Em locação" sem contrato ativo, pede os dados do contrato (SPEC 4.4).
+      const target = stageById.get(stageId);
+      if (props.hasRentals && pipeline.key === "locacao" && target?.key === "ativo" && lead.rentalDaysLeft === null) {
+        setContractLead(lead);
+      }
       router.refresh();
     });
   }
@@ -260,6 +270,20 @@ export function Board(props: BoardProps) {
         }}
       />
 
+      <ContractModal
+        open={!!contractLead}
+        slug={slug}
+        leadId={contractLead?.id ?? ""}
+        leadName={contractLead ? firstName(contractLead.contact.name) : ""}
+        catalog={props.catalog}
+        defaultAddress={contractLead?.custom.endereco}
+        onClose={() => setContractLead(null)}
+        onSaved={() => {
+          setContractLead(null);
+          router.refresh();
+        }}
+      />
+
       <NewLeadModal
         open={newOpen}
         onClose={() => setNewOpen(false)}
@@ -338,6 +362,11 @@ function LeadCard({ lead: l, ownerName, onOpen, overlay, dragging, nodeRef, drag
         {l.aiEnabled === true && !l.needsHuman && <Pill tone="ind">IA</Pill>}
         {l.aiEnabled === false && <Pill>Humano</Pill>}
         {l.overdueTask && <Pill tone="warn">Tarefa atrasada</Pill>}
+        {l.rentalDaysLeft !== null && l.rentalDaysLeft <= 30 && (
+          <Pill tone={dueTone(l.rentalDaysLeft)}>
+            <span suppressHydrationWarning>{dueText(l.rentalDaysLeft).replace(/^v/, "V")}</span>
+          </Pill>
+        )}
         {l.lostReason && <Pill tone="bad">{l.lostReason}</Pill>}
       </span>
       <span className="meta">

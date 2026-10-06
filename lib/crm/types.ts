@@ -45,6 +45,8 @@ export type BoardLead = {
   aiEnabled: boolean | null; // null = ainda sem conversa
   needsHuman: boolean;
   overdueTask: boolean;
+  /** Dias até o fim do contrato de locação ativo que vence primeiro (null = sem contrato ativo). */
+  rentalDaysLeft: number | null;
 };
 
 export const LEAD_SELECT =
@@ -68,7 +70,7 @@ export type LeadRow = {
   conversations: { ai_enabled: boolean; needs_human: boolean }[] | null;
 };
 
-export function toBoardLead(r: LeadRow, overdue: Set<string>): BoardLead {
+export function toBoardLead(r: LeadRow, overdue: Set<string>, rentalDays?: Map<string, number>): BoardLead {
   const conv = r.conversations?.[0] ?? null;
   return {
     id: r.id,
@@ -95,6 +97,7 @@ export function toBoardLead(r: LeadRow, overdue: Set<string>): BoardLead {
     aiEnabled: conv ? conv.ai_enabled : null,
     needsHuman: conv?.needs_human ?? false,
     overdueTask: overdue.has(r.id),
+    rentalDaysLeft: rentalDays?.get(r.id) ?? null,
   };
 }
 
@@ -104,4 +107,4 @@ export const TEMPERATURE_LABEL: Record<Temperature, string> = { quente: "Quente"
 export type LeadActivity = { id: string; kind: string; body: string; userName: string | null; createdAt: string };
 export type LeadTask = import("./tasks").TaskItem;
 export type LeadProduct = { productId: string; name: string; code: string | null; mode: "venda" | "locacao"; quantity: number; price: number | null; requiresHuman: boolean };
-export type LeadDetail = { activities: LeadActivity[]; tasks: LeadTask[]; products: LeadProduct[] };
+export type LeadDetail = { activities: LeadActivity[]; tasks: LeadTask[]; products: LeadProduct[]; contracts: import("./rentals").RentalContract[] };
