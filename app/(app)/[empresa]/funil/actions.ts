@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isManager } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { parseMoneyInput } from "@/lib/catalog/types";
+import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import type { LeadDetail } from "@/lib/crm/types";
 import { toE164 } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/server";
@@ -356,7 +357,6 @@ export async function setLeadProducts(slug: string, leadId: string, items: z.inp
 // Detalhe (histórico, tarefas, produtos)
 // ---------------------------------------------------------------------
 type ActivityRow = { id: string; kind: string; body: string; created_at: string; profiles: { full_name: string | null } | null };
-type TaskRow = { id: string; title: string; due_at: string; done_at: string | null; origin: string; owner: { full_name: string | null } | null };
 type LeadProductRow = {
   mode: "venda" | "locacao";
   quantity: number;
@@ -375,12 +375,7 @@ export async function loadLeadDetail(slug: string, leadId: string): Promise<Acti
       .order("created_at", { ascending: false })
       .limit(100)
       .returns<ActivityRow[]>(),
-    ctx.supabase
-      .from("tasks")
-      .select("id, title, due_at, done_at, origin, owner:profiles!tasks_owner_id_fkey(full_name)")
-      .eq("lead_id", leadId)
-      .order("due_at")
-      .returns<TaskRow[]>(),
+    ctx.supabase.from("tasks").select(TASK_SELECT).eq("lead_id", leadId).order("due_at").returns<TaskRow[]>(),
     ctx.supabase
       .from("lead_products")
       .select("mode, quantity, products(id, name, code, sale_price, rent_price_month, requires_human)")
@@ -393,7 +388,7 @@ export async function loadLeadDetail(slug: string, leadId: string): Promise<Acti
     ok: true,
     data: {
       activities: (acts.data ?? []).map((a) => ({ id: a.id, kind: a.kind, body: a.body, userName: a.profiles?.full_name ?? null, createdAt: a.created_at })),
-      tasks: (tasks.data ?? []).map((t) => ({ id: t.id, title: t.title, dueAt: t.due_at, doneAt: t.done_at, origin: t.origin, ownerName: t.owner?.full_name ?? null })),
+      tasks: (tasks.data ?? []).map(toTask),
       products: (prods.data ?? []).flatMap((p) =>
         p.products
           ? [

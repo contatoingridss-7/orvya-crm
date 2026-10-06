@@ -102,6 +102,6 @@ export const TEMPERATURE_LABEL: Record<Temperature, string> = { quente: "Quente"
 
 // Detalhe do lead (carregado ao abrir o painel)
 export type LeadActivity = { id: string; kind: string; body: string; userName: string | null; createdAt: string };
-export type LeadTask = { id: string; title: string; dueAt: string; doneAt: string | null; ownerName: string | null; origin: string };
+export type LeadTask = import("./tasks").TaskItem;
 export type LeadProduct = { productId: string; name: string; code: string | null; mode: "venda" | "locacao"; quantity: number; price: number | null; requiresHuman: boolean };
 export type LeadDetail = { activities: LeadActivity[]; tasks: LeadTask[]; products: LeadProduct[] };

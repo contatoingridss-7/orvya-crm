@@ -10,7 +10,9 @@ import { Notice } from "@/components/ui/notice";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import type { BoardLead, LeadDetail, LeadProduct } from "@/lib/crm/types";
-import { formatBRL, formatDate, formatDateTime } from "@/lib/format";
+import { formatBRL, formatDateTime } from "@/lib/format";
+import { NewTaskForm } from "../tarefas/new-task-form";
+import { TaskLine } from "../tarefas/task-line";
 import { initials } from "@/lib/names";
 import { formatPhone } from "@/lib/phone";
 import { addNote, changePipeline, deleteLead, loadLeadDetail, setLeadProducts, takeLead, updateLead } from "./actions";
@@ -261,18 +263,41 @@ export function LeadDrawer(props: Props) {
             <p className="m-0 text-[13px] text-muted">Nenhuma tarefa. As automações criam tarefas quando o lead muda de etapa.</p>
           ) : (
             <div className="row-list">
-              {detail.tasks.map((t) => {
-                const late = !t.doneAt && new Date(t.dueAt) < new Date();
-                return (
-                  <div key={t.id} className="flex flex-wrap items-center gap-2 py-2 text-[13px]">
-                    <span className={`flex-1 ${t.doneAt ? "text-muted line-through" : "font-semibold"}`}>{t.title}</span>
-                    {t.origin === "automation" && <Pill tone="warn">Automação</Pill>}
-                    {late ? <Pill tone="bad">Atrasada · {formatDate(t.dueAt)}</Pill> : <span className="text-xs text-muted">{t.doneAt ? "Concluída" : `Prazo ${formatDate(t.dueAt)}`}</span>}
-                    {t.ownerName && <span className="text-xs text-muted">{t.ownerName}</span>}
-                  </div>
-                );
-              })}
+              {detail.tasks.map((t) => (
+                <TaskLine
+                  key={t.id}
+                  task={t}
+                  slug={slug}
+                  viewerId={viewerId}
+                  manager={manager}
+                  showLead={false}
+                  onChanged={() => {
+                    reload();
+                    router.refresh();
+                  }}
+                />
+              ))}
             </div>
+          )}
+          {canEdit && detail && (
+            <details className="mt-2.5">
+              <summary className="cursor-pointer text-[13px] font-semibold text-tint-ink">Nova tarefa para este lead</summary>
+              <div className="pt-2.5">
+                <NewTaskForm
+                  slug={slug}
+                  manager={manager}
+                  viewerId={viewerId}
+                  people={people}
+                  leadId={lead.id}
+                  defaultOwnerId={lead.ownerId}
+                  compact
+                  onCreated={() => {
+                    reload();
+                    router.refresh();
+                  }}
+                />
+              </div>
+            </details>
           )}
         </section>
 
