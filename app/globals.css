@@ -650,6 +650,231 @@ select option {
     stroke-linejoin: round;
   }
 
+  /* Kanban (protótipo) */
+  .board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    align-items: flex-start;
+    -webkit-overflow-scrolling: touch;
+  }
+  .col {
+    flex: none;
+    width: 282px;
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 230px);
+    min-height: 240px;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .col.over {
+    border-color: var(--accent);
+    background: var(--tint);
+  }
+  .col-head {
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .col-head .t {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 650;
+    font-size: 13px;
+    color: var(--title);
+  }
+  .col-head .t .n {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .col-head small {
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .col-head .stripe {
+    height: 3px;
+    border-radius: 3px;
+    margin-top: 10px;
+    background: var(--grad);
+  }
+  .col[data-kind="won"] .stripe {
+    background: var(--won);
+  }
+  .col[data-kind="lost"] .stripe {
+    background: #f87171;
+  }
+  .col-body {
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+    overflow-y: auto;
+    align-content: start;
+    flex: 1;
+  }
+  .kcard {
+    background: var(--raise);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 11px 12px;
+    cursor: grab;
+    display: grid;
+    gap: 7px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    text-align: left;
+    width: 100%;
+    touch-action: manipulation;
+  }
+  .kcard:hover {
+    border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(124, 92, 255, 0.15);
+  }
+  .kcard.dragging {
+    opacity: 0.4;
+  }
+  .kcard.overlay {
+    cursor: grabbing;
+    box-shadow: var(--shadow-lg);
+    transform: rotate(2deg);
+  }
+  .kcard.need {
+    box-shadow: inset 3px 0 0 var(--lost);
+  }
+  .kcard .l1 {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .kcard .l1 b {
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--title);
+  }
+  .kcard .org {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: -4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kcard .l3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .kcard .val {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--title);
+    font-size: 13px;
+  }
+  .kcard .meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .kcard .meta .av {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+  .kcard .meta .r {
+    margin-left: auto;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex: none;
+  }
+  .t-quente {
+    background: #ef4444;
+  }
+  .t-morno {
+    background: #f59e0b;
+  }
+  .t-frio {
+    background: #94a3b8;
+  }
+  .chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .chip[aria-pressed="true"] {
+    background: var(--grad);
+    border-color: transparent;
+    color: #fff;
+  }
+  .tl {
+    display: grid;
+    gap: 10px;
+  }
+  .tl-item {
+    display: grid;
+    grid-template-columns: 10px 1fr;
+    gap: 10px;
+  }
+  .tl-item i {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-top: 5px;
+  }
+  .tl-item.stage i {
+    background: var(--won);
+  }
+  .tl-item.auto i {
+    background: var(--amber);
+  }
+  .tl-item p {
+    margin: 0;
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+  .tl-item small {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .dr-sec h3 {
+    font-size: 13px;
+    font-weight: 650;
+    margin-bottom: 10px;
+  }
+  @media (max-width: 900px) {
+    .col {
+      max-height: none;
+      width: 266px;
+    }
+  }
+
   .scroll-x {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
