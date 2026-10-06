@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orvya · Conexões inteligentes. Resultados integrados.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --accent:#7C5CFF;--accent-dk:#6A45F5;--grad:linear-gradient(135deg,#6D4AFF 0%,#9B7BFF 100%);
+  --won:#10B981;--lost:#EF4444;--amber:#F59E0B;
+  --bg:#F4F4F7;--side:#FFFFFF;--surface:#FFFFFF;--surface-2:#F8F8FB;--raise:#FFFFFF;--line:#E7E7EE;--line-2:#D9D9E3;
+  --ink:#16161D;--muted:#6E6E7C;--tint:#F1EEFF;--tint-ink:#5B3FE0;--title:#0D0D12;
+  --ok-bg:rgba(16,185,129,.12);--ok-fg:#047857;--bad-bg:rgba(239,68,68,.10);--bad-fg:#DC2626;--warn-bg:rgba(245,158,11,.15);--warn-fg:#B45309;
+  --glow:radial-gradient(1100px 520px at 55% 118%,rgba(124,92,255,.16),transparent 70%);
+  --shadow:0 1px 2px rgba(16,16,29,.04),0 8px 24px rgba(16,16,29,.05);--shadow-lg:0 30px 80px rgba(16,16,29,.22);
+  --toast:#15151C;--scrim:rgba(10,10,20,.35);
+  --r:16px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Inter",system-ui,"Segoe UI",Roboto,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#07070A;--side:#0C0C11;--surface:#111117;--surface-2:#16161E;--raise:#1C1C26;--line:#22222C;--line-2:#30303D;
+    --ink:#EDEDF2;--muted:#8B8B9A;--tint:rgba(124,92,255,.15);--tint-ink:#BBA8FF;--title:#FFFFFF;
+    --ok-bg:rgba(16,185,129,.15);--ok-fg:#34D399;--bad-bg:rgba(239,68,68,.15);--bad-fg:#F87171;--warn-bg:rgba(245,158,11,.15);--warn-fg:#FBBF24;
+    --glow:radial-gradient(1000px 520px at 60% 122%,rgba(124,92,255,.45),transparent 65%),radial-gradient(700px 420px at 100% 105%,rgba(168,85,247,.22),transparent 70%);
+    --shadow:none;--shadow-lg:0 30px 80px rgba(0,0,0,.65);--toast:#1D1D28;--scrim:rgba(0,0,0,.6);color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#07070A;--side:#0C0C11;--surface:#111117;--surface-2:#16161E;--raise:#1C1C26;--line:#22222C;--line-2:#30303D;
+  --ink:#EDEDF2;--muted:#8B8B9A;--tint:rgba(124,92,255,.15);--tint-ink:#BBA8FF;--title:#FFFFFF;
+  --ok-bg:rgba(16,185,129,.15);--ok-fg:#34D399;--bad-bg:rgba(239,68,68,.15);--bad-fg:#F87171;--warn-bg:rgba(245,158,11,.15);--warn-fg:#FBBF24;
+  --glow:radial-gradient(1000px 520px at 60% 122%,rgba(124,92,255,.45),transparent 65%),radial-gradient(700px 420px at 100% 105%,rgba(168,85,247,.22),transparent 70%);
+  --shadow:none;--shadow-lg:0 30px 80px rgba(0,0,0,.65);--toast:#1D1D28;--scrim:rgba(0,0,0,.6);color-scheme:dark;
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{color:var(--title);margin:0;line-height:1.15;letter-spacing:-.02em}
+.app{height:100%;display:grid;grid-template-columns:248px minmax(0,1fr);background:var(--glow),var(--bg)}
+
+/* Sidebar */
+.side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:22px 14px 14px;overflow-y:auto;min-height:0}
+.brand{display:flex;align-items:center;gap:11px;padding:0 8px 22px}
+.mark{width:36px;height:36px;border-radius:10px;background:var(--grad);display:grid;place-items:center;flex:none;box-shadow:0 6px 18px rgba(124,92,255,.35)}
+.mark svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.brand strong{display:block;font-size:19px;font-weight:700;color:var(--title);letter-spacing:-.035em;line-height:1.1}
+.brand .slogan{display:block;font-size:10.5px;color:var(--muted);line-height:1.35;margin-top:2px;max-width:170px}
+.signature{margin:6px 4px 0;font-size:10.5px;letter-spacing:.18em;color:var(--muted);font-weight:600}
+.signature b{letter-spacing:.02em;font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.co-switch{display:grid;gap:6px;margin-bottom:20px}
+.co-btn{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:9px 10px;text-align:left;transition:border-color .15s,background .15s}
+.co-btn:hover{border-color:var(--line-2)}
+.co-btn[aria-pressed="true"]{border-color:var(--accent);background:var(--tint)}
+.mono{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:700;font-size:11.5px;background:var(--accent);color:#fff}
+.co-btn[data-co="loc"] .mono{background:#14B8A6}
+.co-btn b{display:block;font-size:13px;font-weight:600;line-height:1.2;color:var(--title)}
+.co-btn small{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.nav{display:grid;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-radius:10px;padding:8px 10px;color:var(--muted);font-weight:500;text-align:left}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--grad);color:#fff;box-shadow:0 6px 18px rgba(124,92,255,.3)}
+.nav svg{flex:none;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav .count{margin-left:auto;background:var(--tint);color:var(--tint-ink);font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;min-width:20px;text-align:center}
+.nav .count.alert{background:var(--bad-bg);color:var(--bad-fg)}
+.nav button[aria-current="page"] .count{background:rgba(255,255,255,.22);color:#fff}
+.nav .sep{height:1px;background:var(--line);margin:8px 6px}
+.side-foot{margin-top:auto;padding-top:16px;display:grid;gap:8px}
+.side-foot button{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:12px;color:var(--muted);text-align:left}
+.side-foot button:hover{color:var(--ink);border-color:var(--line-2)}
+.proto{font-size:11px;color:var(--muted);padding:2px 4px 0;line-height:1.4;margin:0}
+
+/* Main */
+.main{min-width:0;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);display:flex;align-items:center;gap:12px;padding:16px 28px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.top h1{font-size:24px;font-weight:700;letter-spacing:-.03em}
+.top p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.top .spacer{flex:1}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 12px;min-width:260px;height:40px}
+.search svg{width:16px;height:16px;stroke:var(--muted);fill:none;stroke-width:2;flex:none}
+.search input{border:0;background:none;outline:none;flex:1;min-width:0;height:100%}
+.icon-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{color:var(--ink);border-color:var(--line-2)}
+.icon-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;padding:0 16px;height:40px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:13px;white-space:nowrap;transition:border-color .15s,background .15s,filter .15s}
+.btn:hover{border-color:var(--line-2);background:var(--surface-2)}
+.btn.primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 8px 22px rgba(124,92,255,.32)}
+.btn.primary:hover{filter:brightness(1.07);background:var(--grad)}
+.btn.soft{background:var(--tint);border-color:transparent;color:var(--tint-ink)}
+.btn.sm{height:32px;padding:0 11px;font-size:12px;border-radius:9px;box-shadow:none}
+.btn.ghost{background:none;border-color:transparent}
+.btn.danger:hover{border-color:var(--lost);color:var(--bad-fg)}
+.btn:disabled{opacity:.45;pointer-events:none}
+.content{padding:24px 28px 44px;flex:1;min-width:0}
+
+/* Genéricos */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;box-shadow:var(--shadow);min-width:0}
+.panel h2{font-size:15px;font-weight:650;margin-bottom:3px}
+.panel .sub{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+.grid{display:grid;gap:16px}
+.g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g-3-1{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg);border-color:transparent}
+.pill.bad{background:var(--bad-bg);color:var(--bad-fg);border-color:transparent}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg);border-color:transparent}
+.pill.ind{background:var(--tint);color:var(--tint-ink);border-color:transparent}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.t-quente{background:#EF4444}.t-morno{background:#F59E0B}.t-frio{background:#94A3B8}
+.av{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--tint);color:var(--tint-ink);font-weight:700;font-size:11px}
+.muted{color:var(--muted)}
+.empty{padding:26px;text-align:center;color:var(--muted);border:1.5px dashed var(--line-2);border-radius:var(--r)}
+.row-list{display:grid}
+.row-list>*{border-top:1px solid var(--line)}
+.row-list>*:first-child{border-top:0}
+.link{background:none;border:0;padding:0;color:var(--tint-ink);font-weight:600;text-align:left}
+.link:hover{text-decoration:underline}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.field{display:grid;gap:4px;min-width:0}
+.field span{font-size:12px;color:var(--muted);font-weight:500}
+.field input,.field select,.field textarea,.inp{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:38px;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus,.inp:focus{border-color:var(--accent)}
+textarea{resize:vertical}
+select option{background:var(--surface);color:var(--ink)}
+
+/* Painel */
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;box-shadow:var(--shadow)}
+.kpi span{display:block;font-size:12px;color:var(--muted)}
+.kpi strong{display:block;font-size:24px;font-weight:700;color:var(--title);margin-top:4px;line-height:1.2;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.kpi em{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:2px}
+.kpi.hl{background:linear-gradient(160deg,#2B1A66 0%,#5B3BF0 70%,#8E6BFF 100%);border-color:transparent;box-shadow:0 16px 40px rgba(91,59,240,.35)}
+.kpi.hl span,.kpi.hl em{color:rgba(255,255,255,.75)}.kpi.hl strong{color:#fff}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:140px minmax(0,1fr) 100px;align-items:center;gap:10px;font-size:13px}
+.bar .track{height:8px;border-radius:6px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.bar .fill{height:100%;border-radius:6px;background:var(--grad)}
+.bar .fill.won{background:var(--won)}.bar .fill.lost{background:#F87171}
+.bar .val{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px}
+.pipe-block+.pipe-block{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.pipe-block h3{font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;gap:8px;font-weight:650}
+.pipe-block h3 span{font-weight:500;color:var(--muted);font-size:12px}
+.origin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:10px 0}
+.origin b{font-weight:600}
+.origin .track{grid-column:1/-1;height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden;display:flex}
+.origin .track i{display:block;height:100%}
+.origin small{color:var(--muted);font-size:12px;text-align:right}
+.att{display:flex;align-items:center;gap:12px;padding:11px 0}
+.att .grow{flex:1;min-width:0}
+.att b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att small{color:var(--muted);font-size:12px}
+
+/* Kanban */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.tabs{display:flex;gap:3px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;flex-wrap:wrap}
+.tabs button{border:0;background:none;border-radius:9px;padding:6px 14px;font-weight:600;font-size:13px;color:var(--muted)}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-pressed="true"]{background:var(--grad);color:#fff}
+.toolbar select{height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px}
+.board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;-webkit-overflow-scrolling:touch}
+.col{flex:none;width:282px;background:color-mix(in srgb,var(--surface) 60%,transparent);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;max-height:calc(100vh - 220px);min-height:240px;backdrop-filter:blur(8px)}
+.col.over{border-color:var(--accent);background:var(--tint)}
+.col-head{padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.col-head .t{display:flex;align-items:center;gap:8px;font-weight:650;font-size:13px;color:var(--title)}
+.col-head .t .n{margin-left:auto;font-size:12px;color:var(--muted);font-weight:600}
+.col-head small{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.col-head .stripe{height:3px;border-radius:3px;margin-top:10px;background:var(--grad)}
+.col[data-kind="won"] .stripe{background:var(--won)}
+.col[data-kind="lost"] .stripe{background:#F87171}
+.col-body{padding:10px;display:grid;gap:8px;overflow-y:auto;align-content:start;flex:1}
+.kcard{background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:11px 12px;cursor:grab;display:grid;gap:7px;transition:border-color .15s,box-shadow .15s;text-align:left;width:100%}
+.kcard:hover{border-color:var(--accent);box-shadow:0 8px 24px rgba(124,92,255,.15)}
+.kcard.dragging{opacity:.4}
+.kcard.need{box-shadow:inset 3px 0 0 var(--lost)}
+.kcard .l1{display:flex;align-items:center;gap:7px;min-width:0}
+.kcard .l1 b{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--title)}
+.kcard .org{font-size:12px;color:var(--muted);margin-top:-4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kcard .l3{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kcard .val{font-weight:700;font-variant-numeric:tabular-nums;color:var(--title);font-size:13px}
+.kcard .meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.kcard .meta .av{width:22px;height:22px;font-size:9px}
+.kcard .meta .r{margin-left:auto}
+
+/* Conversas */
+.inbox{display:grid;grid-template-columns:330px minmax(0,1fr);border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden;height:calc(100vh - 150px);min-height:500px;box-shadow:var(--shadow)}
+.conv-side{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.conv-filter{padding:10px;border-bottom:1px solid var(--line)}
+.conv-filter select{width:100%;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);padding:0 10px}
+.conv-list{overflow-y:auto;flex:1}
+.conv{display:flex;gap:10px;padding:12px 14px;border:0;border-bottom:1px solid var(--line);width:100%;background:none;text-align:left;align-items:flex-start}
+.conv:hover{background:var(--surface-2)}
+.conv[aria-current="true"]{background:var(--tint)}
+.conv .grow{flex:1;min-width:0}
+.conv .l1{display:flex;gap:6px;align-items:baseline}
+.conv .l1 b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--title)}
+.conv .l1 small{color:var(--muted);font-size:11px;white-space:nowrap}
+.conv p{margin:2px 0 5px;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv .tags{display:flex;gap:4px;flex-wrap:wrap}
+.ch{font-size:10px;font-weight:700;border-radius:6px;padding:1px 6px;background:var(--surface-2);color:var(--muted);white-space:nowrap;flex:none;border:1px solid var(--line)}
+.ch.whatsapp{background:var(--ok-bg);color:var(--ok-fg);border-color:transparent}
+.ch.instagram{background:rgba(236,72,153,.14);color:#DB2777;border-color:transparent}
+.ch.messenger{background:rgba(59,130,246,.14);color:#3B82F6;border-color:transparent}
+.thread{display:flex;flex-direction:column;min-width:0;min-height:0}
+.th-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.th-head .grow{flex:1;min-width:140px}
+.th-head b{display:block;font-weight:600;color:var(--title)}
+.th-head small{color:var(--muted);font-size:12px}
+.msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;background:var(--surface-2)}
+.summary{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:6px}
+.summary b{display:block;font-size:12px;color:var(--tint-ink);margin-bottom:2px}
+.bub{max-width:min(78%,520px);padding:8px 12px;border-radius:16px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.bub small{display:block;font-size:10.5px;opacity:.7;margin-top:3px}
+.bub.lead{align-self:flex-start;background:var(--raise);border:1px solid var(--line);border-bottom-left-radius:5px}
+.bub.ai{align-self:flex-end;background:var(--tint);border-bottom-right-radius:5px}
+.bub.human{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:5px}
+.bub.tpl{border:1px dashed rgba(255,255,255,.5)}
+.win{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:12px;border-top:1px solid var(--line);color:var(--muted)}
+.win.closed{background:var(--warn-bg);color:var(--warn-fg)}
+.composer{border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.composer textarea{flex:1;min-width:180px;border:1px solid var(--line);border-radius:12px;padding:9px 12px;min-height:42px;max-height:140px;background:var(--surface-2);outline:none}
+.composer textarea:focus{border-color:var(--accent)}
+.composer select{flex:1;min-width:180px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);padding:0 10px}
+.tpl-prev{flex-basis:100%;font-size:12.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;color:var(--ink)}
+.ai-note{font-size:11.5px;color:var(--muted);padding:0 14px 10px;margin:0}
+
+/* Fila e tarefas */
+.q-item{display:flex;align-items:center;gap:12px;padding:13px 0;flex-wrap:wrap}
+.q-item .grow{flex:1;min-width:200px}
+.q-item b{font-weight:600;color:var(--title)}
+.q-item p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.score{font-weight:700;font-size:16px;color:var(--title);min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.score small{display:block;font-weight:500;font-size:10px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--grad);border-color:transparent;color:#fff}
+.draft{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:6px;background:var(--surface-2)}
+.draft p{margin:0;font-size:13px}
+.check{display:flex;align-items:center;gap:10px}
+.check input{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.task{display:flex;align-items:center;gap:12px;padding:11px 0;flex-wrap:wrap}
+.task .grow{flex:1;min-width:180px}
+.task.done .grow b{text-decoration:line-through;color:var(--muted)}
+.task b{font-weight:600}
+.task small{display:block;color:var(--muted);font-size:12px}
+.group-h{display:flex;align-items:center;gap:8px;margin:18px 0 4px;font-size:13px;font-weight:650;color:var(--title)}
+.new-task{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.3fr) 150px 130px auto;gap:8px;align-items:end}
+.cost{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--tint);border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
+.cost b{color:var(--tint-ink)}
+
+/* Tabelas */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:12px;font-weight:600;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stock-low{color:var(--bad-fg);font-weight:600}
+
+/* Canais */
+.num-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:grid;gap:12px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.num-card.on::after{content:"";position:absolute;inset:auto -40px -60px auto;width:220px;height:140px;background:radial-gradient(closest-side,rgba(124,92,255,.35),transparent);pointer-events:none}
+.num-card .h{display:flex;align-items:flex-start;gap:12px}
+.num-card .h .grow{flex:1;min-width:0}
+.num-card h3{font-size:15px;font-weight:650}
+.num-card .phone{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--title);font-variant-numeric:tabular-nums}
+.num-card .phone.off{color:var(--muted);font-weight:500;font-size:14px}
+.meter{display:grid;gap:5px}
+.meter .l{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.meter .track{height:8px;border-radius:6px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.meter .track i{display:block;height:100%;background:var(--grad);border-radius:6px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stats div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stats span{display:block;font-size:11px;color:var(--muted)}
+.stats b{font-size:14px;color:var(--title)}
+.int{display:flex;gap:12px;align-items:flex-start;padding:14px 0}
+.int .ic{flex:none;width:36px;height:36px;border-radius:10px;background:var(--tint);color:var(--tint-ink);display:grid;place-items:center;font-weight:700;font-size:12px}
+.int .grow{flex:1;min-width:0}
+.int b{display:block;font-weight:600;color:var(--title)}
+.int p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.steps{margin:0;padding-left:20px;display:grid;gap:6px;font-size:13.5px}
+
+/* Automações */
+.rule{display:flex;align-items:center;gap:14px;padding:14px 0}
+.rule .grow{flex:1;min-width:0}
+.rule p{margin:0;font-size:13.5px}
+.rule p em{font-style:normal;font-weight:600;color:var(--title)}
+.rule small{color:var(--muted);font-size:12px}
+.switch{position:relative;width:40px;height:22px;flex:none}
+.switch input{opacity:0;width:100%;height:100%;margin:0;position:absolute;inset:0;cursor:pointer;z-index:1}
+.switch span{position:absolute;inset:0;border-radius:999px;background:var(--line-2);transition:background .15s}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span::after{transform:translateX(18px)}
+.switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.new-rule{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) minmax(0,1.6fr) 100px auto;gap:8px;align-items:end}
+
+/* Drawer e modal */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;opacity:0;pointer-events:none;transition:opacity .2s;backdrop-filter:blur(2px)}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(580px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:21;transform:translateX(102%);transition:transform .25s ease;display:flex;flex-direction:column;box-shadow:var(--shadow-lg);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden}
+.drawer.on{transform:none;visibility:visible}
+.dr-head{padding:18px 20px 14px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.dr-head .av{width:44px;height:44px;font-size:14px;background:var(--grad);color:#fff}
+.dr-head .grow{flex:1;min-width:0}
+.dr-head h2{font-size:19px}
+.dr-head p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.dr-body{flex:1;overflow-y:auto;padding:16px 20px 24px;display:grid;gap:20px;align-content:start}
+.dr-sec h3{font-size:13px;font-weight:650;margin-bottom:10px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fgrid .full{grid-column:1/-1}
+.ai-box{background:var(--tint);border-radius:12px;padding:12px 14px;display:grid;gap:8px}
+.ai-box .l{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ai-box p{margin:0;font-size:13px}
+.tl{display:grid;gap:10px}
+.tl-item{display:grid;grid-template-columns:10px 1fr;gap:10px}
+.tl-item i{width:10px;height:10px;border-radius:50%;background:var(--accent);margin-top:5px}
+.tl-item.stage i{background:var(--won)}
+.tl-item.auto i{background:var(--amber)}
+.tl-item p{margin:0;font-size:13px}
+.tl-item small{color:var(--muted);font-size:11.5px}
+.dr-foot{border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:8px;flex-wrap:wrap}
+.modal-wrap{position:fixed;inset:0;z-index:30;display:none;place-items:center;padding:20px;background:var(--scrim);backdrop-filter:blur(3px)}
+.modal-wrap.on{display:grid}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:20px;width:min(560px,100%);max-height:calc(100vh - 40px);overflow-y:auto;padding:22px;box-shadow:var(--shadow-lg);display:grid;gap:14px}
+.modal h2{font-size:19px}
+.modal .acts{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.toasts{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));right:18px;z-index:40;display:grid;gap:8px;max-width:min(380px,calc(100% - 36px))}
+.toast{background:var(--toast);color:#fff;border-radius:12px;padding:11px 14px;font-size:13px;box-shadow:var(--shadow-lg);border-left:3px solid var(--accent);animation:tin .25s ease}
+.toast.auto{border-left-color:var(--amber)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Responsivo */
+@media (max-width:1240px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.g-3-1{grid-template-columns:1fr}.g-3{grid-template-columns:1fr 1fr}}
+@media (max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .side{padding:12px 12px 8px;overflow:hidden;min-width:0;border-right:0;border-bottom:1px solid var(--line)}
+  .brand{padding:0 4px 10px}
+  .brand .slogan{max-width:none}
+  .co-switch{grid-template-columns:1fr 1fr;margin-bottom:10px}
+  .co-btn small{display:none}
+  .nav{display:flex;overflow-x:auto;gap:4px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .nav button{flex:none;width:auto;padding:7px 11px}
+  .nav .sep{display:none}
+  .side-foot,.proto{display:none}
+  .top{padding:12px 16px;position:static}
+  .top h1{font-size:20px}
+  .search{min-width:0;flex:1}
+  .content{padding:16px 16px 32px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g-2,.g-3{grid-template-columns:1fr}
+  .bar{grid-template-columns:96px minmax(0,1fr) 84px}
+  .col{max-height:none;width:266px}
+  .inbox{grid-template-columns:1fr;height:calc(100vh - 250px)}
+  .inbox.thread-open .conv-side{display:none}
+  .inbox:not(.thread-open) .thread{display:none}
+  .new-task,.new-rule{grid-template-columns:1fr 1fr}
+  .new-task .full,.new-rule .full{grid-column:1/-1}
+  .fgrid{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr 1fr 1fr}
+}
+@media (min-width:901px){.only-mobile{display:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="scrim" id="scrim" data-action="close-drawer"></div>
+<aside class="drawer" id="drawer" aria-label="Detalhes do lead"></aside>
+<div class="modal-wrap" id="modalWrap"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+const LS_KEY="orvya-v2";
+const DAY=864e5,HOUR=36e5;
+const ago=(d,h=0)=>new Date(Date.now()-d*DAY-h*HOUR).toISOString();
+const ahead=d=>new Date(Date.now()+d*DAY).toISOString();
+const isoDate=d=>{const x=new Date(Date.now()+d*DAY);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const BRL=new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});
+const money=v=>BRL.format(Number(v)||0);
+const cost=v=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v)||0);
+const moneyK=v=>{v=Number(v)||0;return v>=10000?"R$ "+(v/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mil":money(v)};
+const initials=n=>String(n||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+const first=n=>String(n||"").split(/\s+/)[0];
+const uid=p=>p+Math.random().toString(36).slice(2,9);
+const nowIso=()=>new Date().toISOString();
+const lc1=s=>s?s.charAt(0).toLowerCase()+s.slice(1):s;
+
+function rel(iso){
+  if(!iso) return "sem registro";
+  const s=(Date.now()-new Date(iso).getTime())/1000;
+  if(s<60) return "agora";
+  if(s<3600) return "há "+Math.floor(s/60)+" min";
+  if(s<86400) return "há "+Math.floor(s/3600)+" h";
+  const d=Math.floor(s/86400); return d===1?"ontem":"há "+d+" dias";
+}
+const daysSince=iso=>iso?Math.floor((Date.now()-new Date(iso).getTime())/DAY):999;
+function dayDiff(iso){const a=new Date(iso);a.setHours(0,0,0,0);const b=new Date();b.setHours(0,0,0,0);return Math.round((a-b)/DAY)}
+function dueLabel(iso){
+  const d=dayDiff(iso);
+  if(d<0) return d===-1?"venceu ontem":"venceu há "+(-d)+" dias";
+  if(d===0) return "hoje"; if(d===1) return "amanhã";
+  return new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+}
+const hhmm=iso=>new Date(iso).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+
+/* Custos estimados por mensagem de modelo (API oficial, Brasil). Ajuste conforme a tabela vigente da Meta. */
+const TPL_COST={Marketing:0.32,Utilidade:0.035};
+const FREE_SERVICE=1000;
+
+/* ============ Configuração das empresas ============ */
+const ST=(id,name,kind="open")=>({id,name,kind});
+const COMPANIES={
+  supra:{id:"supra",name:"IC Supra Hospitalar",short:"IC Supra",mono:"IC",segment:"Produtos hospitalares e ortopédicos",
+    team:["Renato","Camila","Jéssica"],
+    sources:["Meta Ads","Google Ads","Instagram orgânico","Site","Indicação","Loja física"],
+    lost:["Preço acima do esperado","Comprou na concorrência","Sem estoque","Não respondeu mais","Só pesquisando"],
+    pipelines:{
+      varejo:{name:"Varejo",hint:"Pacientes e famílias",stages:[ST("novo","Novo contato"),ST("qualificado","Qualificado"),ST("orcamento","Orçamento enviado"),ST("negociacao","Negociação"),ST("ganho","Venda fechada","won"),ST("perdido","Perdido","lost")],
+        fields:[{k:"entrega",label:"Entrega",type:"select",options:["A definir","Retira na loja","Entrega em Teresina","Envio para o interior"]}]},
+      b2b:{name:"Institucional",hint:"Clínicas, hospitais e home cares",stages:[ST("prospeccao","Prospecção"),ST("contato","Primeiro contato"),ST("cotacao","Cotação enviada"),ST("negociacao","Negociação"),ST("ganho","Pedido fechado","won"),ST("perdido","Perdido","lost")],
+        fields:[{k:"cnpj",label:"CNPJ",type:"text"},{k:"comprador",label:"Comprador responsável",type:"text"},{k:"recorrencia",label:"Compra recorrente",type:"select",options:["Não informado","Mensal","Trimestral","Pontual"]}]}
+    }},
+  loc:{id:"loc",name:"LocPress Saúde",short:"LocPress",mono:"LP",segment:"Venda e locação de equipamentos médicos",
+    team:["Larissa","Diego","Paula"],
+    sources:["Meta Ads","Google Ads","Instagram orgânico","Site","Indicação médica","Hospital parceiro"],
+    lost:["Preço acima do esperado","Fechou com concorrente","Sem equipamento disponível","Paciente internado ou faleceu","Não respondeu mais"],
+    pipelines:{
+      venda:{name:"Venda",hint:"Equipamentos médicos e hospitalares",stages:[ST("novo","Novo contato"),ST("qualificado","Qualificado"),ST("orcamento","Orçamento enviado"),ST("negociacao","Negociação"),ST("ganho","Vendido","won"),ST("perdido","Perdido","lost")],
+        fields:[{k:"entrega",label:"Entrega",type:"select",options:["A definir","Retira na loja","Entrega e instalação","Envio para o interior"]},{k:"cnpj",label:"CNPJ (se empresa)",type:"text"}]},
+      locacao:{name:"Locação",hint:"Aluguel de equipamentos",stages:[ST("novo","Novo contato"),ST("qualificado","Qualificado"),ST("documentacao","Documentação"),ST("entrega","Entrega agendada"),ST("ativo","Em locação","won"),ST("perdido","Perdido","lost")],
+        fields:[{k:"equipamento",label:"Equipamento",type:"text"},{k:"serie",label:"Nº de série",type:"text"},{k:"inicio",label:"Início do contrato",type:"date"},{k:"fim",label:"Fim do contrato",type:"date"},{k:"mensal",label:"Valor mensal (R$)",type:"number"},{k:"endereco",label:"Endereço de entrega",type:"text",full:true}]},
+      homecare:{name:"CPAP e home care",hint:"Terapia do sono e cuidados em casa",stages:[ST("novo","Novo contato"),ST("avaliacao","Receita e avaliação"),ST("teste","Teste de adaptação"),ST("proposta","Proposta"),ST("ganho","Fechado","won"),ST("perdido","Perdido","lost")],
+        fields:[{k:"receita",label:"Receita médica",type:"select",options:["Pendente","Recebida","Não precisa"]},{k:"medico",label:"Médico solicitante",type:"text"},{k:"pressao",label:"Pressão prescrita (cmH₂O)",type:"text"},{k:"mascara",label:"Máscara",type:"select",options:["A definir","Nasal","Oronasal","Almofada nasal"]},{k:"modalidade",label:"Modalidade",type:"select",options:["A definir","Compra","Locação"]}]}
+    }}
+};
+
+/* ============ Dados de exemplo ============ */
+function seed(){
+  const products={
+    supra:[
+      {id:"s414",name:"Muleta canadense preta ALO",code:"414",cat:"Mobilidade",price:34.9,stock:16,promo:"Queima de estoque"},
+      {id:"s417",name:"Muleta canadense articulada ALO",code:"417",cat:"Mobilidade",price:59.9,stock:10},
+      {id:"s80",name:"Muleta axilar universal Dellamed",code:"80",cat:"Mobilidade",price:139.9,stock:8},
+      {id:"s1102",name:"Cadeira de rodas dobrável em aço",code:"1102",cat:"Mobilidade",price:899,stock:5},
+      {id:"s1150",name:"Andador articulado em alumínio",code:"1150",cat:"Mobilidade",price:289,stock:7},
+      {id:"s7319",name:"Ponteira 22 mm Dellamed",code:"7319",cat:"Acessórios",price:8.9,stock:21},
+      {id:"s8094",name:"Órtese Comfort Air sem polegar P",code:"8094",cat:"Órteses",price:69.9,stock:4},
+      {id:"s3319",name:"Kit de tala em EVA 4 peças Resgate",code:"3319",cat:"Imobilização",price:45.9,stock:6},
+      {id:"s9897",name:"Papagaio 1,4 L com tampa Cellpus",code:"9897",cat:"Cuidados",price:9.9,stock:34,promo:"Queima de estoque"},
+      {id:"s8029",name:"Rolo de posicionamento M",code:"8029",cat:"Reabilitação",price:94.9,stock:4},
+      {id:"s9924",name:"Prancha de polietileno adulto Resgate",code:"9924",cat:"Resgate",price:429,stock:4},
+      {id:"s2201",name:"Cadeira de banho com rodas",code:"2201",cat:"Cuidados",price:329,stock:3},
+      {id:"s5010",name:"Luva de procedimento látex cx 100",code:"5010",cat:"Descartáveis",price:32.9,stock:120}
+    ],
+    loc:[
+      {id:"l01",name:"CPAP automático com umidificador",cat:"Sono",price:5490,rent:390,stock:3,rented:9},
+      {id:"l02",name:"BiPAP ST",cat:"Sono",price:11900,rent:790,stock:1,rented:3},
+      {id:"l09",name:"Máscara nasal para CPAP",cat:"Sono",price:480,rent:null,stock:12,rented:0},
+      {id:"l03",name:"Concentrador de oxigênio 5 L",cat:"Respiratório",price:6900,rent:590,stock:2,rented:11},
+      {id:"l11",name:"Aspirador de secreção portátil",cat:"Respiratório",price:1290,rent:180,stock:4,rented:2},
+      {id:"l12",name:"Nebulizador ultrassônico",cat:"Respiratório",price:329,rent:null,stock:9,rented:0},
+      {id:"l13",name:"Monitor multiparamétrico",cat:"Monitoramento",price:8900,rent:650,stock:2,rented:1},
+      {id:"l10",name:"Oxímetro de pulso",cat:"Monitoramento",price:149,rent:null,stock:20,rented:0},
+      {id:"l14",name:"Esfigmomanômetro digital de braço",cat:"Diagnóstico",price:219,rent:null,stock:14,rented:0},
+      {id:"l04",name:"Cama hospitalar elétrica 3 movimentos",cat:"Camas e mobiliário",price:7800,rent:420,stock:4,rented:14},
+      {id:"l05",name:"Cama hospitalar manual 2 manivelas",cat:"Camas e mobiliário",price:3200,rent:260,stock:6,rented:18},
+      {id:"l15",name:"Poltrona hospitalar reclinável",cat:"Camas e mobiliário",price:1890,rent:190,stock:3,rented:2},
+      {id:"l06",name:"Colchão pneumático com compressor",cat:"Camas e mobiliário",price:390,rent:90,stock:8,rented:10},
+      {id:"l07",name:"Cadeira de rodas dobrável",cat:"Mobilidade",price:890,rent:140,stock:5,rented:7},
+      {id:"l08",name:"Cadeira de banho com rodas",cat:"Mobilidade",price:420,rent:90,stock:4,rented:5}
+    ]
+  };
+  const numbers=[
+    {id:"supra-1",co:"supra",label:"Atendimento e vendas",phone:"(86) 99900-1001",status:"connected",quality:"Alta",since:ago(12),used:214},
+    {id:"supra-2",co:"supra",label:"Institucional",phone:"",status:"off",quality:"",since:null,used:0},
+    {id:"loc-1",co:"loc",label:"Locação e CPAP",phone:"(86) 99900-2001",status:"connected",quality:"Alta",since:ago(12),used:96},
+    {id:"loc-2",co:"loc",label:"Venda de equipamentos",phone:"",status:"off",quality:"",since:null,used:0}
+  ];
+  const templates=[
+    {id:"t-s1",co:"supra",name:"retomar_orcamento",cat:"Marketing",status:"Aprovado",text:"Oi, {{nome}}! Aqui é {{vendedor}}, da IC Supra. O orçamento de {{produto}} continua disponível. Quer que eu reserve para você?"},
+    {id:"t-s2",co:"supra",name:"pedido_saiu_para_entrega",cat:"Utilidade",status:"Aprovado",text:"Olá, {{nome}}! Seu pedido da IC Supra saiu para entrega hoje. Qualquer dúvida, é só responder esta mensagem."},
+    {id:"t-s3",co:"supra",name:"pos_venda",cat:"Utilidade",status:"Aprovado",text:"Olá, {{nome}}! O {{produto}} está atendendo bem? Se precisar de ajuste ou troca, estamos à disposição."},
+    {id:"t-s4",co:"supra",name:"cotacao_institucional",cat:"Marketing",status:"Em análise",text:"Olá, {{nome}}! Aqui é {{vendedor}}, da IC Supra. Posso atualizar a cotação da sua instituição com os preços deste mês?"},
+    {id:"t-l1",co:"loc",name:"retomar_contato",cat:"Marketing",status:"Aprovado",text:"Oi, {{nome}}! Aqui é {{vendedor}}, da LocPress Saúde. Ainda precisa de {{produto}}? Temos unidade disponível com entrega em Teresina."},
+    {id:"t-l2",co:"loc",name:"renovacao_locacao",cat:"Utilidade",status:"Aprovado",text:"Olá, {{nome}}! O contrato de locação de {{produto}} está chegando ao fim. Quer renovar por mais um período?"},
+    {id:"t-l3",co:"loc",name:"entrega_confirmada",cat:"Utilidade",status:"Aprovado",text:"Olá, {{nome}}! A entrega do seu equipamento está confirmada. Avisamos quando a equipe estiver a caminho."},
+    {id:"t-l4",co:"loc",name:"retorno_proposta",cat:"Marketing",status:"Aprovado",text:"Oi, {{nome}}! Aqui é {{vendedor}}, da LocPress. Conseguiu avaliar a proposta de {{produto}}? Posso ajustar a forma de pagamento."}
+  ];
+  const integrations={supra:{},loc:{}};
+  const leads=[];let n=1;
+  function L(co,pipe,stage,o){
+    const id="L"+(n++);
+    const channel=o.channel||"whatsapp";
+    const msgs=(o.msgs||[]).map(m=>({from:m[0],text:m[1],at:ago(0,m[2]),by:m[0]==="human"?o.owner:undefined}));
+    const last=msgs.length?msgs[msgs.length-1].at:ago(o.idle||0,2);
+    leads.push({id,co,pipe,stage,name:o.name,phone:o.phone,org:o.org||"",type:o.type||"B2C",temp:o.temp||"morno",owner:o.owner,
+      source:o.source,channel,line:channel==="whatsapp"?(o.line||co+"-1"):null,value:o.value||0,interest:o.interest||[],score:o.score||50,
+      ai:o.ai!==false,needsHuman:!!o.need,needReason:o.need||"",lastContact:last,created:ago(o.age||5),updated:last,
+      closedAt:o.closed!=null?ago(o.closed):null,lostReason:o.lost||"",summary:o.summary||"",fields:o.fields||{},msgs,
+      history:(o.notes||[]).map(t=>({kind:"note",text:t,at:ago(1),by:o.owner}))});
+    return id;
+  }
+  const id={};
+  /* IC Supra */
+  id.maria=L("supra","varejo","orcamento",{name:"Maria das Graças Sousa",phone:"(86) 99812-4471",temp:"quente",owner:"Renato",source:"Meta Ads",value:139.9,interest:["s80"],score:82,age:4,
+    summary:"Filho operou o joelho e vai precisar de muleta axilar por uns 60 dias. Recebeu o preço e perguntou sobre entrega no bairro Dirceu.",
+    msgs:[["lead","Boa tarde! Vi o anúncio de vocês. Tem muleta axilar? É pro meu filho que operou o joelho",30],["ai","Boa tarde, Maria! Temos sim. A muleta axilar universal Dellamed tem regulagem de altura e serve para quem tem de 1,50 m a 1,90 m. Sai por R$ 139,90 o par. Quer que eu reserve para você?",29.9],["lead","Vocês entregam no Dirceu?",4],["ai","Entregamos sim! Vou confirmar com o Renato o horário de hoje e já te aviso.",3.9]]});
+  id.jose=L("supra","varejo","novo",{name:"José Ribamar Lima",phone:"(86) 98877-2310",temp:"morno",owner:"Camila",source:"Meta Ads",score:74,age:1,need:"Pediu para falar com uma pessoa",interest:["s1102"],value:899,
+    summary:"Quer cadeira de rodas para a mãe de 82 anos. Perguntou se pode parcelar em 10 vezes e pediu para falar com um atendente.",
+    msgs:[["lead","Olá, quanto tá a cadeira de rodas?",3],["ai","Olá, José! A cadeira de rodas dobrável em aço sai por R$ 899,00, à vista no PIX ou em até 6x no cartão. Ela é para uso diário?",2.9],["lead","É pra minha mãe de 82 anos. Dá pra fazer em 10x? Queria falar com alguém aí",0.6]]});
+  L("supra","varejo","qualificado",{name:"Francisca Araújo",phone:"(86) 99431-0098",temp:"morno",owner:"Jéssica",source:"Instagram orgânico",channel:"instagram",interest:["s8094"],value:69.9,score:58,age:3,
+    summary:"Tem tendinite no punho esquerdo e a fisioterapeuta indicou órtese. Vai medir o punho para acertar o tamanho.",
+    msgs:[["lead","Oi! Vocês têm órtese para punho? Minha fisio indicou",26],["ai","Oi, Francisca! Temos a Órtese Comfort Air sem polegar. Para acertar o tamanho, você pode medir a circunferência do punho com uma fita? O tamanho P vai de 13 a 15 cm.",25.8],["lead","Vou medir e te falo",25]]});
+  id.antonio=L("supra","varejo","negociacao",{name:"Antônio Carlos Veloso",phone:"(86) 99902-7765",temp:"quente",owner:"Renato",source:"Indicação",interest:["s1102","s2201"],value:1228,score:77,age:6,ai:false,
+    summary:"Montando o quarto do pai, que teve AVC. Quer cadeira de rodas e cadeira de banho e pediu desconto no combo.",
+    msgs:[["lead","Renato, se eu levar a cadeira de rodas e a de banho juntas, faz quanto?",44],["human","Seu Antônio, consigo fazer as duas por R$ 1.160 no PIX. Posso separar?",43],["lead","Vou ver com meus irmãos e te respondo amanhã",42]],
+    notes:["Cliente indicado pela fisioterapeuta que atende o pai."]});
+  id.helena=L("supra","b2b","cotacao",{name:"Dra. Helena Castro",org:"Clínica Ortopédica Poti",type:"B2B",phone:"(86) 3221-4580",temp:"quente",owner:"Renato",source:"Indicação",value:4800,interest:["s417","s8094","s3319"],score:69,age:10,ai:false,line:"supra-2",
+    fields:{cnpj:"12.345.678/0001-90",comprador:"Sandra (compras)",recorrencia:"Mensal"},
+    summary:"Clínica quer fornecedor fixo de muletas, órteses e talas. Cotação enviada; está comparando com o fornecedor atual.",
+    msgs:[["human","Dra. Helena, segue a cotação com as muletas articuladas, órteses e kits de tala. Validade de 10 dias.",50],["lead","Obrigada, Renato. Vou comparar com o que temos hoje e retorno.",48]]});
+  id.marcela=L("supra","b2b","negociacao",{name:"Marcela Andrade",org:"Home Care Cuidar Bem",type:"B2B",phone:"(86) 98120-3344",temp:"quente",owner:"Camila",source:"Google Ads",value:7200,interest:["s9897","s5010","s8029"],score:81,age:14,ai:false,
+    fields:{cnpj:"98.765.432/0001-10",comprador:"Marcela Andrade",recorrencia:"Mensal"},
+    summary:"Home care com 40 pacientes. Quer contrato mensal de descartáveis e itens de cuidado. Negociando prazo de 28 dias.",
+    msgs:[["lead","Camila, se o prazo for 28 dias a gente fecha o mensal",8],["human","Vou validar com o Sr. Ivo e te retorno ainda hoje.",7]]});
+  id.drog=L("supra","b2b","prospeccao",{name:"Drogaria Mais Saúde",org:"Rede com 3 lojas",type:"B2B",phone:"(86) 3233-1200",temp:"frio",owner:"Jéssica",source:"Loja física",value:2500,score:32,age:20,ai:false,idle:1,
+    summary:"Rede de farmácias que revende muletas e cadeiras de banho. Ainda sem contato com o comprador."});
+  id.raimundo=L("supra","varejo","ganho",{name:"Raimundo Nonato Ferreira",phone:"(86) 99987-1123",temp:"quente",owner:"Renato",source:"Meta Ads",value:289,interest:["s1150"],score:90,age:12,closed:2,
+    msgs:[["lead","Pode mandar o PIX que eu pago agora",52],["human","Chave enviada! Obrigado, seu Raimundo.",51.5],["lead","Pago ✅",51]]});
+  L("supra","varejo","ganho",{name:"Keila Monteiro",phone:"(86) 99421-9087",temp:"quente",owner:"Jéssica",source:"Site",value:459.8,interest:["s2201","s414"],score:88,age:9,closed:5,idle:5});
+  L("supra","b2b","ganho",{name:"Clínica Movimente",org:"Fisioterapia",type:"B2B",phone:"(86) 3227-5511",temp:"quente",owner:"Camila",source:"Google Ads",value:1840,interest:["s8029","s3319"],score:85,age:16,closed:8,idle:8});
+  L("supra","varejo","perdido",{name:"Luciana Meireles",phone:"(86) 98765-0001",temp:"frio",owner:"Camila",source:"Google Ads",value:899,interest:["s1102"],score:20,age:15,closed:6,idle:6,lost:"Comprou na concorrência"});
+  L("supra","varejo","novo",{name:"Pedro Henrique Batista",phone:"(86) 99345-6721",temp:"morno",owner:"Jéssica",source:"Meta Ads",channel:"messenger",score:55,age:0,interest:["s7319"],value:17.8,
+    summary:"Perguntou por ponteiras de reposição para muleta canadense.",
+    msgs:[["lead","Vocês vendem só a borrachinha da muleta?",1.5],["ai","Vendemos sim, Pedro! A ponteira de reposição sai por R$ 8,90 a unidade. Sabe o diâmetro do tubo da sua muleta? A mais comum é de 22 mm.",1.4]]});
+  L("supra","varejo","negociacao",{name:"Ana Beatriz Rocha",phone:"(86) 99110-8642",temp:"quente",owner:"Camila",source:"Meta Ads",value:429,interest:["s9924"],score:79,age:5,need:"Pediu desconto acima da política",
+    summary:"Socorrista voluntária. Quer a prancha de resgate e pediu 20% de desconto, acima do que a IA pode oferecer.",
+    msgs:[["lead","Se fizer 20% eu fecho agora",2],["ai","Entendo, Ana! Esse desconto eu preciso confirmar com a equipe. Já chamei a Camila para te responder.",1.9]]});
+  id.sebastiana=L("supra","varejo","qualificado",{name:"Sebastiana Pires",phone:"(86) 98844-3321",temp:"morno",owner:"Renato",source:"Loja física",value:94.9,interest:["s8029"],score:48,age:12,ai:false,
+    summary:"Esteve na loja e pediu para ser avisada quando o rolo de posicionamento tamanho G chegar.",
+    msgs:[["lead","Me avisa quando chegar o rolo G, por favor",221],["human","Dona Sebastiana, assim que o rolo G chegar eu te aviso por aqui!",220]]});
+  L("supra","varejo","orcamento",{name:"Cláudio Mendes",phone:"(86) 99201-7788",temp:"morno",owner:"Jéssica",source:"Google Ads",value:119.8,interest:["s417"],score:52,age:10,
+    summary:"Orçamento de 2 muletas articuladas enviado há 8 dias, sem resposta.",
+    msgs:[["lead","Quanto sai duas muletas articuladas?",196],["ai","Cláudio, segue o orçamento: 2 muletas canadenses articuladas ALO por R$ 119,80. Posso reservar?",195]]});
+  /* LocPress */
+  id.carla=L("loc","locacao","entrega",{name:"Carla Nogueira",phone:"(86) 99633-2210",temp:"quente",owner:"Larissa",source:"Hospital parceiro",value:1530,interest:["l04","l06"],score:86,age:3,ai:false,
+    fields:{equipamento:"Cama elétrica 3 movimentos e colchão pneumático",inicio:isoDate(1),fim:isoDate(91),mensal:510,endereco:"Rua Anfrísio Lobão, 1450, Jóquei"},
+    summary:"O pai recebe alta do hospital amanhã. Contrato de 3 meses assinado e entrega agendada para amanhã às 9h.",
+    msgs:[["lead","Mandei o contrato assinado",5.5],["human","Carla, contrato recebido! A entrega fica para amanhã às 9h. A equipe já monta a cama no quarto.",5],["lead","Perfeito, obrigada!",4.8]]});
+  id.joana=L("loc","locacao","ativo",{name:"Joana Batista",phone:"(86) 99744-5566",temp:"quente",owner:"Diego",source:"Indicação médica",value:2520,interest:["l04"],score:70,age:170,closed:170,idle:30,
+    fields:{equipamento:"Cama elétrica 3 movimentos",serie:"CE-2291",inicio:isoDate(-171),fim:isoDate(9),mensal:420,endereco:"Av. Nossa Senhora de Fátima, 820, Fátima"}});
+  L("loc","locacao","ativo",{name:"Roberto Alencar",phone:"(86) 98811-9034",temp:"morno",owner:"Larissa",source:"Google Ads",value:1770,interest:["l03"],score:65,age:50,closed:50,idle:20,
+    fields:{equipamento:"Concentrador de oxigênio 5 L",serie:"CO5-0187",inicio:isoDate(-50),fim:isoDate(40),mensal:590,endereco:"Rua Areolino de Abreu, 300, Centro"}});
+  id.carvalho=L("loc","locacao","ativo",{name:"Família Carvalho",phone:"(86) 99102-4455",temp:"morno",owner:"Paula",source:"Meta Ads",value:780,interest:["l05"],score:60,age:88,closed:88,idle:25,
+    fields:{equipamento:"Cama manual 2 manivelas",serie:"CM-0932",inicio:isoDate(-88),fim:isoDate(4),mensal:260,endereco:"Rua Firmino Pires, 77, Piçarra"}});
+  L("loc","locacao","ativo",{name:"Rosângela Freitas",phone:"(86) 99345-0012",temp:"morno",owner:"Diego",source:"Hospital parceiro",value:1170,interest:["l01"],score:66,age:30,closed:12,idle:12,
+    fields:{equipamento:"CPAP automático com umidificador",serie:"CP-1144",inicio:isoDate(-12),fim:isoDate(14),mensal:390,endereco:"Rua São Pedro, 2100, Ilhotas"}});
+  id.marcos=L("loc","locacao","documentacao",{name:"Marcos Vinícius Reis",phone:"(86) 98700-1289",temp:"quente",owner:"Diego",source:"Hospital parceiro",value:1770,interest:["l03"],score:80,age:2,
+    fields:{equipamento:"Concentrador de oxigênio 5 L",mensal:590},
+    summary:"Mãe com DPOC, alta prevista para sexta. Falta enviar RG e comprovante de endereço para fechar o contrato.",
+    msgs:[["lead","Quero fechar o concentrador, o que precisa?",20.2],["ai","Marcos, para fechar o contrato do concentrador preciso de uma foto do RG do responsável e um comprovante de endereço. Pode mandar por aqui mesmo.",20],["lead","Mando hoje à noite",19]]});
+  L("loc","locacao","novo",{name:"Eliane Soares",phone:"(86) 99955-7001",temp:"quente",owner:"Paula",source:"Meta Ads",score:92,age:0,need:"Urgência: alta hospitalar amanhã cedo",interest:["l04","l06"],value:510,
+    summary:"Marido acamado recebe alta amanhã cedo e tem escara. Precisa de cama e colchão pneumático com entrega até as 7h.",
+    msgs:[["lead","Preciso alugar uma cama hospitalar URGENTE, meu marido sai do hospital amanhã cedo",0.8],["ai","Eliane, vamos resolver isso! Temos cama elétrica e manual disponíveis. Ele vai precisar de colchão pneumático também? Já chamei a Paula para agilizar a entrega.",0.75],["lead","Sim, ele tem escara. Vocês entregam amanhã 7h?",0.4]]});
+  L("loc","locacao","qualificado",{name:"Tereza Cristina Lopes",phone:"(86) 98222-6634",temp:"morno",owner:"Larissa",source:"Instagram orgânico",channel:"instagram",value:420,interest:["l07"],score:50,age:9,
+    summary:"Quer alugar cadeira de rodas por 3 meses após cirurgia de quadril marcada para outubro.",
+    msgs:[["lead","Quanto é o aluguel da cadeira de rodas?",147],["ai","Tereza, a locação da cadeira de rodas dobrável sai por R$ 140 por mês. Quer que eu reserve para a data da cirurgia?",146],["lead","Vou confirmar a data com o médico",145]]});
+  id.paulo=L("loc","homecare","avaliacao",{name:"Paulo Sérgio Moura",phone:"(86) 99320-1147",temp:"morno",owner:"Diego",source:"Indicação médica",value:390,interest:["l01"],score:63,age:4,
+    fields:{receita:"Pendente",medico:"Dr. Rafael Coelho (otorrino)",mascara:"A definir",modalidade:"Locação"},
+    summary:"A polissonografia indicou apneia moderada. Aguardando a receita com a pressão prescrita.",
+    msgs:[["lead","Fiz a polissonografia e deu apneia. O médico falou em CPAP",40],["ai","Paulo, quando tiver a receita com a pressão indicada, me manda uma foto? Com ela eu já separo o CPAP certo e você pode testar antes de decidir.",39.8]]});
+  id.adriana=L("loc","homecare","teste",{name:"Adriana Lopes",phone:"(86) 99876-4410",temp:"quente",owner:"Larissa",source:"Meta Ads",value:5490,interest:["l01","l09"],score:75,age:8,ai:false,
+    fields:{receita:"Recebida",medico:"Dra. Lívia Sampaio",pressao:"Automático, 6 a 12",mascara:"Almofada nasal",modalidade:"A definir"},
+    summary:"Em teste de 7 dias com CPAP automático. Reclamou de ressecamento e o umidificador foi ajustado.",
+    msgs:[["lead","Dormi bem melhor essa noite depois que aumentou o umidificador",10],["human","Que ótimo, Adriana! Amanhã te ligo para vermos se prefere comprar ou seguir na locação.",9]]});
+  id.fernando=L("loc","homecare","proposta",{name:"Fernando Castelo Branco",phone:"(86) 99001-2345",temp:"quente",owner:"Diego",source:"Google Ads",value:5970,interest:["l01","l09"],score:71,age:12,ai:false,
+    fields:{receita:"Recebida",medico:"Dr. Rafael Coelho (otorrino)",pressao:"9",mascara:"Nasal",modalidade:"Compra"},
+    summary:"Proposta de compra do CPAP com máscara nasal em 10x no cartão. Vai decidir até sexta.",
+    msgs:[["lead","Pode me mandar a proposta do CPAP com a máscara?",75],["human","Fernando, segue a proposta: CPAP automático com umidificador e máscara nasal por R$ 5.970 em até 10x.",74]]});
+  L("loc","homecare","novo",{name:"Wellington Santos",phone:"(86) 98543-7710",temp:"frio",owner:"Paula",source:"Meta Ads",channel:"messenger",score:38,age:1,
+    summary:"Perguntou o preço do CPAP, mas ainda não tem diagnóstico.",
+    msgs:[["lead","Quanto custa um CPAP? Eu ronco muito",14],["ai","Wellington, o CPAP é indicado depois de um exame chamado polissonografia. Você já fez? Se ainda não, posso te explicar como funciona e o que perguntar ao médico.",13.9]]});
+  id.clinica=L("loc","venda","negociacao",{name:"Clínica Respirar Bem",org:"Clínica de pneumologia",type:"B2B",phone:"(86) 3215-9900",temp:"quente",owner:"Larissa",source:"Indicação médica",value:13800,interest:["l03"],score:68,age:18,ai:false,line:"loc-2",
+    fields:{cnpj:"45.678.901/0001-23",entrega:"Entrega e instalação"},
+    summary:"Quer 2 concentradores para a clínica. Negociando faturamento em 3 parcelas.",
+    msgs:[["lead","Larissa, conseguimos faturar em 3x?",30],["human","Consigo sim, Dr. Otávio. Envio o pedido com as 3 parcelas ainda hoje.",29]]});
+  L("loc","venda","orcamento",{name:"Dr. Marcos Almeida",org:"Consultório de clínica geral",type:"B2B",phone:"(86) 99230-5678",temp:"morno",owner:"Paula",source:"Google Ads",value:9498,interest:["l13","l14","l10"],score:61,age:6,
+    summary:"Montando consultório novo. Orçamento de monitor multiparamétrico, esfigmomanômetro e oxímetros enviado.",
+    msgs:[["lead","Preciso equipar um consultório novo. Tem monitor multiparamétrico?",100],["ai","Temos sim, Dr. Marcos! O monitor multiparamétrico sai por R$ 8.900. Para o consultório, costuma ir junto um esfigmomanômetro digital e oxímetros. Quer que eu monte o orçamento completo?",99.8],["lead","Pode montar",99]]});
+  L("loc","venda","novo",{name:"Sandra Oliveira",phone:"(86) 99187-3321",temp:"morno",owner:"Paula",source:"Site",value:329,interest:["l12"],score:57,age:0,
+    summary:"Chegou pelo formulário do site perguntando sobre nebulizador para a filha.",
+    msgs:[["lead","Oi, vi no site o nebulizador ultrassônico. Serve para criança de 4 anos?",2.2],["ai","Oi, Sandra! Serve sim. O nebulizador ultrassônico vem com máscara infantil e adulto e sai por R$ 329. Quer que eu reserve?",2.1]]});
+  L("loc","venda","ganho",{name:"Luiza Fontenele",phone:"(86) 99654-3321",temp:"quente",owner:"Paula",source:"Instagram orgânico",channel:"instagram",value:420,interest:["l08"],score:84,age:7,closed:3,idle:3});
+  L("loc","homecare","ganho",{name:"Marta Rodrigues",phone:"(86) 99411-2280",temp:"quente",owner:"Larissa",source:"Indicação médica",value:5970,interest:["l01","l09"],score:89,age:20,closed:6,idle:6,
+    fields:{receita:"Recebida",pressao:"10",mascara:"Oronasal",modalidade:"Compra"}});
+  L("loc","venda","perdido",{name:"Gilberto Lima",phone:"(86) 98123-0098",temp:"frio",owner:"Diego",source:"Google Ads",value:7800,interest:["l04"],score:18,age:25,closed:10,idle:10,lost:"Preço acima do esperado"});
+
+  const tasks=[];
+  const T=(co,lead,text,d,owner)=>tasks.push({id:uid("t"),co,lead,text,due:ahead(d),owner,done:false});
+  T("supra",id.maria,"Confirmar horário da entrega no Dirceu",0,"Renato");
+  T("supra",id.antonio,"Retornar para o seu Antônio sobre o combo",-1,"Renato");
+  T("supra",id.helena,"Cobrar retorno da cotação da Clínica Poti",1,"Renato");
+  T("supra",id.marcela,"Validar prazo de 28 dias com o Sr. Ivo",0,"Camila");
+  T("supra",id.drog,"Descobrir o nome do comprador da drogaria",3,"Jéssica");
+  T("supra",id.sebastiana,"Avisar quando chegar o rolo G",-4,"Renato");
+  T("supra",id.raimundo,"Pós-venda: perguntar se o andador atendeu",5,"Renato");
+  T("loc",id.carla,"Separar cama elétrica e colchão para a entrega das 9h",0,"Larissa");
+  T("loc",id.joana,"Oferecer renovação do contrato da cama",-2,"Diego");
+  T("loc",id.marcos,"Cobrar documentos do Marcos",0,"Diego");
+  T("loc",id.adriana,"Ligar para a Adriana sobre compra ou locação",1,"Larissa");
+  T("loc",id.fernando,"Retornar a proposta do Fernando",4,"Diego");
+  T("loc",id.carvalho,"Renovação: Família Carvalho vence em 4 dias",-1,"Paula");
+  T("loc",id.clinica,"Enviar pedido com faturamento em 3 parcelas",0,"Larissa");
+
+  const R=(co,pipe,stage,text,days,on=true)=>({id:uid("r"),co,pipe,stage,text,days,on});
+  const rules=[
+    R("supra","varejo","orcamento","Cobrar retorno do orçamento",2),
+    R("supra","varejo","ganho","Pós-venda: perguntar se o produto atendeu",7),
+    R("supra","b2b","cotacao","Confirmar se a cotação foi recebida",1),
+    R("supra","b2b","ganho","Agendar a próxima reposição com o comprador",25),
+    R("loc","venda","orcamento","Cobrar retorno do orçamento",2),
+    R("loc","venda","ganho","Agendar entrega e instalação",1),
+    R("loc","locacao","documentacao","Conferir documentos e contrato assinado",1),
+    R("loc","locacao","entrega","Confirmar endereço e horário da entrega",0),
+    R("loc","locacao","ativo","Ligar para checar a adaptação ao equipamento",3),
+    R("loc","homecare","teste","Avaliar a adaptação ao CPAP com o paciente",5),
+    R("loc","homecare","proposta","Retornar a proposta de CPAP",2,false)
+  ];
+  return {v:2,co:"supra",pipe:{supra:"varejo",loc:"venda"},leads,tasks,rules,products,numbers,templates,integrations};
+}
+
+/* ============ Estado ============ */
+let S;
+function load(){try{const r=localStorage.getItem(LS_KEY);if(r){const p=JSON.parse(r);if(p&&p.v===2&&Array.isArray(p.leads)){S=p;return}}}catch(e){}S=seed();save()}
+function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(S))}catch(e){}}
+const UI={view:"painel",q:"",lead:null,conv:null,threadOpen:false,owner:"",temp:"",idle:7,sel:{},react:null,tplPick:{},taskFilter:"",prodQ:"",rulePipe:null,line:""};
+
+const CO=()=>COMPANIES[S.co];
+const leadsOf=()=>S.leads.filter(l=>l.co===S.co);
+const byId=id=>S.leads.find(l=>l.id===id);
+const pipeOf=l=>COMPANIES[l.co].pipelines[l.pipe];
+const stageOf=l=>pipeOf(l).stages.find(s=>s.id===l.stage)||pipeOf(l).stages[0];
+const kindOf=l=>stageOf(l).kind;
+const prod=(co,pid)=>(S.products[co]||[]).find(p=>p.id===pid);
+const numsOf=co=>S.numbers.filter(x=>x.co===(co||S.co));
+const numById=id=>S.numbers.find(x=>x.id===id);
+const tplsOf=co=>S.templates.filter(t=>t.co===(co||S.co));
+const matchQ=l=>{const q=UI.q.trim().toLowerCase();if(!q)return true;const qd=q.replace(/\D/g,"");return (l.name+" "+l.org+" "+l.phone).toLowerCase().includes(q)||(qd.length>=3&&l.phone.replace(/\D/g,"").includes(qd))};
+const tasksOf=()=>S.tasks.filter(t=>t.co===S.co);
+const overdue=()=>tasksOf().filter(t=>!t.done&&dayDiff(t.due)<0);
+const needList=()=>leadsOf().filter(l=>l.needsHuman&&kindOf(l)==="open");
+const chLabel=c=>({whatsapp:"WhatsApp",instagram:"Instagram",messenger:"Messenger"})[c]||c;
+const lastIn=l=>{for(let i=l.msgs.length-1;i>=0;i--)if(l.msgs[i].from==="lead")return l.msgs[i];return null};
+const windowOpen=l=>{if(l.channel!=="whatsapp")return true;const m=lastIn(l);return !!m&&(Date.now()-new Date(m.at).getTime())<24*HOUR};
+const windowEnds=l=>{const m=lastIn(l);return m?new Date(new Date(m.at).getTime()+24*HOUR).toISOString():null};
+function fillTpl(t,l){const p=l.interest.map(x=>prod(l.co,x)).filter(Boolean)[0];
+  return t.text.replace(/{{nome}}/g,first(l.name)).replace(/{{vendedor}}/g,l.owner).replace(/{{produto}}/g,p?lc1(p.name):"o equipamento")}
+
+/* ============ Ícones ============ */
+const I={
+  painel:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  funil:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>',
+  conversas:'<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+  fila:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+  tarefas:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 2v4M16 2v4M8 12l3 3 5-6"/></svg>',
+  catalogo:'<svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
+  automacoes:'<svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>',
+  canais:'<svg viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0V7zM12 16v5"/></svg>',
+  sun:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  moon:'<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
+};
+const VIEWS=[["painel","Painel"],["funil","Funil"],["conversas","Conversas"],["fila","Precisa de mim"],["tarefas","Tarefas"],["catalogo","Catálogo"],["sep"],["automacoes","Automações"],["canais","Canais e integrações"]];
+
+/* ============ Tema ============ */
+function storedTheme(){try{return localStorage.getItem("orvya-theme")}catch(e){return null}}
+function effectiveTheme(){const s=storedTheme();if(s==="light"||s==="dark")return s;return window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}
+function applyTheme(){const s=storedTheme();if(s==="light"||s==="dark")document.documentElement.setAttribute("data-theme",s);else document.documentElement.removeAttribute("data-theme")}
+function toggleTheme(){const nx=effectiveTheme()==="dark"?"light":"dark";try{localStorage.setItem("orvya-theme",nx)}catch(e){}applyTheme();renderSide();renderMain()}
+
+/* ============ Render ============ */
+function render(){renderSide();renderMain();renderDrawer()}
+
+function renderSide(){
+  const need=needList().length,od=overdue().length;
+  const waiting=leadsOf().filter(l=>l.msgs.length&&l.msgs[l.msgs.length-1].from==="lead"&&kindOf(l)==="open").length;
+  const counts={fila:need,tarefas:od,conversas:waiting};
+  const dark=effectiveTheme()==="dark";
+  document.getElementById("side").innerHTML=`
+    <div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="18.2" cy="6.8" r="1.6" fill="#fff" stroke="none"/></svg></span><div><strong class="wordmark">Orvya</strong><span class="slogan">Conexões inteligentes. Resultados integrados.</span></div></div>
+    <div class="co-switch">${Object.values(COMPANIES).map(c=>`
+      <button class="co-btn" data-co="${c.id}" data-action="co" data-id="${c.id}" aria-pressed="${S.co===c.id}">
+        <span class="mono">${c.mono}</span><span><b>${c.name}</b><small>${c.segment}</small></span></button>`).join("")}
+    </div>
+    <nav class="nav" aria-label="Seções">${VIEWS.map(([v,label])=>v==="sep"?'<div class="sep" role="separator"></div>':`
+      <button data-action="nav" data-id="${v}" ${UI.view===v?'aria-current="page"':""}>${I[v]}<span>${label}</span>${counts[v]?`<span class="count ${v!=="conversas"?"alert":""}">${counts[v]}</span>`:""}</button>`).join("")}
+    </nav>
+    <div class="side-foot">
+      <button data-action="theme">${dark?"Mudar para o modo claro":"Mudar para o modo escuro"}</button>
+      <button data-action="reset">Restaurar dados de exemplo</button>
+      <p class="proto">Protótipo com dados fictícios. As alterações ficam salvas só neste navegador.</p>
+      <p class="signature">VÉR7ICE <b>Orvya</b></p>
+    </div>`;
+}
+
+function renderMain(){
+  const titles={painel:["Painel","como está a operação comercial hoje"],funil:["Funil","arraste os cards para mudar de etapa"],conversas:["Conversas","WhatsApp, Instagram e Messenger em um só lugar"],
+    fila:["Precisa de mim","conversas que a IA passou para a equipe e leads para reativar"],tarefas:["Tarefas","próximos passos da equipe"],
+    catalogo:["Catálogo",S.co==="loc"?"equipamentos para venda e locação":"produtos e preços que o agente pode informar"],automacoes:["Automações","o que o CRM faz sozinho quando um lead muda de etapa"],
+    canais:["Canais e integrações","números de WhatsApp, modelos de mensagem, anúncios e site"]};
+  const [t,sub]=titles[UI.view];
+  const showSearch=["funil","conversas","painel"].includes(UI.view);
+  const views={painel:vPainel,funil:vFunil,conversas:vConversas,fila:vFila,tarefas:vTarefas,catalogo:vCatalogo,automacoes:vAutomacoes,canais:vCanais};
+  const main=document.getElementById("main");
+  const prevScroll=main.scrollTop;
+  const board=document.querySelector(".board");const prevBoard=board?board.scrollLeft:0;
+  const dark=effectiveTheme()==="dark";
+  main.innerHTML=`
+    <header class="top">
+      <div><h1>${t}</h1><p>${esc(CO().name)}: ${sub}</p></div>
+      <div class="spacer"></div>
+      ${showSearch?`<label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" type="search" placeholder="Buscar nome, empresa ou telefone" value="${esc(UI.q)}" aria-label="Buscar leads"></label>`:""}
+      <button class="icon-btn" data-action="theme" aria-label="${dark?"Mudar para o modo claro":"Mudar para o modo escuro"}" title="${dark?"Modo claro":"Modo escuro"}">${dark?I.sun:I.moon}</button>
+      <button class="btn primary" data-action="new-lead">Novo lead</button>
+    </header>
+    <div class="content">${views[UI.view]()}</div>`;
+  main.scrollTop=prevScroll;
+  const nb=document.querySelector(".board");if(nb)nb.scrollLeft=prevBoard;
+  if(UI.view==="conversas"){const m=document.getElementById("msgs");if(m)m.scrollTop=m.scrollHeight}
+  bindDnD();
+}
+
+/* ---------- Painel ---------- */
+function vPainel(){
+  const ls=leadsOf().filter(matchQ);
+  const open=ls.filter(l=>kindOf(l)==="open"),won=ls.filter(l=>kindOf(l)==="won"),lost=ls.filter(l=>kindOf(l)==="lost");
+  const inMonth=l=>l.closedAt&&daysSince(l.closedAt)<30;
+  const wonM=won.filter(inMonth),lostM=lost.filter(inMonth);
+  const pipelineValue=open.reduce((a,l)=>a+(+l.value||0),0);
+  const conv=(wonM.length+lostM.length)?Math.round(wonM.length/(wonM.length+lostM.length)*100):0;
+  const isLoc=S.co==="loc";
+  const active=ls.filter(l=>l.pipe==="locacao"&&l.stage==="ativo");
+  const mrr=active.reduce((a,l)=>a+(+l.fields.mensal||0),0);
+  const kpis=[
+    ["Leads em aberto",open.length,`${needList().length} precisam de você agora`],
+    ["Valor em negociação",moneyK(pipelineValue),"soma dos leads em aberto"],
+    [isLoc?"Fechado em 30 dias":"Vendido em 30 dias",moneyK(wonM.reduce((a,l)=>a+(+l.value||0),0)),`${wonM.length} negócios ganhos`],
+    ["Taxa de conversão",conv+"%",`${wonM.length} ganhos e ${lostM.length} perdidos em 30 dias`],
+    isLoc?["Receita de locação",money(mrr),`${active.length} contratos ativos por mês`]:["Tarefas atrasadas",overdue().length,"somando toda a equipe"]
+  ];
+  const pipes=Object.entries(CO().pipelines).map(([pid,p])=>{
+    const pl=ls.filter(l=>l.pipe===pid);
+    const max=Math.max(1,...p.stages.map(s=>pl.filter(l=>l.stage===s.id).length));
+    return `<div class="pipe-block"><h3>${p.name}<span>${pl.filter(l=>kindOf(l)==="open").length} em aberto</span></h3><div class="bars">${p.stages.map(s=>{
+      const items=pl.filter(l=>l.stage===s.id);const v=items.reduce((a,l)=>a+(+l.value||0),0);
+      return `<div class="bar"><span>${s.name}</span><div class="track"><div class="fill ${s.kind}" style="width:${items.length?Math.max(4,items.length/max*100):0}%"></div></div><span class="val">${items.length} · ${moneyK(v)}</span></div>`}).join("")}</div></div>`}).join("");
+  const srcs=CO().sources.map(src=>{const x=ls.filter(l=>l.source===src);const w=x.filter(l=>kindOf(l)==="won");
+    return {src,total:x.length,won:w.length,lost:x.filter(l=>kindOf(l)==="lost").length,rev:w.reduce((a,l)=>a+(+l.value||0),0)}}).sort((a,b)=>b.total-a.total);
+  const maxS=Math.max(1,...srcs.map(s=>s.total));
+  const origins=srcs.map(s=>`<div class="origin"><b>${s.src}</b><small>${s.total} leads, ${s.won} ${s.won===1?"fechado":"fechados"}, ${moneyK(s.rev)}</small>
+    <div class="track" style="width:${s.total?Math.max(6,s.total/maxS*100):6}%">${s.total?`<i style="width:${s.won/s.total*100}%;background:var(--won)"></i><i style="width:${s.lost/s.total*100}%;background:#F87171"></i><i style="flex:1;background:var(--accent);opacity:.6"></i>`:""}</div></div>`).join("");
+  const stale=open.filter(l=>daysSince(l.lastContact)>=7&&!l.needsHuman);
+  const att=[...needList().filter(matchQ).map(l=>({l,why:l.needReason,tag:'<span class="pill bad">Precisa de você</span>'})),...stale.map(l=>({l,why:"Último contato "+rel(l.lastContact),tag:'<span class="pill warn">Parado</span>'}))];
+  const attHtml=att.length?`<div class="row-list">${att.slice(0,6).map(({l,why,tag})=>`<div class="att"><span class="av">${initials(l.name)}</span><div class="grow"><b>${esc(l.name)}</b><small>${esc(why)}</small></div>${tag}<button class="btn sm" data-action="open-lead" data-id="${l.id}">Abrir</button></div>`).join("")}</div>`:`<div class="empty">Nada pendente agora.</div>`;
+  let contracts="";
+  if(isLoc){
+    const exp=active.filter(l=>l.fields.fim).map(l=>({l,d:dayDiff(l.fields.fim+"T12:00")})).filter(x=>x.d<=30).sort((a,b)=>a.d-b.d);
+    contracts=`<section class="panel"><h2>Contratos de locação vencendo</h2><p class="sub">Próximos 30 dias. Ofereça a renovação antes de a família procurar outra empresa.</p>
+      ${exp.length?`<div class="row-list">${exp.map(({l,d})=>`<div class="att"><span class="av">${initials(l.name)}</span><div class="grow"><b>${esc(l.name)}</b><small>${esc(l.fields.equipamento||"")}, ${money(l.fields.mensal)} por mês</small></div>
+        <span class="pill ${d<=7?"bad":d<=15?"warn":"ok"}">${d<0?"vencido":d===0?"vence hoje":"vence em "+d+" dias"}</span><button class="btn sm" data-action="open-lead" data-id="${l.id}">Abrir</button></div>`).join("")}</div>`:`<div class="empty">Nenhum contrato vence nos próximos 30 dias.</div>`}</section>`;
+  }
+  const nums=numsOf();
+  const numsHtml=`<section class="panel"><h2>WhatsApp</h2><p class="sub">Conversas iniciadas pelo cliente neste mês. As primeiras ${FREE_SERVICE.toLocaleString("pt-BR")} de cada número não têm custo de mensagem.</p>
+    <div class="row-list">${nums.map(x=>`<div class="att"><span class="dot" style="background:${x.status==="connected"?"var(--won)":"var(--line-2)"}"></span><div class="grow"><b>${esc(x.label)}</b><small>${x.status==="connected"?esc(x.phone):"Não conectado"}</small></div>
+      ${x.status==="connected"?`<span class="pill ind">${x.used} de ${FREE_SERVICE.toLocaleString("pt-BR")}</span>`:`<button class="btn sm soft" data-action="nav" data-id="canais">Conectar</button>`}</div>`).join("")}</div></section>`;
+  return `<div class="kpis">${kpis.map((k,i)=>`<div class="kpi ${i===2?"hl":""}"><span>${k[0]}</span><strong>${k[1]}</strong><em>${k[2]}</em></div>`).join("")}</div>
+    <div class="grid g-3-1">
+      <div class="grid" style="align-content:start">
+        <section class="panel"><h2>Funil por etapa</h2><p class="sub">Quantidade de leads e valor em cada etapa</p>${pipes}</section>
+        <section class="panel"><h2>Origem dos leads</h2><p class="sub"><span class="dot" style="background:var(--won)"></span> fechados &nbsp; <span class="dot" style="background:#F87171"></span> perdidos &nbsp; <span class="dot" style="background:var(--accent)"></span> em aberto. É aqui que se mede o retorno de cada campanha.</p><div class="row-list">${origins}</div></section>
+      </div>
+      <div class="grid" style="align-content:start">
+        <section class="panel"><h2>Precisa de atenção</h2><p class="sub">Pedidos de atendimento humano e leads parados há 7 dias ou mais</p>${attHtml}</section>
+        ${contracts}
+        ${numsHtml}
+      </div>
+    </div>`;
+}
+
+/* ---------- Funil ---------- */
+function vFunil(){
+  const pid=S.pipe[S.co];const p=CO().pipelines[pid];
+  const ls=leadsOf().filter(l=>l.pipe===pid&&matchQ(l)&&(!UI.owner||l.owner===UI.owner)&&(!UI.temp||l.temp===UI.temp));
+  const tabs=Object.entries(CO().pipelines).map(([k,x])=>`<button data-action="pipe" data-id="${k}" aria-pressed="${pid===k}">${x.name}</button>`).join("");
+  const cols=p.stages.map(s=>{
+    const items=ls.filter(l=>l.stage===s.id).sort((a,b)=>(b.needsHuman-a.needsHuman)||(b.score-a.score));
+    const v=items.reduce((a,l)=>a+(+l.value||0),0);
+    return `<section class="col" data-stage="${s.id}" data-kind="${s.kind}" aria-label="${s.name}">
+      <div class="col-head"><div class="t">${s.name}<span class="n">${items.length}</span></div><small>${money(v)}</small><div class="stripe"></div></div>
+      <div class="col-body">${items.map(card).join("")||`<p class="muted" style="font-size:12px;text-align:center;margin:12px 0">Arraste um lead para cá</p>`}</div></section>`}).join("");
+  return `<div class="toolbar"><div class="tabs" role="group" aria-label="Funis">${tabs}</div>
+    <select id="fOwner" aria-label="Filtrar por responsável"><option value="">Todos os responsáveis</option>${CO().team.map(t=>`<option ${UI.owner===t?"selected":""}>${t}</option>`).join("")}</select>
+    <select id="fTemp" aria-label="Filtrar por temperatura"><option value="">Todas as temperaturas</option>${["quente","morno","frio"].map(t=>`<option value="${t}" ${UI.temp===t?"selected":""}>${t[0].toUpperCase()+t.slice(1)}</option>`).join("")}</select>
+    <span class="muted" style="font-size:12px">${p.hint}</span></div>
+    <div class="board">${cols}</div>`;
+}
+function card(l){
+  const open=kindOf(l)==="open";
+  const hasOverdue=S.tasks.some(t=>t.lead===l.id&&!t.done&&dayDiff(t.due)<0);
+  let extra="";
+  if(l.pipe==="locacao"&&l.stage==="ativo"&&l.fields.fim){const d=dayDiff(l.fields.fim+"T12:00");if(d<=15)extra=`<span class="pill ${d<=7?"bad":"warn"}">vence em ${Math.max(d,0)} dias</span>`}
+  return `<button class="kcard ${l.needsHuman&&open?"need":""}" draggable="true" data-lead="${l.id}" data-action="open-lead" data-id="${l.id}">
+    <div class="l1"><span class="dot t-${l.temp}" title="Temperatura: ${l.temp}"></span><b>${esc(l.name)}</b><span class="ch ${l.channel}">${chLabel(l.channel)}</span></div>
+    ${l.org?`<div class="org">${esc(l.org)}</div>`:""}
+    <div class="l3"><span class="val">${money(l.value)}</span>${l.type==="B2B"?'<span class="pill">B2B</span>':""}
+      ${open&&l.msgs.length?(l.ai?'<span class="pill ind">IA ativa</span>':'<span class="pill">Humano</span>'):""}
+      ${l.needsHuman&&open?'<span class="pill bad">Precisa de você</span>':""}${hasOverdue?'<span class="pill warn">Tarefa atrasada</span>':""}${extra}</div>
+    <div class="meta"><span class="av">${initials(l.owner)}</span>${esc(l.owner)}<span class="r">${rel(l.lastContact)}</span></div></button>`;
+}
+
+let dragId=null,dragged=false;
+function bindDnD(){
+  document.querySelectorAll(".kcard").forEach(el=>{
+    el.addEventListener("dragstart",e=>{dragId=el.dataset.lead;dragged=true;el.classList.add("dragging");e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",dragId)}catch(_){}});
+    el.addEventListener("dragend",()=>{el.classList.remove("dragging");document.querySelectorAll(".col.over").forEach(c=>c.classList.remove("over"));setTimeout(()=>{dragged=false},50)});
+  });
+  document.querySelectorAll(".col").forEach(col=>{
+    col.addEventListener("dragover",e=>{e.preventDefault();col.classList.add("over")});
+    col.addEventListener("dragleave",e=>{if(!col.contains(e.relatedTarget))col.classList.remove("over")});
+    col.addEventListener("drop",e=>{e.preventDefault();col.classList.remove("over");let lid=dragId;try{lid=lid||e.dataTransfer.getData("text/plain")}catch(_){}dragId=null;if(lid)moveLead(lid,col.dataset.stage)});
+  });
+}
+
+/* ---------- Movimentação e automações ---------- */
+function moveLead(lid,stage,opts={}){
+  const l=byId(lid);if(!l||l.stage===stage){renderDrawer();return}
+  const target=pipeOf(l).stages.find(s=>s.id===stage);
+  if(target.kind==="lost"&&!opts.reason){askLost(lid,stage);return}
+  const from=stageOf(l).name;
+  l.stage=stage;l.updated=nowIso();
+  if(target.kind!=="open"){l.closedAt=nowIso();l.needsHuman=false}else{l.closedAt=null;l.lostReason=""}
+  if(target.kind==="lost")l.lostReason=opts.reason;
+  l.history.unshift({kind:"stage",text:`Etapa alterada de ${from} para ${target.name}${opts.reason?`. Motivo: ${opts.reason}`:""}`,at:nowIso(),by:"Você"});
+  const rules=S.rules.filter(r=>r.on&&r.co===l.co&&r.pipe===l.pipe&&r.stage===stage);
+  rules.forEach(r=>{
+    S.tasks.push({id:uid("t"),co:l.co,lead:l.id,text:r.text,due:ahead(r.days),owner:l.owner,done:false});
+    l.history.unshift({kind:"auto",text:`Automação criou a tarefa “${r.text}” para ${l.owner}`,at:nowIso(),by:"CRM"});
+  });
+  save();render();
+  toast(`${first(l.name)} foi para ${target.name}.`);
+  rules.forEach(r=>toast(`Automação: tarefa “${r.text}” criada para ${l.owner}, prazo ${dueLabel(ahead(r.days))}.`,"auto"));
+}
+function askLost(lid,stage){
+  const l=byId(lid);
+  modal(`<h2>Por que ${esc(first(l.name))} foi perdido?</h2><p class="muted" style="margin:0">O motivo alimenta o relatório de perdas e ajuda a ajustar preço, estoque e abordagem.</p>
+    <div class="chips" id="lostChips">${COMPANIES[l.co].lost.map(r=>`<button class="chip" data-action="lost-pick" data-id="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join("")}</div>
+    <label class="field"><span>Ou descreva outro motivo</span><input id="lostOther" placeholder="Ex.: família decidiu esperar a alta"></label>
+    <div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" data-action="lost-confirm" data-id="${lid}" data-stage="${stage}">Marcar como perdido</button></div>`);
+}
+
+/* ---------- Conversas ---------- */
+function vConversas(){
+  const nums=numsOf();
+  const ls=leadsOf().filter(l=>l.msgs.length&&matchQ(l)&&(!UI.line||(UI.line==="outros"?l.channel!=="whatsapp":l.line===UI.line))).sort((a,b)=>new Date(b.lastContact)-new Date(a.lastContact));
+  if(!UI.conv||!ls.find(l=>l.id===UI.conv))UI.conv=ls[0]?ls[0].id:null;
+  const filter=`<div class="conv-filter"><select id="fLine" aria-label="Filtrar por número"><option value="">Todos os canais</option>${nums.map(x=>`<option value="${x.id}" ${UI.line===x.id?"selected":""}>WhatsApp: ${esc(x.label)}${x.status==="connected"?"":" (não conectado)"}</option>`).join("")}<option value="outros" ${UI.line==="outros"?"selected":""}>Instagram e Messenger</option></select></div>`;
+  const list=ls.map(l=>{const m=l.msgs[l.msgs.length-1];const open=kindOf(l)==="open";const nb=l.line&&numById(l.line);
+    return `<button class="conv" data-action="conv" data-id="${l.id}" aria-current="${UI.conv===l.id}"><span class="av">${initials(l.name)}</span><div class="grow">
+      <div class="l1"><b>${esc(l.name)}</b><small>${rel(m.at)}</small></div><p>${m.from==="lead"?"":m.from==="ai"?"IA: ":esc(m.by||l.owner)+": "}${esc(m.text)}</p>
+      <div class="tags"><span class="ch ${l.channel}">${l.channel==="whatsapp"&&nb?esc(nb.label):chLabel(l.channel)}</span>${l.needsHuman&&open?'<span class="pill bad">Precisa de você</span>':l.ai&&open?'<span class="pill ind">IA respondendo</span>':""}${m.from==="lead"&&open&&!l.needsHuman?'<span class="pill warn">Aguardando resposta</span>':""}</div></div></button>`}).join("")||`<div class="empty" style="margin:14px">Nenhuma conversa encontrada.</div>`;
+  const l=UI.conv&&byId(UI.conv);
+  let thread=`<div class="empty" style="margin:auto">Selecione uma conversa.</div>`;
+  if(l){
+    const open=kindOf(l)==="open";const nb=l.line&&numById(l.line);const connected=l.channel!=="whatsapp"||(nb&&nb.status==="connected");
+    const win=windowOpen(l);
+    let composer;
+    if(!connected){
+      composer=`<div class="win closed">O número “${esc(nb?nb.label:"")}” ainda não está conectado. Conecte em Canais e integrações para responder por ele.</div>`;
+    }else if(win){
+      composer=`${l.channel==="whatsapp"?`<div class="win">Janela de atendimento aberta até ${hhmm(windowEnds(l))}. Pode responder livremente, sem custo.</div>`:""}
+        <div class="composer"><textarea id="reply" rows="1" placeholder="Responder como ${esc(l.owner)}…" aria-label="Mensagem"></textarea><button class="btn primary" data-action="send" data-id="${l.id}">Enviar</button></div>
+        <p class="ai-note">${l.ai&&open?"A IA está respondendo esta conversa. Se você enviar uma mensagem, ela é pausada.":"A IA está pausada nesta conversa. A equipe está no controle."}</p>`;
+    }else{
+      const tp=tplsOf(l.co).filter(t=>t.status==="Aprovado");const pick=UI.tplPick[l.id]||(tp[0]&&tp[0].id);const t=tp.find(x=>x.id===pick);
+      composer=`<div class="win closed">A janela de 24 horas fechou. Pela regra da Meta, só é possível enviar um modelo aprovado até o cliente responder.</div>
+        <div class="composer"><select id="tplPick" data-lead="${l.id}" aria-label="Modelo de mensagem">${tp.map(x=>`<option value="${x.id}" ${x.id===pick?"selected":""}>${x.name} (${x.cat})</option>`).join("")}</select>
+        <button class="btn primary" data-action="send-tpl" data-id="${l.id}" ${t?"":"disabled"}>Enviar modelo</button>
+        ${t?`<div class="tpl-prev">${esc(fillTpl(t,l))}</div>`:""}</div>
+        <p class="ai-note">${t?`Custo estimado deste envio: ${cost(TPL_COST[t.cat])} (categoria ${t.cat}).`:"Nenhum modelo aprovado. Crie um em Canais e integrações."}</p>`;
+    }
+    thread=`<div class="th-head"><button class="btn sm only-mobile" data-action="conv-back">Voltar</button><span class="av">${initials(l.name)}</span>
+      <div class="grow"><b>${esc(l.name)}</b><small>${esc(l.phone)} · ${l.channel==="whatsapp"&&nb?"WhatsApp "+esc(nb.label):chLabel(l.channel)} · ${stageOf(l).name}</small></div>
+      ${open?(l.ai?`<button class="btn sm" data-action="assume" data-id="${l.id}">Assumir conversa</button>`:`<button class="btn sm soft" data-action="return-ai" data-id="${l.id}">Devolver para IA</button>`):""}
+      <button class="btn sm" data-action="open-lead" data-id="${l.id}">Ver lead</button></div>
+      <div class="msgs" id="msgs">${l.summary?`<div class="summary"><b>Resumo da IA para a equipe</b>${esc(l.summary)}</div>`:""}
+      ${l.msgs.map(m=>`<div class="bub ${m.from} ${m.tpl?"tpl":""}">${esc(m.text)}<small>${m.from==="ai"?"Agente IA":m.from==="human"?esc(m.by||l.owner)+(m.tpl?" · modelo "+esc(m.tpl):""):esc(first(l.name))} · ${new Date(m.at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</small></div>`).join("")}</div>
+      ${composer}`;
+  }
+  return `<div class="inbox ${UI.threadOpen?"thread-open":""}"><div class="conv-side">${filter}<div class="conv-list">${list}</div></div><div class="thread">${thread}</div></div>`;
+}
+
+/* ---------- Fila ---------- */
+function vFila(){
+  const need=needList().sort((a,b)=>(b.score-a.score)||(new Date(a.lastContact)-new Date(b.lastContact)));
+  const needHtml=need.length?`<div class="row-list">${need.map(l=>`<div class="q-item"><div class="score">${l.score}<small>score</small></div>
+    <div class="grow"><b>${esc(l.name)}</b> <span class="ch ${l.channel}">${chLabel(l.channel)}</span><p><strong style="color:var(--bad-fg);font-weight:600">${esc(l.needReason)}</strong>, esperando ${rel(l.lastContact)}</p><p>${esc(l.summary)}</p></div>
+    <button class="btn sm" data-action="open-lead" data-id="${l.id}">Ver lead</button><button class="btn sm primary" data-action="take" data-id="${l.id}">Assumir</button></div>`).join("")}</div>`
+    :`<div class="empty">Nenhuma conversa exige a equipe agora.</div>`;
+  const elig=leadsOf().filter(l=>kindOf(l)==="open"&&!l.needsHuman&&l.channel==="whatsapp"&&daysSince(l.lastContact)>=UI.idle).sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact));
+  const nSel=elig.filter(l=>UI.sel[l.id]).length;
+  const tp=tplsOf().filter(t=>t.status==="Aprovado");
+  let react;
+  if(UI.react){
+    const t=tp.find(x=>x.id===UI.react.tpl)||tp[0];const ids=UI.react.ids;
+    react=`<p class="sub">Leads parados estão fora da janela de 24 horas, então a reativação usa um modelo aprovado pela Meta. O texto é fixo; só os campos entre chaves mudam.</p>
+      <label class="field" style="margin-bottom:12px"><span>Modelo</span><select id="reactTpl">${tp.map(x=>`<option value="${x.id}" ${t&&x.id===t.id?"selected":""}>${x.name} (${x.cat})</option>`).join("")}</select></label>
+      <div class="grid">${ids.map(i=>{const l=byId(i);return `<div class="draft"><div class="check"><span class="av">${initials(l.name)}</span><b>${esc(l.name)}</b><span class="muted" style="font-size:12px">${stageOf(l).name}, último contato ${rel(l.lastContact)}</span></div><p>${t?esc(fillTpl(t,l)):""}</p></div>`}).join("")}</div>
+      ${t?`<div class="cost"><span>${ids.length} × ${cost(TPL_COST[t.cat])} (${t.cat})</span><b>Custo estimado: ${cost(ids.length*TPL_COST[t.cat])}</b></div>`:""}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" data-action="react-cancel">Cancelar</button><button class="btn primary" data-action="react-send" ${t?"":"disabled"}>Enviar para ${ids.length} ${ids.length===1?"lead":"leads"}</button></div>`;
+  }else{
+    react=`<div class="toolbar" style="margin-bottom:6px"><span class="muted" style="font-size:13px">Sem contato há pelo menos</span><div class="chips">${[2,5,7,14].map(d=>`<button class="chip" data-action="idle" data-id="${d}" aria-pressed="${UI.idle===d}">${d} dias</button>`).join("")}</div></div>
+      <p class="sub">Leads de WhatsApp em aberto e sem pedido de atendimento pendente.</p>
+      ${elig.length?`<div class="row-list">${elig.map(l=>`<label class="q-item check" style="cursor:pointer"><input type="checkbox" data-sel="${l.id}" ${UI.sel[l.id]?"checked":""}><div class="grow"><b>${esc(l.name)}</b><p>${CO().pipelines[l.pipe].name}, ${stageOf(l).name}. ${esc(l.owner)}, último contato ${rel(l.lastContact)}</p></div><span class="dot t-${l.temp}" title="${l.temp}"></span></label>`).join("")}</div>
+      <div style="margin-top:12px"><button class="btn primary" data-action="react-start" ${nSel?"":"disabled"}>${nSel?`Escolher modelo para ${nSel} ${nSel===1?"lead":"leads"}`:"Selecione leads para reativar"}</button></div>`:`<div class="empty">Nenhum lead parado nesse período.</div>`}`;
+  }
+  return `<div class="grid g-2" style="align-items:start"><section class="panel"><h2>Conversas esperando a equipe</h2><p class="sub">Ordenadas por score e tempo de espera</p>${needHtml}</section>
+    <section class="panel"><h2>Reativar leads parados</h2>${react}</section></div>`;
+}
+
+/* ---------- Tarefas ---------- */
+function vTarefas(){
+  const ts=tasksOf().filter(t=>!UI.taskFilter||t.owner===UI.taskFilter);
+  const byDue=(a,b)=>new Date(a.due)-new Date(b.due);
+  const groups=[["Atrasadas",ts.filter(t=>!t.done&&dayDiff(t.due)<0).sort(byDue)],["Hoje",ts.filter(t=>!t.done&&dayDiff(t.due)===0)],["Próximos dias",ts.filter(t=>!t.done&&dayDiff(t.due)>0).sort(byDue)],["Concluídas",ts.filter(t=>t.done).slice(-6).reverse()]];
+  const leadOpts=leadsOf().filter(l=>kindOf(l)!=="lost").map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  return `<section class="panel" style="margin-bottom:16px"><h2>Nova tarefa</h2><p class="sub">Toda tarefa fica ligada a um lead, para ninguém perder o contexto.</p>
+    <div class="new-task"><label class="field full"><span>O que precisa ser feito</span><input id="ntText" placeholder="Ex.: ligar para confirmar a entrega"></label>
+    <label class="field"><span>Lead</span><select id="ntLead">${leadOpts}</select></label>
+    <label class="field"><span>Prazo</span><input id="ntDate" type="date" value="${isoDate(0)}"></label>
+    <label class="field"><span>Responsável</span><select id="ntOwner">${CO().team.map(t=>`<option>${t}</option>`).join("")}</select></label>
+    <button class="btn primary" data-action="add-task">Adicionar</button></div></section>
+    <section class="panel"><div class="toolbar" style="justify-content:space-between"><h2>Tarefas da equipe</h2>
+      <select id="tOwner" aria-label="Filtrar por responsável"><option value="">Todos</option>${CO().team.map(t=>`<option ${UI.taskFilter===t?"selected":""}>${t}</option>`).join("")}</select></div>
+      ${groups.map(([g,items],i)=>`<div class="group-h" ${i===0?'style="margin-top:0"':""}>${g} <span class="pill ${g==="Atrasadas"&&items.length?"bad":""}">${items.length}</span></div>
+      ${items.length?`<div class="row-list">${items.map(taskRow).join("")}</div>`:`<p class="muted" style="font-size:13px;margin:4px 0 0">Nada aqui.</p>`}`).join("")}</section>`;
+}
+function taskRow(t){
+  const l=byId(t.lead);const d=dayDiff(t.due);
+  return `<div class="task ${t.done?"done":""}"><label class="check"><input type="checkbox" data-task="${t.id}" ${t.done?"checked":""} aria-label="Concluir tarefa"></label>
+    <div class="grow"><b>${esc(t.text)}</b><small>${l?`<button class="link" data-action="open-lead" data-id="${l.id}">${esc(l.name)}</button> · `:""}${esc(t.owner)}</small></div>
+    <span class="pill ${t.done?"ok":d<0?"bad":d===0?"warn":""}">${t.done?"feita":dueLabel(t.due)}</span></div>`;
+}
+
+/* ---------- Catálogo ---------- */
+function vCatalogo(){
+  const isLoc=S.co==="loc";const q=UI.prodQ.toLowerCase();
+  const ps=S.products[S.co].filter(p=>!q||(p.name+" "+(p.code||"")+" "+p.cat).toLowerCase().includes(q));
+  const head=isLoc?`<tr><th>Equipamento</th><th>Categoria</th><th class="num">Venda</th><th class="num">Aluguel por mês</th><th class="num">Em estoque</th><th class="num">Em locação</th><th>Leads em aberto</th></tr>`
+    :`<tr><th>Produto</th><th>Código</th><th>Categoria</th><th class="num">Preço</th><th class="num">Estoque</th><th>Campanha</th><th>Leads em aberto</th></tr>`;
+  const rows=ps.map(p=>{const n=S.leads.filter(l=>l.co===S.co&&l.interest.includes(p.id)&&kindOf(l)==="open").length;const nl=n?`<span class="pill ind">${n} ${n===1?"interessado":"interessados"}</span>`:"";
+    return isLoc?`<tr><td><b style="font-weight:600">${esc(p.name)}</b></td><td>${p.cat}</td><td class="num">${money(p.price)}</td><td class="num">${p.rent?money(p.rent):'<span class="muted">só venda</span>'}</td><td class="num ${p.stock<=2?"stock-low":""}">${p.stock}</td><td class="num">${p.rented||"—"}</td><td>${nl}</td></tr>`
+    :`<tr><td><b style="font-weight:600">${esc(p.name)}</b></td><td class="muted">${p.code}</td><td>${p.cat}</td><td class="num">${money(p.price)}</td><td class="num ${p.stock<=4?"stock-low":""}">${p.stock}</td><td>${p.promo?`<span class="pill ok">${p.promo}</span>`:""}</td><td>${nl}</td></tr>`}).join("");
+  return `<div class="panel"><div class="toolbar" style="justify-content:space-between"><div><h2>${isLoc?"Equipamentos para venda e locação":"Produtos"}</h2><p class="sub" style="margin:2px 0 0">O agente de IA só informa preços e condições cadastrados aqui. Os valores são de exemplo e devem ser trocados pela tabela aprovada.</p></div>
+    <input class="inp" id="prodQ" placeholder="Buscar no catálogo" value="${esc(UI.prodQ)}" style="max-width:260px" aria-label="Buscar no catálogo"></div>
+    <div class="scroll-x"><table><thead>${head}</thead><tbody>${rows||`<tr><td colspan="7" class="muted">Nada encontrado.</td></tr>`}</tbody></table></div></div>`;
+}
+
+/* ---------- Automações ---------- */
+function vAutomacoes(){
+  const rs=S.rules.filter(r=>r.co===S.co);
+  const pipes=CO().pipelines;const pSel=UI.rulePipe&&pipes[UI.rulePipe]?UI.rulePipe:Object.keys(pipes)[0];
+  const fixed=[
+    ["Ao mover para Perdido, o motivo é obrigatório","Alimenta o relatório de perdas por motivo."],
+    ["Se a equipe envia uma mensagem, a IA pausa naquela conversa","Evita a IA e o vendedor responderem ao mesmo tempo."],
+    ["Desconto fora da política, urgência ou pedido de atendente vão para Precisa de mim","A IA nunca inventa condição comercial."],
+    ["Fora da janela de 24 horas do WhatsApp, só modelos aprovados","Regra da API oficial da Meta. Vale para a equipe e para a IA."],
+    ["Lead aberto sem contato há 7 dias aparece em Reativar leads parados","O envio sempre passa por revisão e mostra o custo estimado."]
+  ];
+  if(S.co==="loc")fixed.push(["Contrato de locação a 30 dias do fim aparece no Painel","Janela para oferecer a renovação."]);
+  return `<div class="grid g-3-1" style="align-items:start"><section class="panel"><h2>Regras por etapa</h2><p class="sub">Quando um lead entra na etapa, o CRM cria a tarefa para o responsável daquele lead.</p>
+    <div class="row-list">${rs.map(r=>{const p=pipes[r.pipe];const st=p.stages.find(s=>s.id===r.stage);return `<div class="rule"><div class="grow"><p>Entrou em <em>${st?st.name:r.stage}</em> no funil <em>${p.name}</em>: criar a tarefa <em>“${esc(r.text)}”</em></p><small>${r.days===0?"Prazo para o mesmo dia":"Prazo de "+r.days+(r.days===1?" dia":" dias")}</small></div>
+      <label class="switch" title="Ativar ou desativar"><input type="checkbox" data-rule="${r.id}" ${r.on?"checked":""} aria-label="Ativar regra"><span></span></label>
+      <button class="btn sm ghost danger" data-action="del-rule" data-id="${r.id}">Excluir</button></div>`}).join("")||'<div class="empty">Nenhuma regra ainda.</div>'}</div>
+    <div class="group-h" style="margin-top:20px">Nova regra</div>
+    <div class="new-rule"><label class="field"><span>Funil</span><select id="nrPipe">${Object.entries(pipes).map(([k,p])=>`<option value="${k}" ${k===pSel?"selected":""}>${p.name}</option>`).join("")}</select></label>
+      <label class="field"><span>Etapa</span><select id="nrStage">${pipes[pSel].stages.filter(s=>s.kind!=="lost").map(s=>`<option value="${s.id}">${s.name}</option>`).join("")}</select></label>
+      <label class="field full"><span>Tarefa a criar</span><input id="nrText" placeholder="Ex.: enviar vídeo de uso do equipamento"></label>
+      <label class="field"><span>Prazo em dias</span><input id="nrDays" type="number" min="0" value="1"></label>
+      <button class="btn primary" data-action="add-rule">Criar regra</button></div></section>
+    <section class="panel"><h2>Regras fixas</h2><p class="sub">Valem para as duas empresas e protegem a operação</p><div class="row-list">${fixed.map(([a,b])=>`<div class="rule"><div class="grow"><p>${a}</p><small>${b}</small></div><span class="pill ok">Sempre ativa</span></div>`).join("")}</div></section></div>`;
+}
+
+/* ---------- Canais e integrações ---------- */
+const INTEGRATIONS=[
+  {k:"meta_leads",ic:"M",name:"Meta Ads: formulários de lead",desc:"Cada formulário preenchido no Facebook ou Instagram vira lead no funil, já com campanha e anúncio.",
+    steps:["Página do Facebook ligada ao Gerenciador de Negócios da empresa","Aplicativo Meta com a permissão de leitura de leads aprovada","Escolher para qual funil e etapa cada formulário envia os leads"]},
+  {k:"meta_ctwa",ic:"M",name:"Meta Ads: anúncios de clique para o WhatsApp",desc:"A primeira mensagem chega com a identificação do anúncio. A API oficial entrega esse dado em toda conversa.",
+    steps:["Número conectado pela API oficial","Anúncios apontando para o número conectado","Nada mais: o CRM lê a origem do anúncio automaticamente"]},
+  {k:"meta_capi",ic:"M",name:"Meta Ads: API de Conversões",desc:"O CRM avisa a Meta quando um lead compra ou aluga. O algoritmo passa a buscar pessoas parecidas com quem fecha negócio.",
+    steps:["Conjunto de dados (pixel) no Gerenciador de Eventos","Token de acesso da API de Conversões","Definir os eventos: lead qualificado, venda fechada e locação iniciada, com valor"]},
+  {k:"google_leads",ic:"G",name:"Google Ads: formulários de lead",desc:"Os formulários dos anúncios do Google enviam o contato direto para o CRM.",
+    steps:["Copiar o endereço de recebimento e a chave que o CRM gera","Colar os dois no formulário de lead da campanha no Google Ads","Enviar um lead de teste pelo próprio Google Ads"]},
+  {k:"google_conv",ic:"G",name:"Google Ads: conversões de vendas",desc:"O CRM informa ao Google quais cliques viraram venda, para as campanhas otimizarem por faturamento.",
+    steps:["Criar a ação de conversão “Venda no CRM” no Google Ads","Começar pela importação automática de planilha, que é mais simples","Depois, se quiser, migrar para a API do Google Ads (exige token de desenvolvedor aprovado)"]},
+  {k:"site",ic:"S",name:"Site: formulário e botão de WhatsApp",desc:"Um script no site guarda de onde veio cada visita e envia junto com o formulário. O botão de WhatsApp usa link rastreado.",
+    steps:["Colar o script do CRM no site","Apontar o formulário de contato para o CRM","Trocar o botão de WhatsApp pelo link rastreado de cada número"]},
+  {k:"instagram",ic:"I",name:"Instagram Direct",desc:"As mensagens do Direct entram na caixa de conversas junto com o WhatsApp.",
+    steps:["Conta profissional do Instagram ligada à página do Facebook","Autorizar o CRM a ler e responder mensagens"]},
+  {k:"messenger",ic:"F",name:"Messenger",desc:"As mensagens da página do Facebook entram na caixa de conversas.",steps:["Autorizar o CRM na página do Facebook"]}
+];
+function vCanais(){
+  const nums=numsOf();const tps=tplsOf();const ints=S.integrations[S.co]||{};
+  const numCards=nums.map((x,i)=>{const on=x.status==="connected";const pct=Math.min(100,x.used/FREE_SERVICE*100);
+    return `<article class="num-card ${on?"on":""}"><div class="h"><div class="grow"><span class="muted" style="font-size:12px">Número ${i+1} · API oficial do WhatsApp</span><h3>${esc(x.label)}</h3></div>
+      <span class="pill ${on?"ok":""}">${on?"Conectado":"Não conectado"}</span></div>
+      <div class="phone ${on?"":"off"}">${on?esc(x.phone):"Nenhum número conectado ainda"}</div>
+      ${on?`<div class="meter"><div class="l"><span>Conversas iniciadas pelo cliente no mês</span><span>${x.used} de ${FREE_SERVICE.toLocaleString("pt-BR")} sem custo</span></div><div class="track"><i style="width:${pct}%"></i></div></div>
+      <div class="stats"><div><span>Qualidade</span><b>${x.quality}</b></div><div><span>Leads abertos</span><b>${S.leads.filter(l=>l.line===x.id&&kindOf(l)==="open").length}</b></div><div><span>Conectado</span><b>${rel(x.since)}</b></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-action="num-rename" data-id="${x.id}">Renomear</button><button class="btn sm ghost danger" data-action="num-off" data-id="${x.id}">Desconectar</button></div>`
+      :`<p class="muted" style="margin:0;font-size:13px">Use um número exclusivo para este canal. Ele pode seguir no app WhatsApp Business se a conexão for feita com coexistência.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary sm" data-action="num-connect" data-id="${x.id}">Conectar com a Meta</button><button class="btn sm" data-action="num-rename" data-id="${x.id}">Renomear</button></div>`}
+    </article>`}).join("");
+  const tplRows=tps.map(t=>`<tr><td><b style="font-weight:600">${esc(t.name)}</b><div class="muted" style="font-size:12px;max-width:420px">${esc(t.text)}</div></td><td>${t.cat}</td><td class="num">${cost(TPL_COST[t.cat])}</td>
+    <td><span class="pill ${t.status==="Aprovado"?"ok":t.status==="Rejeitado"?"bad":"warn"}">${t.status}</span></td>
+    <td>${t.status!=="Aprovado"?`<button class="btn sm" data-action="tpl-approve" data-id="${t.id}">Simular aprovação</button>`:""}</td></tr>`).join("");
+  const intRows=INTEGRATIONS.map(it=>{const on=!!ints[it.k];return `<div class="int"><span class="ic">${it.ic}</span><div class="grow"><b>${it.name}</b><p>${it.desc}</p></div>
+    <span class="pill ${on?"ok":""}">${on?"Configurado":"Não configurado"}</span><button class="btn sm" data-action="int-open" data-id="${it.k}">${on?"Ver":"Configurar"}</button></div>`}).join("");
+  return `<div class="grid" style="gap:20px">
+    <section><div class="toolbar" style="justify-content:space-between;margin-bottom:10px"><div><h2 style="font-size:16px">WhatsApp da ${esc(CO().short)}</h2><p class="muted" style="margin:2px 0 0;font-size:12.5px">Até 2 números por empresa, os dois pela API oficial. Dá para começar testando com 1 e conectar o segundo depois.</p></div></div>
+      <div class="grid g-2">${numCards}</div></section>
+    <section class="panel"><div class="toolbar" style="justify-content:space-between"><div><h2>Modelos de mensagem</h2><p class="sub" style="margin:2px 0 0">Obrigatórios para falar com o cliente depois de 24 horas sem resposta dele. Cada modelo passa pela aprovação da Meta. Custos estimados por envio.</p></div>
+      <button class="btn sm primary" data-action="tpl-new">Novo modelo</button></div>
+      <div class="scroll-x"><table><thead><tr><th>Modelo</th><th>Categoria</th><th class="num">Custo estimado</th><th>Status</th><th></th></tr></thead><tbody>${tplRows}</tbody></table></div></section>
+    <section class="panel"><h2>Anúncios, site e outros canais</h2><p class="sub">Essas ligações fazem o painel de origem mostrar o retorno de cada campanha em vendas fechadas.</p><div class="row-list">${intRows}</div></section>
+  </div>`;
+}
+
+/* ---------- Drawer do lead ---------- */
+function renderDrawer(){
+  const d=document.getElementById("drawer"),sc=document.getElementById("scrim");
+  const l=UI.lead&&byId(UI.lead);
+  if(!l){d.classList.remove("on");sc.classList.remove("on");return}
+  const c=COMPANIES[l.co],p=pipeOf(l),k=kindOf(l),open=k==="open";
+  const prevScroll=(d.querySelector(".dr-body")||{}).scrollTop||0;const same=d.dataset.lead===l.id;
+  const sel=(key,opts,val)=>`<select data-f="${key}">${opts.map(o=>Array.isArray(o)?`<option value="${o[0]}" ${o[0]===val?"selected":""}>${o[1]}</option>`:`<option ${o===val?"selected":""}>${o}</option>`).join("")}</select>`;
+  const tasks=S.tasks.filter(t=>t.lead===l.id).sort((a,b)=>a.done-b.done||new Date(a.due)-new Date(b.due));
+  const avail=S.products[l.co].filter(x=>!l.interest.includes(x.id));
+  const wonName=p.stages.find(s=>s.kind==="won").name;
+  const nb=l.line&&numById(l.line);
+  d.dataset.lead=l.id;
+  d.innerHTML=`<div class="dr-head"><span class="av">${initials(l.name)}</span><div class="grow"><h2>${esc(l.name)}</h2><p>${esc(l.phone)}${l.org?" · "+esc(l.org):""}</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><span class="pill">${c.short}</span><span class="pill ${k==="won"?"ok":k==="lost"?"bad":"ind"}">${p.name}: ${stageOf(l).name}</span><span class="ch ${l.channel}">${l.channel==="whatsapp"&&nb?"WhatsApp "+esc(nb.label):chLabel(l.channel)}</span>${l.lostReason&&k==="lost"?`<span class="pill bad">${esc(l.lostReason)}</span>`:""}</div></div>
+    <button class="btn sm ghost" data-action="close-drawer">Fechar</button></div>
+    <div class="dr-body">
+      ${l.msgs.length||l.summary?`<div class="ai-box"><div class="l"><b style="font-size:13px">Agente IA</b>${open?(l.ai?'<span class="pill ind">Respondendo</span>':'<span class="pill">Pausado</span>'):'<span class="pill">Negócio encerrado</span>'}<span class="muted" style="font-size:12px">score ${l.score}</span>
+        ${open&&l.msgs.length?`<button class="btn sm" style="margin-left:auto" data-action="${l.ai?"assume":"return-ai"}" data-id="${l.id}">${l.ai?"Assumir conversa":"Devolver para IA"}</button>`:""}</div>${l.summary?`<p>${esc(l.summary)}</p>`:""}</div>`:""}
+      <div class="dr-sec"><h3>Negócio</h3><div class="fgrid">
+        <label class="field"><span>Funil</span>${sel("pipe",Object.entries(c.pipelines).map(([id,x])=>[id,x.name]),l.pipe)}</label>
+        <label class="field"><span>Etapa</span>${sel("stage",p.stages.map(s=>[s.id,s.name]),l.stage)}</label>
+        <label class="field"><span>Valor (R$)</span><input type="number" step="0.01" min="0" data-f="value" value="${l.value}"></label>
+        <label class="field"><span>Temperatura</span>${sel("temp",[["quente","Quente"],["morno","Morno"],["frio","Frio"]],l.temp)}</label>
+        <label class="field"><span>Responsável</span>${sel("owner",c.team,l.owner)}</label>
+        <label class="field"><span>Origem</span>${sel("source",c.sources,l.source)}</label>
+        <label class="field"><span>Tipo de cliente</span>${sel("type",[["B2C","Paciente ou família"],["B2B","Empresa ou instituição"]],l.type)}</label>
+        <label class="field"><span>Canal</span>${sel("channel",[["whatsapp","WhatsApp"],["instagram","Instagram"],["messenger","Messenger"]],l.channel)}</label>
+        ${l.channel==="whatsapp"?`<label class="field full"><span>Número da empresa que atende</span>${sel("line",numsOf(l.co).map(x=>[x.id,x.label+(x.status==="connected"?"":" (não conectado)")]),l.line)}</label>`:""}
+        <label class="field"><span>Nome</span><input data-f="name" value="${esc(l.name)}"></label>
+        <label class="field"><span>Telefone do cliente</span><input data-f="phone" value="${esc(l.phone)}"></label>
+        <label class="field full"><span>Empresa ou instituição</span><input data-f="org" value="${esc(l.org)}" placeholder="Opcional"></label>
+      </div></div>
+      ${p.fields.length?`<div class="dr-sec"><h3>Campos de ${p.name}</h3><div class="fgrid">${p.fields.map(f=>`<label class="field ${f.full?"full":""}"><span>${f.label}</span>${f.type==="select"?`<select data-cf="${f.k}">${f.options.map(o=>`<option ${o===(l.fields[f.k]||f.options[0])?"selected":""}>${o}</option>`).join("")}</select>`:`<input type="${f.type}" data-cf="${f.k}" value="${esc(l.fields[f.k]??"")}">`}</label>`).join("")}</div></div>`:""}
+      <div class="dr-sec"><h3>${l.co==="loc"?"Equipamentos de interesse":"Produtos de interesse"}</h3>
+        <div class="chips" style="margin-bottom:8px">${l.interest.map(pid=>{const x=prod(l.co,pid);if(!x)return "";const rent=x.rent&&l.pipe==="locacao";return `<span class="pill ind" style="padding:4px 8px 4px 10px">${esc(x.name)}, ${money(rent?x.rent:x.price)}${rent?" por mês":""}<button class="link" style="margin-left:6px;color:inherit" data-action="rm-int" data-id="${pid}" aria-label="Remover ${esc(x.name)}">✕</button></span>`}).join("")||'<span class="muted" style="font-size:13px">Nenhum ainda.</span>'}</div>
+        ${avail.length?`<select class="inp" id="addInt" aria-label="Adicionar do catálogo"><option value="">Adicionar do catálogo…</option>${avail.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select>`:""}</div>
+      <div class="dr-sec"><h3>Tarefas</h3>${tasks.length?`<div class="row-list">${tasks.map(taskRow).join("")}</div>`:'<p class="muted" style="font-size:13px;margin:0 0 8px">Nenhuma tarefa.</p>'}
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><input class="inp" id="dtText" placeholder="Nova tarefa para este lead" style="flex:2;min-width:160px"><input class="inp" id="dtDate" type="date" value="${isoDate(1)}" style="flex:1;min-width:130px" aria-label="Prazo"><button class="btn sm primary" style="height:38px" data-action="add-dtask">Adicionar</button></div></div>
+      <div class="dr-sec"><h3>Histórico</h3>
+        <div style="display:flex;gap:8px;margin-bottom:12px"><textarea class="inp" id="noteText" rows="2" placeholder="Registrar anotação, ligação ou visita" style="flex:1"></textarea><button class="btn sm" style="height:38px" data-action="add-note">Salvar</button></div>
+        <div class="tl">${l.history.map(h=>`<div class="tl-item ${h.kind}"><i></i><div><p>${esc(h.text)}</p><small>${esc(h.by)} · ${rel(h.at)}</small></div></div>`).join("")}
+          <div class="tl-item"><i style="background:var(--line-2)"></i><div><p>Lead criado pela origem ${esc(l.source)}</p><small>${rel(l.created)}</small></div></div></div></div>
+    </div>
+    <div class="dr-foot">${l.msgs.length?`<button class="btn primary" data-action="goto-conv" data-id="${l.id}">Abrir conversa</button>`:""}
+      ${open?`<button class="btn" data-action="mark-won" data-id="${l.id}">Marcar ${esc(lc1(wonName))}</button><button class="btn danger" data-action="mark-lost" data-id="${l.id}">Perdido</button>`:""}
+      <span style="flex:1"></span><button class="btn ghost danger" data-action="del-lead" data-id="${l.id}">Excluir lead</button></div>`;
+  if(same)d.querySelector(".dr-body").scrollTop=prevScroll;
+  d.classList.add("on");sc.classList.add("on");
+}
+
+/* ============ Modal e aviso ============ */
+function modal(html){const w=document.getElementById("modalWrap");document.getElementById("modal").innerHTML=html;w.classList.add("on");const f=w.querySelector("input,select");if(f)f.focus()}
+function closeModal(){document.getElementById("modalWrap").classList.remove("on")}
+function toast(t,kind=""){const el=document.createElement("div");el.className="toast "+kind;el.textContent=t;document.getElementById("toasts").appendChild(el);setTimeout(()=>el.remove(),4500)}
+function newLeadModal(){
+  const c=CO(),pid=S.pipe[S.co];const nums=numsOf();
+  modal(`<h2>Novo lead na ${c.short}</h2>
+    <div class="fgrid"><label class="field full"><span>Nome</span><input id="nlName" placeholder="Paciente, familiar ou empresa"></label>
+    <label class="field"><span>Telefone do cliente</span><input id="nlPhone" inputmode="tel" placeholder="(86) 99999-0000"></label>
+    <label class="field"><span>Canal</span><select id="nlCh"><option value="whatsapp">WhatsApp</option><option value="instagram">Instagram</option><option value="messenger">Messenger</option></select></label>
+    <label class="field full"><span>Número da empresa que atende</span><select id="nlLine">${nums.map(x=>`<option value="${x.id}">${esc(x.label)}${x.status==="connected"?"":" (não conectado)"}</option>`).join("")}</select></label>
+    <label class="field"><span>Funil</span><select id="nlPipe">${Object.entries(c.pipelines).map(([id,p])=>`<option value="${id}" ${id===pid?"selected":""}>${p.name}</option>`).join("")}</select></label>
+    <label class="field"><span>Origem</span><select id="nlSrc">${c.sources.map(s=>`<option>${s}</option>`).join("")}</select></label>
+    <label class="field"><span>Responsável</span><select id="nlOwner">${c.team.map(s=>`<option>${s}</option>`).join("")}</select></label>
+    <label class="field"><span>Tipo de cliente</span><select id="nlType"><option value="B2C">Paciente ou família</option><option value="B2B">Empresa ou instituição</option></select></label></div>
+    <p id="nlErr" style="color:var(--bad-fg);font-size:13px;margin:0" hidden></p>
+    <div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" data-action="create-lead">Criar lead</button></div>`);
+}
+
+/* ============ Eventos ============ */
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-action]");if(!b)return;
+  const a=b.dataset.action,id=b.dataset.id;
+  const L=id?byId(id):null;
+  switch(a){
+    case "co":S.co=id;UI.lead=null;UI.conv=null;UI.owner="";UI.temp="";UI.taskFilter="";UI.sel={};UI.react=null;UI.rulePipe=null;UI.threadOpen=false;UI.line="";save();render();break;
+    case "nav":closeModal();UI.view=id;UI.threadOpen=false;render();document.getElementById("main").scrollTop=0;break;
+    case "pipe":S.pipe[S.co]=id;save();renderMain();break;
+    case "theme":toggleTheme();break;
+    case "open-lead":if(dragged)return;closeModal();UI.lead=id;renderDrawer();break;
+    case "close-drawer":UI.lead=null;renderDrawer();break;
+    case "new-lead":newLeadModal();break;
+    case "modal-close":closeModal();break;
+    case "create-lead":{
+      const name=document.getElementById("nlName").value.trim(),phone=document.getElementById("nlPhone").value.trim();
+      const err=document.getElementById("nlErr");const digits=phone.replace(/\D/g,"");
+      if(!name||digits.length<10){err.hidden=false;err.textContent="Informe o nome e um telefone com DDD.";return}
+      const dup=S.leads.find(x=>x.co===S.co&&x.phone.replace(/\D/g,"")===digits);
+      if(dup){err.hidden=false;err.innerHTML=`Este telefone já está no lead ${esc(dup.name)}. <button class="link" data-action="open-lead" data-id="${dup.id}">Abrir lead</button>`;return}
+      const pipe=document.getElementById("nlPipe").value;const ch=document.getElementById("nlCh").value;const now=nowIso();
+      const nl={id:uid("L"),co:S.co,pipe,stage:COMPANIES[S.co].pipelines[pipe].stages[0].id,name,phone,org:"",type:document.getElementById("nlType").value,temp:"morno",
+        owner:document.getElementById("nlOwner").value,source:document.getElementById("nlSrc").value,channel:ch,line:ch==="whatsapp"?document.getElementById("nlLine").value:null,value:0,interest:[],score:50,
+        ai:false,needsHuman:false,needReason:"",lastContact:now,created:now,updated:now,closedAt:null,lostReason:"",summary:"",fields:{},msgs:[],history:[]};
+      S.leads.push(nl);save();closeModal();UI.lead=nl.id;render();toast(`${first(name)} entrou no funil ${COMPANIES[S.co].pipelines[pipe].name}.`);break}
+    case "lost-pick":document.querySelectorAll("#lostChips .chip").forEach(c=>c.setAttribute("aria-pressed",String(c===b)));document.getElementById("lostOther").value="";break;
+    case "lost-confirm":{
+      const picked=document.querySelector('#lostChips .chip[aria-pressed="true"]');const other=document.getElementById("lostOther").value.trim();
+      const reason=other||(picked&&picked.dataset.id);if(!reason){toast("Escolha ou descreva o motivo da perda.");return}
+      closeModal();moveLead(id,b.dataset.stage,{reason});break}
+    case "conv":UI.conv=id;UI.threadOpen=true;renderMain();break;
+    case "conv-back":UI.threadOpen=false;renderMain();break;
+    case "goto-conv":UI.conv=id;UI.threadOpen=true;UI.view="conversas";UI.line="";UI.lead=null;render();break;
+    case "assume":case "take":
+      L.ai=false;L.needsHuman=false;L.history.unshift({kind:"note",text:`${L.owner} assumiu a conversa e a IA foi pausada.`,at:nowIso(),by:L.owner});
+      if(a==="take"){UI.conv=id;UI.threadOpen=true;UI.view="conversas";UI.line="";UI.lead=null}
+      save();render();toast(`Você assumiu a conversa com ${first(L.name)}. A IA foi pausada.`);break;
+    case "return-ai":L.ai=true;L.history.unshift({kind:"note",text:"Conversa devolvida para a IA.",at:nowIso(),by:L.owner});save();render();toast(`A IA voltou a responder ${first(L.name)}.`);break;
+    case "send":{
+      const t=document.getElementById("reply");const txt=t.value.trim();if(!txt)return;
+      const now=nowIso();L.msgs.push({from:"human",text:txt,at:now,by:L.owner});
+      const wasAi=L.ai;L.ai=false;L.needsHuman=false;L.lastContact=now;L.updated=now;save();render();
+      toast(wasAi?"Mensagem enviada. A IA foi pausada nesta conversa.":"Mensagem enviada.");break}
+    case "send-tpl":{
+      const tp=tplsOf(L.co).filter(t=>t.status==="Aprovado");const t=tp.find(x=>x.id===(UI.tplPick[L.id]||(tp[0]&&tp[0].id)));if(!t)return;
+      const now=nowIso();L.msgs.push({from:"human",text:fillTpl(t,L),at:now,by:L.owner,tpl:t.name});L.ai=false;L.lastContact=now;L.updated=now;
+      L.history.unshift({kind:"note",text:`Modelo “${t.name}” enviado.`,at:now,by:L.owner});
+      save();render();toast(`Modelo enviado. A conversa reabre quando ${first(L.name)} responder. Custo estimado ${cost(TPL_COST[t.cat])}.`);break}
+    case "idle":UI.idle=+id;UI.sel={};renderMain();break;
+    case "react-start":{const ids=leadsOf().filter(l=>UI.sel[l.id]&&kindOf(l)==="open"&&!l.needsHuman&&l.channel==="whatsapp"&&daysSince(l.lastContact)>=UI.idle).map(l=>l.id);
+      const tp=tplsOf().filter(t=>t.status==="Aprovado");const mk=tp.find(t=>t.cat==="Marketing")||tp[0];UI.react={ids,tpl:mk?mk.id:null};renderMain();break}
+    case "react-cancel":UI.react=null;renderMain();break;
+    case "react-send":{
+      const t=tplsOf().find(x=>x.id===UI.react.tpl&&x.status==="Aprovado");if(!t)return;
+      const now=Date.now();UI.react.ids.forEach((lid,i)=>{const l=byId(lid);if(!l)return;const at=new Date(now+i*1000).toISOString();
+        l.msgs.push({from:"human",text:fillTpl(t,l),at,by:l.owner,tpl:t.name});l.lastContact=at;
+        l.history.unshift({kind:"note",text:`Reativação com o modelo “${t.name}”.`,at,by:l.owner})});
+      const n=UI.react.ids.length;UI.react=null;UI.sel={};save();render();toast(`${n} ${n===1?"modelo enviado":"modelos enviados"}. Custo estimado ${cost(n*TPL_COST[t.cat])}.`);break}
+    case "add-task":{
+      const text=document.getElementById("ntText").value.trim();const dt=document.getElementById("ntDate").value;if(!text||!dt){toast("Descreva a tarefa e escolha o prazo.");return}
+      S.tasks.push({id:uid("t"),co:S.co,lead:document.getElementById("ntLead").value,text,due:new Date(dt+"T12:00").toISOString(),owner:document.getElementById("ntOwner").value,done:false});
+      save();render();toast("Tarefa adicionada.");break}
+    case "add-dtask":{
+      const l=byId(UI.lead);const text=document.getElementById("dtText").value.trim();const dt=document.getElementById("dtDate").value;if(!text||!dt)return;
+      S.tasks.push({id:uid("t"),co:l.co,lead:l.id,text,due:new Date(dt+"T12:00").toISOString(),owner:l.owner,done:false});
+      save();render();toast("Tarefa adicionada.");break}
+    case "add-note":{
+      const l=byId(UI.lead);const t=document.getElementById("noteText").value.trim();if(!t)return;
+      l.history.unshift({kind:"note",text:t,at:nowIso(),by:l.owner});save();renderDrawer();break}
+    case "rm-int":{const l=byId(UI.lead);l.interest=l.interest.filter(x=>x!==id);save();render();break}
+    case "mark-won":moveLead(id,pipeOf(L).stages.find(s=>s.kind==="won").id);break;
+    case "mark-lost":moveLead(id,pipeOf(L).stages.find(s=>s.kind==="lost").id);break;
+    case "del-lead":
+      modal(`<h2>Excluir ${esc(L.name)}?</h2><p class="muted" style="margin:0">O histórico, as conversas e as tarefas deste lead serão apagados.</p><div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" style="background:var(--lost);box-shadow:none" data-action="del-confirm" data-id="${id}">Excluir lead</button></div>`);break;
+    case "del-confirm":S.leads=S.leads.filter(x=>x.id!==id);S.tasks=S.tasks.filter(t=>t.lead!==id);UI.lead=null;if(UI.conv===id)UI.conv=null;closeModal();save();render();toast("Lead excluído.");break;
+    case "add-rule":{
+      const text=document.getElementById("nrText").value.trim();if(!text){toast("Descreva a tarefa que a regra vai criar.");return}
+      S.rules.push({id:uid("r"),co:S.co,pipe:document.getElementById("nrPipe").value,stage:document.getElementById("nrStage").value,text,days:Math.max(0,parseInt(document.getElementById("nrDays").value)||0),on:true});
+      save();renderMain();toast("Regra criada e ativa.");break}
+    case "del-rule":S.rules=S.rules.filter(r=>r.id!==id);save();renderMain();toast("Regra excluída.");break;
+    case "num-connect":{const x=numById(id);
+      modal(`<h2>Conectar “${esc(x.label)}” pela API oficial</h2>
+        <p class="muted" style="margin:0">No sistema real, este botão abre o cadastro guiado da Meta. Antes, tenha em mãos:</p>
+        <ol class="steps"><li>Gerenciador de Negócios da ${esc(CO().name)} verificado com o CNPJ</li><li>O número que vai ser usado, recebendo SMS ou ligação para o código</li><li>O nome de exibição que aparece para o cliente</li><li>A decisão de manter ou não o app WhatsApp Business no mesmo número (coexistência)</li><li>Uma forma de pagamento na conta da Meta, para os modelos de mensagem</li></ol>
+        <label class="field"><span>Número para o protótipo</span><input id="numPhone" inputmode="tel" placeholder="(86) 99999-0000"></label>
+        <p id="numErr" style="color:var(--bad-fg);font-size:13px;margin:0" hidden></p>
+        <div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" data-action="num-confirm" data-id="${id}">Simular conexão</button></div>`);break}
+    case "num-confirm":{const x=numById(id);const ph=document.getElementById("numPhone").value.trim();
+      if(ph.replace(/\D/g,"").length<10){const er=document.getElementById("numErr");er.hidden=false;er.textContent="Informe o número com DDD.";return}
+      x.phone=ph;x.status="connected";x.quality="Alta";x.since=nowIso();x.used=0;save();closeModal();render();toast(`Número “${x.label}” conectado.`);break}
+    case "num-off":{const x=numById(id);modal(`<h2>Desconectar “${esc(x.label)}”?</h2><p class="muted" style="margin:0">As conversas continuam no CRM, mas ninguém consegue responder por este número até ele ser conectado de novo.</p><div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" style="background:var(--lost);box-shadow:none" data-action="num-off-confirm" data-id="${id}">Desconectar</button></div>`);break}
+    case "num-off-confirm":{const x=numById(id);x.status="off";x.phone="";x.since=null;x.used=0;save();closeModal();render();toast("Número desconectado.");break}
+    case "num-rename":{const x=numById(id);modal(`<h2>Renomear número</h2><label class="field"><span>Nome interno</span><input id="numLabel" value="${esc(x.label)}" placeholder="Ex.: Locação e CPAP"></label><div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" data-action="num-rename-ok" data-id="${id}">Salvar nome</button></div>`);break}
+    case "num-rename-ok":{const x=numById(id);const v=document.getElementById("numLabel").value.trim();if(!v)return;x.label=v;save();closeModal();render();toast("Nome salvo.");break}
+    case "tpl-new":
+      modal(`<h2>Novo modelo de mensagem</h2><p class="muted" style="margin:0">Use {{nome}}, {{vendedor}} e {{produto}} para os campos que mudam. Depois de enviado, a Meta revisa e aprova.</p>
+        <label class="field"><span>Nome do modelo</span><input id="tplName" placeholder="Ex.: lembrete_devolucao"></label>
+        <label class="field"><span>Categoria</span><select id="tplCat"><option>Utilidade</option><option>Marketing</option></select></label>
+        <label class="field"><span>Texto</span><textarea id="tplText" rows="4" placeholder="Olá, {{nome}}! ..."></textarea></label>
+        <p class="muted" style="margin:0;font-size:12.5px">Utilidade é para avisos de pedido, entrega e contrato. Qualquer oferta ou convite para comprar entra como Marketing, que custa mais.</p>
+        <div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" data-action="tpl-save">Enviar para aprovação</button></div>`);break;
+    case "tpl-save":{const nm=document.getElementById("tplName").value.trim().toLowerCase().replace(/[^a-z0-9_]+/g,"_");const tx=document.getElementById("tplText").value.trim();
+      if(!nm||!tx){toast("Preencha o nome e o texto do modelo.");return}
+      S.templates.push({id:uid("t-"),co:S.co,name:nm,cat:document.getElementById("tplCat").value,status:"Em análise",text:tx});save();closeModal();renderMain();toast("Modelo enviado para aprovação.");break}
+    case "tpl-approve":{const t=S.templates.find(x=>x.id===id);t.status="Aprovado";save();renderMain();toast(`Modelo “${t.name}” aprovado.`);break}
+    case "int-open":{const it=INTEGRATIONS.find(x=>x.k===id);const on=!!(S.integrations[S.co]||{})[id];
+      modal(`<h2>${it.name}</h2><p class="muted" style="margin:0">${it.desc}</p><div><b style="font-size:13px">O que é preciso</b><ol class="steps" style="margin-top:8px">${it.steps.map(s=>`<li>${s}</li>`).join("")}</ol></div>
+        <div class="acts"><button class="btn" data-action="modal-close">Fechar</button><button class="btn primary" data-action="int-toggle" data-id="${id}">${on?"Marcar como não configurado":"Simular configuração"}</button></div>`);break}
+    case "int-toggle":{S.integrations[S.co]=S.integrations[S.co]||{};S.integrations[S.co][id]=!S.integrations[S.co][id];save();closeModal();renderMain();toast(S.integrations[S.co][id]?"Integração marcada como configurada.":"Integração marcada como não configurada.");break}
+    case "reset":
+      modal(`<h2>Restaurar os dados de exemplo?</h2><p class="muted" style="margin:0">Tudo o que foi alterado neste protótipo volta ao estado inicial.</p><div class="acts"><button class="btn" data-action="modal-close">Cancelar</button><button class="btn primary" data-action="reset-confirm">Restaurar exemplos</button></div>`);break;
+    case "reset-confirm":S=seed();UI.lead=null;UI.conv=null;UI.react=null;UI.sel={};save();closeModal();render();toast("Dados de exemplo restaurados.");break;
+  }
+});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.id==="fOwner"){UI.owner=t.value;renderMain();return}
+  if(t.id==="fTemp"){UI.temp=t.value;renderMain();return}
+  if(t.id==="fLine"){UI.line=t.value;UI.conv=null;renderMain();return}
+  if(t.id==="tOwner"){UI.taskFilter=t.value;renderMain();return}
+  if(t.id==="tplPick"){UI.tplPick[t.dataset.lead]=t.value;renderMain();return}
+  if(t.id==="reactTpl"){UI.react.tpl=t.value;renderMain();return}
+  if(t.id==="nrPipe"){UI.rulePipe=t.value;document.getElementById("nrStage").innerHTML=CO().pipelines[t.value].stages.filter(s=>s.kind!=="lost").map(s=>`<option value="${s.id}">${s.name}</option>`).join("");return}
+  if(t.dataset.sel){UI.sel[t.dataset.sel]=t.checked;renderMain();return}
+  if(t.dataset.task){const tk=S.tasks.find(x=>x.id===t.dataset.task);if(tk){tk.done=t.checked;save();render();if(t.checked)toast("Tarefa concluída.")}return}
+  if(t.dataset.rule){const r=S.rules.find(x=>x.id===t.dataset.rule);if(r){r.on=t.checked;save();toast(r.on?"Regra ativada.":"Regra desativada.")}return}
+  const l=UI.lead&&byId(UI.lead);if(!l)return;
+  if(t.id==="addInt"&&t.value){l.interest.push(t.value);const x=prod(l.co,t.value);if(!(+l.value)&&x)l.value=(l.pipe==="locacao"&&x.rent)?x.rent:x.price;save();render();return}
+  if(t.dataset.f){
+    const k=t.dataset.f;
+    if(k==="stage"){moveLead(l.id,t.value);return}
+    if(k==="pipe"){l.pipe=t.value;l.stage=pipeOf(l).stages[0].id;l.closedAt=null;l.lostReason="";l.history.unshift({kind:"stage",text:`Movido para o funil ${pipeOf(l).name}`,at:nowIso(),by:"Você"});save();render();return}
+    if(k==="channel"){l.channel=t.value;l.line=t.value==="whatsapp"?(l.line||numsOf(l.co)[0].id):null;save();render();return}
+    l[k]=k==="value"?(parseFloat(t.value)||0):t.value;l.updated=nowIso();save();render();return}
+  if(t.dataset.cf){l.fields[t.dataset.cf]=t.type==="number"?(parseFloat(t.value)||0):t.value;save();render()}
+});
+function refocus(elId,pos){const n=document.getElementById(elId);if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}}
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.id==="q"){UI.q=t.value;const pos=t.selectionStart;renderMain();refocus("q",pos)}
+  else if(t.id==="prodQ"){UI.prodQ=t.value;const pos=t.selectionStart;renderMain();refocus("prodQ",pos)}
+});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){if(document.getElementById("modalWrap").classList.contains("on"))closeModal();else if(UI.lead){UI.lead=null;renderDrawer()}}
+  if(e.key==="Enter"&&!e.shiftKey&&e.target.id==="reply"){e.preventDefault();const b=document.querySelector('[data-action="send"]');if(b)b.click()}
+});
+document.getElementById("modalWrap").addEventListener("click",e=>{if(e.target.id==="modalWrap")closeModal()});
+try{window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(!storedTheme()){renderSide();renderMain()}})}catch(_){}
+
+applyTheme();load();render();
+</script>
+</body>
+</html>

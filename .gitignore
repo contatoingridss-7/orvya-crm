@@ -1,0 +1,27 @@
+# dependências
+/node_modules
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# segredos
+.env
+.env*.local
+
+# Supabase local
+/supabase/.temp/
+/supabase/.branches/
+
+# Vercel
+.vercel
+
+# sistema
+.DS_Store
+Thumbs.db
+npm-debug.log*
+
+# pacote original (o conteúdo já está no repositório)
+orvya-kit.zip
