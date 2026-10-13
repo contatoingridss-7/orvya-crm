@@ -250,7 +250,9 @@ async function handleInbound(ctx: Ctx, value: WaChangeValue, m: WaMessage) {
     await ctx.admin.from("leads").update({ last_contact_at: sentAt }).eq("id", leadId);
     if (conversation.lead_id !== leadId) await ctx.admin.from("conversations").update({ lead_id: leadId }).eq("id", conversation.id);
   }
-  await ctx.admin.rpc("conversation_inbound", { p_conversation: conversation.id, p_at: sentAt });
+  const { error: rpcError } = await ctx.admin.rpc("conversation_inbound", { p_conversation: conversation.id, p_at: sentAt, p_preview: body });
+  // Banco ainda sem a migration 0007 (função de 2 parâmetros).
+  if (rpcError) await ctx.admin.rpc("conversation_inbound", { p_conversation: conversation.id, p_at: sentAt });
 
   await saveMedia(ctx, mediaId, conversation.id, messageId);
   // Fase 4: aqui o agente de IA é acionado, se estiver ligado para a empresa e para a conversa.
@@ -298,10 +300,13 @@ async function handleEcho(ctx: Ctx, m: WaMessage) {
   });
   if (!messageId) return;
 
-  await ctx.admin
+  const { error: convError } = await ctx.admin
     .from("conversations")
-    .update({ ai_enabled: false, needs_human: false, last_message_at: sentAt })
+    .update({ ai_enabled: false, needs_human: false, last_message_at: sentAt, last_preview: body.slice(0, 160), last_direction: "out" })
     .eq("id", conversation.id);
+  if (convError) {
+    await ctx.admin.from("conversations").update({ ai_enabled: false, needs_human: false, last_message_at: sentAt }).eq("id", conversation.id);
+  }
   await saveMedia(ctx, mediaId, conversation.id, messageId);
 }
 

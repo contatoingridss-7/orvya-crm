@@ -47,6 +47,8 @@ export type BoardProps = {
   manager: boolean;
   /** LocPress: contratos de locação. */
   hasRentals: boolean;
+  /** Agente de IA ligado para a empresa (sem ele, não há etiqueta de IA nos cards). */
+  companyAi: boolean;
   initialLeadId: string | null;
   closedWindowDays: number;
 };
@@ -67,7 +69,16 @@ export function Board(props: BoardProps) {
     setBaseLeads(props.leads);
     setOverrides({});
   }
-  const leads = useMemo(() => props.leads.map((l) => (overrides[l.id] ? { ...l, stageId: overrides[l.id]! } : l)), [props.leads, overrides]);
+  const leads = useMemo(
+    () =>
+      props.leads.map((l) => ({
+        ...l,
+        ...(overrides[l.id] ? { stageId: overrides[l.id]! } : {}),
+        // IA desligada na empresa: a etiqueta IA/Humano não tem sentido no card.
+        ...(props.companyAi ? {} : { aiEnabled: null }),
+      })),
+    [props.leads, overrides, props.companyAi],
+  );
 
   const [owner, setOwner] = useState<OwnerFilter>("todos");
   const [temperature, setTemperature] = useState("");

@@ -72,7 +72,7 @@ export default async function FunilPage({
   }
 
   const closedSince = subDays(new Date(), CLOSED_WINDOW_DAYS).toISOString();
-  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes] = await Promise.all([
+  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes, aiRes] = await Promise.all([
     supabase.from("stages").select("id, key, name, kind, position").eq("pipeline_id", current.id).order("position").returns<Stage[]>(),
     supabase
       .from("leads")
@@ -112,6 +112,8 @@ export default async function FunilPage({
       .eq("company_id", company.id)
       .eq("status", "ativo")
       .returns<{ lead_id: string; end_date: string }[]>(),
+    // Só gestor/admin leem a configuração da IA; para o vendedor fica "desligada" (sem etiqueta).
+    supabase.from("ai_settings").select("enabled").eq("company_id", company.id).maybeSingle<{ enabled: boolean }>(),
   ]);
 
   const overdue = new Set((overdueRes.data ?? []).map((t) => t.lead_id));
@@ -170,6 +172,7 @@ export default async function FunilPage({
           viewerId={viewer.id}
           manager={isManager(company.role)}
           hasRentals={company.slug === "locpress"}
+          companyAi={aiRes.data?.enabled ?? false}
           initialLeadId={sp.lead ?? null}
           closedWindowDays={CLOSED_WINDOW_DAYS}
         />
