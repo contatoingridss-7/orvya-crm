@@ -54,6 +54,30 @@ function tokenError(e: unknown): string {
   return "Não foi possível enviar a mensagem.";
 }
 
+/**
+ * Celular brasileiro: a Meta às vezes identifica o cliente sem o nono dígito (5586 9999-0000),
+ * mas o número pode estar registrado com ele (5586 99999-0000), e vice-versa. Se a Meta recusar
+ * o destinatário (131030 = fora da lista do número de teste; 131026 = não entregável),
+ * tenta uma vez com a outra versão.
+ */
+async function sendWithNinthDigitRetry(to: string, send: (dest: string) => Promise<string>): Promise<string> {
+  try {
+    return await send(to);
+  } catch (e) {
+    const retryable = e instanceof GraphError && (e.code === 131030 || e.code === 131026);
+    const alt = ninthDigitVariant(to);
+    if (!retryable || !alt) throw e;
+    return send(alt);
+  }
+}
+
+function ninthDigitVariant(digits: string): string | null {
+  if (!digits.startsWith("55")) return null;
+  if (digits.length === 12 && /[6-9]/.test(digits[4] ?? "")) return `${digits.slice(0, 4)}9${digits.slice(4)}`;
+  if (digits.length === 13 && digits[4] === "9") return `${digits.slice(0, 4)}${digits.slice(5)}`;
+  return null;
+}
+
 const sendSchema = z.object({
   conversationId: z.uuid(),
   text: z.string().trim().min(1, "Escreva a mensagem.").max(4096, "Mensagem longa demais (máximo de 4.096 caracteres)."),
@@ -90,7 +114,7 @@ export async function sendText(slug: string, input: z.input<typeof sendSchema>):
 
   let wamid: string;
   try {
-    wamid = await sendTextMessage(number.phone_number_id, cred.access_token, to, parsed.data.text);
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(number.phone_number_id!, cred.access_token, dest, parsed.data.text));
   } catch (e) {
     return { ok: false, error: tokenError(e) };
   }
