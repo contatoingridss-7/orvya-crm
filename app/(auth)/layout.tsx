@@ -1,4 +1,5 @@
 import { Brand, Signature } from "@/components/brand";
+import { LegalFooter } from "@/components/legal-footer";
 
 // Login, recuperação e redefinição de senha: sempre escuras, com o brilho violeta do protótipo.
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -9,8 +10,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <Brand />
         </div>
         <div className="panel grid gap-4 !p-6">{children}</div>
-        <div className="flex justify-center">
+        <div className="grid justify-items-center gap-2">
           <Signature />
+          <LegalFooter />
         </div>
       </main>
     </div>

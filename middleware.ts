@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 // Telas abertas sem login. /redefinir-senha recebe o usuário vindo do link do e-mail (convite ou recuperação).
-const PUBLIC_PATHS = ["/login", "/recuperar-senha", "/redefinir-senha", "/auth/"];
+const PUBLIC_PATHS = ["/login", "/recuperar-senha", "/redefinir-senha", "/privacidade", "/auth/"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => (p.endsWith("/") ? pathname.startsWith(p) : pathname === p));

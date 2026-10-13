@@ -1046,6 +1046,41 @@ select option {
     }
   }
 
+  /* Texto corrido das páginas públicas (política de privacidade) */
+  .legal section {
+    display: grid;
+    gap: 10px;
+    max-width: 68ch;
+  }
+  .legal h2 {
+    font-size: 17px;
+    font-weight: 650;
+  }
+  .legal p {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.65;
+  }
+  .legal ul,
+  .legal ol {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+  .legal ul {
+    list-style: disc;
+  }
+  .legal ol {
+    list-style: decimal;
+  }
+  .legal b {
+    color: var(--title);
+    font-weight: 600;
+  }
+
   .scroll-x {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
