@@ -14,6 +14,8 @@ type SidebarProps = {
   companies: ShellCompany[];
   role: Role;
   userName: string;
+  /** Contadores ao lado do item do menu (ex.: { fila: 3 }). */
+  counts?: Partial<Record<string, number>>;
 };
 
 /** Seção atual a partir do endereço (/ic-supra/config/equipe → config/equipe). */
@@ -22,7 +24,7 @@ export function useSection(slug: string): string {
   return pathname.replace(`/${slug}`, "").replace(/^\//, "");
 }
 
-export function Sidebar({ current, companies, role, userName }: SidebarProps) {
+export function Sidebar({ current, companies, role, userName, counts }: SidebarProps) {
   const section = useSection(current.slug);
 
   return (
@@ -64,6 +66,11 @@ export function Sidebar({ current, companies, role, userName }: SidebarProps) {
             >
               {item.icon}
               <span>{item.label}</span>
+              {!!counts?.[item.section] && (
+                <span className="count alert" aria-label={`${counts[item.section]} pendentes`}>
+                  {counts[item.section]! > 99 ? "99+" : counts[item.section]}
+                </span>
+              )}
             </Link>
           ),
         )}

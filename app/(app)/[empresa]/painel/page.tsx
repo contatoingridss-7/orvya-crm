@@ -293,7 +293,7 @@ export default async function PainelPage({
               </Panel>
             )}
 
-            <Panel title="WhatsApp" subtitle="Conversas iniciadas pelo cliente neste mês. As primeiras 1.000 de cada número não têm custo de mensagem.">
+            <Panel title="WhatsApp" subtitle="Conversas iniciadas pelo cliente neste mês. Respostas em até 24 h depois da mensagem do cliente são gratuitas; só modelos enviados fora dessa janela são cobrados.">
               <ComingSoon phase="Fase 3">Status dos números e contador de conversas aparecem quando o WhatsApp for conectado.</ComingSoon>
             </Panel>
           </div>

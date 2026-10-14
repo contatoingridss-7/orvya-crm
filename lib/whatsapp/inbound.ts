@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { storeInboundMedia } from "./media";
+import { mapMetaStatus } from "./templates";
 import {
   describeMessage,
   extractTrackingCode,
@@ -31,6 +32,11 @@ export async function processWebhookEvent(admin: SupabaseClient, eventId: number
       const value = change.value;
       if (!value) continue;
       try {
+        // Eventos de modelo vêm da conta (WABA), sem metadata.phone_number_id: tratar antes de loadNumber.
+        if (change.field === "message_template_status_update" || change.field === "template_category_update") {
+          await handleTemplateUpdate(admin, entry.id ?? null, change.field, value);
+          continue;
+        }
         const ctx = await loadNumber(admin, value);
         if (!ctx) {
           errors.push(`Número não cadastrado no Orvya: ${value.metadata?.phone_number_id ?? "?"}`);
@@ -71,6 +77,40 @@ async function safe(errors: string[], fn: () => Promise<void>) {
   } catch (e) {
     errors.push(e instanceof Error ? e.message : String(e));
   }
+}
+
+// ---------------------------------------------------------------------
+// Modelos de mensagem (status e categoria decididos pela Meta)
+// ---------------------------------------------------------------------
+async function handleTemplateUpdate(admin: SupabaseClient, wabaId: string | null, field: string, value: WaChangeValue): Promise<void> {
+  const metaId = value.message_template_id != null ? String(value.message_template_id) : null;
+  let patch: Record<string, unknown>;
+  if (field === "template_category_update") {
+    const category = (["MARKETING", "UTILITY", "AUTHENTICATION"] as const).find((c) => c === value.new_category?.toUpperCase());
+    if (!category) return;
+    patch = { category };
+  } else {
+    const status = mapMetaStatus(value.event);
+    if (!status) return; // FLAGGED, LIMIT_EXCEEDED etc.: sem mudança de status no Orvya
+    const reason = value.reason && value.reason !== "NONE" ? value.reason : null;
+    patch = { status, rejected_reason: status === "rejected" ? reason : null };
+  }
+
+  if (metaId) {
+    const { data } = await admin.from("message_templates").update(patch).eq("meta_template_id", metaId).select("id");
+    if (data?.length) return;
+  }
+  // Modelo criado direto na Meta (ou id não gravado): procura pelo nome nas empresas dessa conta.
+  if (!wabaId || !value.message_template_name) return;
+  const { data: numbers } = await admin.from("whatsapp_numbers").select("company_id").eq("waba_id", wabaId).returns<{ company_id: string }[]>();
+  const companies = [...new Set((numbers ?? []).map((n) => n.company_id))];
+  if (!companies.length) return;
+  await admin
+    .from("message_templates")
+    .update({ ...patch, ...(metaId ? { meta_template_id: metaId } : {}) })
+    .in("company_id", companies)
+    .eq("name", value.message_template_name)
+    .eq("language", value.message_template_language ?? "pt_BR");
 }
 
 async function loadNumber(admin: SupabaseClient, value: WaChangeValue): Promise<Ctx | null> {

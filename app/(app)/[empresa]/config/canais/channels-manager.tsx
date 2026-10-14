@@ -12,6 +12,7 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/format";
 import { connectNumber, disconnectNumber, saveNumberSettings, type ActionResult } from "./actions";
+import { TemplatesPanel, type TemplateItem } from "./templates-panel";
 
 export type NumberSlot = {
   slot: 1 | 2;
@@ -35,6 +36,8 @@ type Props = {
   canEdit: boolean;
   webhookUrl: string;
   env: { appSecret: boolean; verifyToken: boolean; graphVersion: string } | null;
+  templates: TemplateItem[];
+  templatesError: boolean;
 };
 
 const STATUS: Record<NumberSlot["status"], { label: string; tone: "ok" | "warn" | "bad" | "neutral" }> = {
@@ -46,7 +49,7 @@ const STATUS: Record<NumberSlot["status"], { label: string; tone: "ok" | "warn" 
 
 const QUALITY: Record<string, string> = { GREEN: "Alta", YELLOW: "Média", RED: "Baixa" };
 
-export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, webhookUrl, env }: Props) {
+export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, webhookUrl, env, templates, templatesError }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [connecting, setConnecting] = useState<NumberSlot | null>(null);
@@ -94,6 +97,11 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
             <dt className="text-muted">Campos a assinar</dt>
             <dd className="m-0">
               <code className="rounded-md bg-surface-2 px-1.5 py-0.5">messages</code>{" "}
+              <code className="rounded-md bg-surface-2 px-1.5 py-0.5">message_template_status_update</code>{" "}
+              <span className="text-xs text-muted">
+                (status dos modelos; opcional: <code>template_category_update</code>)
+              </span>
+              <br />
               <span className="text-xs text-muted">
                 e, para números que também ficam no celular (coexistência): <code>smb_message_echoes</code>, <code>history</code>, <code>smb_app_state_sync</code>
               </span>
@@ -154,9 +162,13 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
         ))}
       </div>
 
-      <Panel title="Modelos de mensagem" subtitle="Mensagens aprovadas pela Meta para falar com o cliente fora da janela de 24 horas.">
-        <ComingSoon phase="Fase 3b">Cadastro, envio para aprovação e sincronização dos modelos.</ComingSoon>
-      </Panel>
+      <TemplatesPanel
+        slug={slug}
+        templates={templates}
+        canEdit={canEdit}
+        hasConnectedNumber={slots.some((n) => n.status === "connected")}
+        loadError={templatesError}
+      />
 
       <Panel title="Anúncios, site e outros canais" subtitle="Meta Ads, Google Ads, formulário do site, Instagram e Messenger.">
         <ComingSoon phase="Fase 6">Integrações de anúncios e do site.</ComingSoon>

@@ -75,3 +75,78 @@ export function markAsRead(phoneNumberId: string, token: string, wamid: string) 
 export function subscribeApp(wabaId: string, token: string) {
   return graph<{ success?: boolean }>(`${wabaId}/subscribed_apps`, token, { method: "POST" });
 }
+
+/** Envia um modelo aprovado (vale com a janela aberta ou fechada). Devolve o wamid. */
+export async function sendTemplateMessage(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  template: { name: string; language: string; params: string[] },
+): Promise<string> {
+  const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
+    method: "POST",
+    body: {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name: template.name,
+        language: { code: template.language },
+        ...(template.params.length
+          ? { components: [{ type: "body", parameters: template.params.map((text) => ({ type: "text", text })) }] }
+          : {}),
+      },
+    },
+  });
+  const id = res.messages?.[0]?.id;
+  if (!id) throw new GraphError("A Meta não confirmou o envio.", 502);
+  return id;
+}
+
+export type MetaTemplate = {
+  id: string;
+  name: string;
+  status?: string;
+  category?: string;
+  language?: string;
+  rejected_reason?: string;
+  components?: { type?: string; text?: string }[];
+};
+
+/** Cria o modelo na conta (WABA) e manda para a análise da Meta. */
+export function createMetaTemplate(
+  wabaId: string,
+  token: string,
+  t: { name: string; language: string; category: string; body: string; examples: string[] },
+) {
+  return graph<{ id: string; status?: string; category?: string }>(`${wabaId}/message_templates`, token, {
+    method: "POST",
+    body: {
+      name: t.name,
+      language: t.language,
+      category: t.category,
+      components: [
+        {
+          type: "BODY",
+          text: t.body,
+          ...(t.examples.length ? { example: { body_text: [t.examples] } } : {}),
+        },
+      ],
+    },
+  });
+}
+
+/** Lista os modelos da conta (até 200, o suficiente para as empresas atuais). */
+export async function listMetaTemplates(wabaId: string, token: string): Promise<MetaTemplate[]> {
+  const res = await graph<{ data?: MetaTemplate[] }>(
+    `${wabaId}/message_templates?fields=id,name,status,category,language,rejected_reason,components&limit=200`,
+    token,
+  );
+  return res.data ?? [];
+}
+
+/** Apaga o modelo (todas as línguas com esse nome) na conta. */
+export function deleteMetaTemplate(wabaId: string, token: string, name: string) {
+  return graph<{ success?: boolean }>(`${wabaId}/message_templates?name=${encodeURIComponent(name)}`, token, { method: "DELETE" });
+}

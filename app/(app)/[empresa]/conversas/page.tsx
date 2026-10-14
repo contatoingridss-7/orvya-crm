@@ -5,7 +5,7 @@ import { isManager, type MemberRole } from "@/lib/auth/roles";
 import { requireCompany } from "@/lib/auth/viewer";
 import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
-import { Inbox, type InboxConversation } from "./inbox";
+import { Inbox, type InboxConversation, type InboxTemplate } from "./inbox";
 
 export const metadata: Metadata = { title: "Conversas" };
 
@@ -26,6 +26,7 @@ type ConvRow = {
   leads: { id: string; closed_at: string | null; stages: { name: string } | null; pipelines: { key: string; name: string } | null } | null;
 };
 type NumberRow = { id: string; label: string; display_phone: string | null; status: string };
+type TemplateRow = { id: string; name: string; category: InboxTemplate["category"]; body: string; variables: string[] | null };
 type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null };
 
 export default async function ConversasPage({ params, searchParams }: { params: Promise<{ empresa: string }>; searchParams: Promise<{ c?: string }> }) {
@@ -33,7 +34,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [convRes, numbersRes, membersRes, aiRes] = await Promise.all([
+  const [convRes, numbersRes, membersRes, aiRes, templatesRes] = await Promise.all([
     // O RLS já filtra: vendedor vê as dele e as da fila; gestor/admin, todas.
     supabase
       .from("conversations")
@@ -49,6 +50,14 @@ export default async function ConversasPage({ params, searchParams }: { params: 
     supabase.from("memberships").select("role, profiles(id, full_name, email, active)").eq("company_id", company.id).returns<MemberRow[]>(),
     // Só gestor/admin leem a configuração da IA; para o vendedor fica "desligada" na tela.
     supabase.from("ai_settings").select("enabled").eq("company_id", company.id).maybeSingle<{ enabled: boolean }>(),
+    // Modelos aprovados da empresa (membros leem pelo RLS) para enviar fora da janela de 24 h.
+    supabase
+      .from("message_templates")
+      .select("id, name, category, body, variables")
+      .eq("company_id", company.id)
+      .eq("status", "approved")
+      .order("name")
+      .returns<TemplateRow[]>(),
   ]);
 
   const people: Person[] = (membersRes.data ?? [])
@@ -88,6 +97,8 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           numbers={(numbersRes.data ?? []).map((n) => ({ id: n.id, label: n.label, phone: n.display_phone, connected: n.status === "connected" }))}
           people={people}
           viewerId={viewer.id}
+          viewerName={viewer.fullName}
+          templates={(templatesRes.data ?? []).map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body, variables: t.variables ?? [] }))}
           manager={isManager(company.role)}
           companyAi={aiRes.data?.enabled ?? false}
           initialId={sp.c ?? null}

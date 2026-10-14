@@ -6,7 +6,17 @@ import { isManager } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { GraphError, markAsRead, sendTextMessage } from "@/lib/whatsapp/graph";
+import { markAsRead, sendTextMessage } from "@/lib/whatsapp/graph";
+import {
+  deliverTemplate,
+  recordOutboundMessage,
+  resolveDestination,
+  SEND_CONVERSATION_SELECT,
+  sendErrorMessage,
+  sendWithNinthDigitRetry,
+  type SendConversation,
+} from "@/lib/whatsapp/send";
+import { cleanParam, countParams } from "@/lib/whatsapp/templates";
 import { isWindowOpen } from "@/lib/whatsapp/window";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -22,60 +32,45 @@ type Ctx = NonNullable<Awaited<ReturnType<typeof context>>>;
 
 const NO_ACCESS = { ok: false as const, error: "Sem acesso a esta empresa." };
 
-type ConvRow = {
-  id: string;
-  company_id: string;
-  assigned_to: string | null;
-  lead_id: string | null;
-  last_inbound_at: string | null;
-  whatsapp_number_id: string | null;
-  contacts: { phone_e164: string | null } | null;
-  whatsapp_numbers: { phone_number_id: string | null; status: string } | null;
-};
+type ConvRow = SendConversation;
 
 /** Carrega a conversa pelo cliente do usuário: se o RLS esconder, ele não tem acesso (docs/WHATSAPP.md, seção 4.1). */
 async function loadConversation(ctx: Ctx, conversationId: string) {
   const { data } = await ctx.supabase
     .from("conversations")
-    .select("id, company_id, assigned_to, lead_id, last_inbound_at, whatsapp_number_id, contacts(phone_e164), whatsapp_numbers(phone_number_id, status)")
+    .select(SEND_CONVERSATION_SELECT)
     .eq("id", conversationId)
     .eq("company_id", ctx.company.id)
     .maybeSingle<ConvRow>();
   return data;
 }
 
-function tokenError(e: unknown): string {
-  if (e instanceof GraphError) {
-    if (e.code === 190) return "O token de acesso do número expirou. Reconecte o número em Canais com um token permanente.";
-    if (e.code === 131047) return "A janela de 24 horas fechou. Use um modelo de mensagem aprovado.";
-    if (e.code === 131030) return "Este número não está na lista de destinatários permitidos do número de teste da Meta.";
-    return `A Meta recusou o envio: ${e.message}`;
+type Prepared = { conv: ConvRow; phoneNumberId: string; token: string; to: string };
+
+/** Confere permissão, número conectado, telefone e token antes de qualquer envio. */
+async function prepareSend(ctx: Ctx, conversationId: string): Promise<{ ok: true; p: Prepared } | { ok: false; error: string }> {
+  const conv = await loadConversation(ctx, conversationId);
+  if (!conv) return { ok: false, error: "Conversa não encontrada." };
+  // Vendedor responde nas dele e nas da fila (e passa a ser o responsável); gestor/admin em todas.
+  if (!ctx.manager && conv.assigned_to && conv.assigned_to !== ctx.viewer.id) {
+    return { ok: false, error: "Esta conversa é de outro vendedor." };
   }
-  return "Não foi possível enviar a mensagem.";
+  const dest = await resolveDestination(conv);
+  if (!dest.ok) return dest;
+  return { ok: true, p: { conv, ...dest.d } };
 }
 
 /**
- * Celular brasileiro: a Meta às vezes identifica o cliente sem o nono dígito (5586 9999-0000),
- * mas o número pode estar registrado com ele (5586 99999-0000), e vice-versa. Se a Meta recusar
- * o destinatário (131030 = fora da lista do número de teste; 131026 = não entregável),
- * tenta uma vez com a outra versão.
+ * Registra a mensagem enviada e atualiza conversa e lead (docs/WHATSAPP.md, seção 4, passos 5 e 6).
+ * Equipe respondeu: a IA pausa nesta conversa (CLAUDE.md, regra 8) e quem respondeu assume, se estava na fila.
  */
-async function sendWithNinthDigitRetry(to: string, send: (dest: string) => Promise<string>): Promise<string> {
-  try {
-    return await send(to);
-  } catch (e) {
-    const retryable = e instanceof GraphError && (e.code === 131030 || e.code === 131026);
-    const alt = ninthDigitVariant(to);
-    if (!retryable || !alt) throw e;
-    return send(alt);
-  }
-}
-
-function ninthDigitVariant(digits: string): string | null {
-  if (!digits.startsWith("55")) return null;
-  if (digits.length === 12 && /[6-9]/.test(digits[4] ?? "")) return `${digits.slice(0, 4)}9${digits.slice(4)}`;
-  if (digits.length === 13 && digits[4] === "9") return `${digits.slice(0, 4)}${digits.slice(5)}`;
-  return null;
+async function recordOutbound(
+  ctx: Ctx,
+  conv: ConvRow,
+  msg: { wamid: string; body: string; msgType: "text" | "template"; templateName?: string },
+): Promise<ActionResult> {
+  const r = await recordOutboundMessage(conv, msg, ctx.viewer.id);
+  return r.ok ? { ok: true } : r;
 }
 
 const sendSchema = z.object({
@@ -90,73 +85,71 @@ export async function sendText(slug: string, input: z.input<typeof sendSchema>):
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Mensagem inválida." };
 
-  const conv = await loadConversation(ctx, parsed.data.conversationId);
-  if (!conv) return { ok: false, error: "Conversa não encontrada." };
-  // Vendedor responde nas dele e nas da fila (e passa a ser o responsável); gestor/admin em todas.
-  if (!ctx.manager && conv.assigned_to && conv.assigned_to !== ctx.viewer.id) {
-    return { ok: false, error: "Esta conversa é de outro vendedor." };
-  }
-
-  const number = conv.whatsapp_numbers;
-  if (!number?.phone_number_id || number.status !== "connected") {
-    return { ok: false, error: "O número desta conversa não está conectado. Veja em Canais e integrações." };
-  }
+  const prep = await prepareSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
   // Janela de 24 h conferida no servidor, não só na tela (CLAUDE.md, regra 4).
   if (!isWindowOpen(conv.last_inbound_at)) {
     return { ok: false, error: "A janela de 24 horas está fechada. Fora dela, só modelos de mensagem aprovados." };
   }
-  const to = conv.contacts?.phone_e164?.replace(/\D/g, "");
-  if (!to) return { ok: false, error: "O contato não tem telefone." };
-
-  const admin = createAdminClient();
-  const { data: cred } = await admin.from("whatsapp_credentials").select("access_token").eq("number_id", conv.whatsapp_number_id!).maybeSingle<{ access_token: string }>();
-  if (!cred) return { ok: false, error: "O número não tem token de acesso. Reconecte em Canais." };
 
   let wamid: string;
   try {
-    wamid = await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(number.phone_number_id!, cred.access_token, dest, parsed.data.text));
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, parsed.data.text));
   } catch (e) {
-    return { ok: false, error: tokenError(e) };
+    return { ok: false, error: sendErrorMessage(e) };
   }
 
-  const now = new Date().toISOString();
-  const { error: msgError } = await admin.from("messages").insert({
-    company_id: conv.company_id,
-    conversation_id: conv.id,
-    direction: "out",
-    sender: "user",
-    user_id: ctx.viewer.id,
-    msg_type: "text",
-    body: parsed.data.text,
-    wa_message_id: wamid,
-    status: "sent",
-    source: "orvya",
-    sent_at: now,
-  });
-  if (msgError) return { ok: false, error: "A mensagem foi enviada, mas não ficou registrada. Recarregue a página." };
-
-  // Equipe respondeu: a IA pausa nesta conversa (CLAUDE.md, regra 8) e quem respondeu assume, se estava na fila.
-  await admin
-    .from("conversations")
-    .update({
-      ai_enabled: false,
-      needs_human: false,
-      assigned_to: conv.assigned_to ?? ctx.viewer.id,
-      last_message_at: now,
-      last_preview: parsed.data.text.slice(0, 160),
-      last_direction: "out",
-    })
-    .eq("id", conv.id);
-  if (conv.lead_id) {
-    const { data: lead } = await admin.from("leads").select("owner_id").eq("id", conv.lead_id).maybeSingle<{ owner_id: string | null }>();
-    await admin
-      .from("leads")
-      .update({ last_contact_at: now, ...(lead && !lead.owner_id ? { owner_id: ctx.viewer.id } : {}) })
-      .eq("id", conv.lead_id);
-  }
-
+  const r = await recordOutbound(ctx, conv, { wamid, body: parsed.data.text, msgType: "text" });
   revalidatePath(`/${slug}/conversas`);
-  return { ok: true };
+  return r;
+}
+
+const templateSchema = z.object({
+  conversationId: z.uuid(),
+  templateId: z.uuid("Escolha o modelo."),
+  values: z.array(z.string().max(1024, "Campo longo demais.")).max(20),
+});
+
+type TemplateRow = { id: string; name: string; language: string; body: string; status: string; variables: string[] | null };
+
+/**
+ * Envio de modelo aprovado (docs/WHATSAPP.md, seções 4 e 5). Vale com a janela aberta ou fechada;
+ * fora da janela é o único envio permitido. Só modelos aprovados da empresa (lidos pelo RLS).
+ */
+export async function sendTemplate(slug: string, input: z.input<typeof templateSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = templateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+
+  const { data: tpl } = await ctx.supabase
+    .from("message_templates")
+    .select("id, name, language, body, status, variables")
+    .eq("id", parsed.data.templateId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<TemplateRow>();
+  if (!tpl) return { ok: false, error: "Modelo não encontrado." };
+  if (tpl.status !== "approved") return { ok: false, error: "Este modelo não está aprovado pela Meta." };
+
+  const values = parsed.data.values.map(cleanParam);
+  if (values.length !== countParams(tpl.body) || values.some((v) => !v)) {
+    return { ok: false, error: "Preencha todos os campos do modelo." };
+  }
+
+  const prep = await prepareSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) return prep;
+
+  let sent: { wamid: string; body: string };
+  try {
+    sent = await deliverTemplate(prep.p, tpl, values);
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+
+  const r = await recordOutbound(ctx, prep.p.conv, { wamid: sent.wamid, body: sent.body, msgType: "template", templateName: tpl.name });
+  revalidatePath(`/${slug}/conversas`);
+  return r.ok ? { ok: true, message: "Modelo enviado. A conversa reabre quando o cliente responder." } : r;
 }
 
 /** Assumir a conversa: vira responsável pela conversa e pelo lead (se ninguém estava). */

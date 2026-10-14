@@ -44,6 +44,14 @@ export type WaChangeValue = {
   // Coexistência (app WhatsApp Business + API)
   message_echoes?: WaMessage[];
   history?: { metadata?: Record<string, unknown>; threads?: WaHistoryThread[] }[];
+  // message_template_status_update e template_category_update (sem metadata; entry.id = WABA)
+  event?: string;
+  message_template_id?: number | string;
+  message_template_name?: string;
+  message_template_language?: string;
+  reason?: string | null;
+  new_category?: string;
+  previous_category?: string;
 };
 
 export type WaWebhookPayload = {

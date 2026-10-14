@@ -6,15 +6,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 import { formatInTimeZone } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
+import { TextField } from "@/components/ui/field";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import type { Person } from "@/lib/crm/types";
-import { TIMEZONE } from "@/lib/format";
+import { formatBRL, TIMEZONE } from "@/lib/format";
 import { firstName, initials } from "@/lib/names";
 import { formatPhone } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/client";
+import { templateCost, type TemplateCategory } from "@/lib/whatsapp/pricing";
+import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNames } from "@/lib/whatsapp/templates";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
-import { assumeConversation, markRead, sendText } from "./actions";
+import { assumeConversation, markRead, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -36,6 +39,9 @@ export type InboxConversation = {
 
 type InboxNumber = { id: string; label: string; phone: string | null; connected: boolean };
 
+/** Modelo aprovado pela Meta (corpo com {{1}}, {{2}}... e nomes amigáveis em variables). */
+export type InboxTemplate = { id: string; name: string; category: TemplateCategory; body: string; variables: string[] };
+
 type Props = {
   slug: string;
   companyId: string;
@@ -43,6 +49,8 @@ type Props = {
   numbers: InboxNumber[];
   people: Person[];
   viewerId: string;
+  viewerName: string;
+  templates: InboxTemplate[];
   manager: boolean;
   companyAi: boolean;
   initialId: string | null;
@@ -54,6 +62,7 @@ type Message = {
   sender: "contact" | "ai" | "user" | "system";
   user_id: string | null;
   msg_type: string;
+  template_name: string | null;
   body: string | null;
   media_path: string | null;
   media_mime: string | null;
@@ -62,7 +71,7 @@ type Message = {
   sent_at: string;
 };
 
-const MESSAGE_COLUMNS = "id, direction, sender, user_id, msg_type, body, media_path, media_mime, status, source, sent_at";
+const MESSAGE_COLUMNS = "id, direction, sender, user_id, msg_type, template_name, body, media_path, media_mime, status, source, sent_at";
 
 type Filter = "todas" | "nao-lidas" | "precisa" | "minhas" | "fila";
 const FILTERS: { id: Filter; label: string }[] = [
@@ -92,7 +101,7 @@ function dayLabel(iso: string): string {
 }
 
 export function Inbox(props: Props) {
-  const { slug, companyId, conversations, numbers, people, viewerId, manager, companyAi } = props;
+  const { slug, companyId, conversations, numbers, people, viewerId, viewerName, templates, manager, companyAi } = props;
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(props.initialId);
   const [filter, setFilter] = useState<Filter>("todas");
@@ -214,6 +223,8 @@ export function Inbox(props: Props) {
           number={selected.numberId ? (numberById.get(selected.numberId) ?? null) : null}
           peopleById={peopleById}
           viewerId={viewerId}
+          viewerName={viewerName}
+          templates={templates}
           manager={manager}
           onBack={() => {
             setSelectedId(null);
@@ -233,6 +244,8 @@ function Thread({
   number,
   peopleById,
   viewerId,
+  viewerName,
+  templates,
   manager,
   onBack,
 }: {
@@ -241,6 +254,8 @@ function Thread({
   number: InboxNumber | null;
   peopleById: Map<string, string>;
   viewerId: string;
+  viewerName: string;
+  templates: InboxTemplate[];
   manager: boolean;
   onBack: () => void;
 }) {
@@ -251,6 +266,7 @@ function Thread({
   const [text, setText] = useState("");
   const [sending, startSending] = useTransition();
   const [assuming, startAssuming] = useTransition();
+  const [usingTemplate, setUsingTemplate] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -395,13 +411,48 @@ function Thread({
       ) : !canReply ? (
         <div className="win">Conversa de {firstName(peopleById.get(c.assignedTo ?? "") ?? "outro vendedor")}. Você pode acompanhar, mas não responder.</div>
       ) : !windowOpen ? (
-        <div className="win closed">
-          Janela de 24 horas fechada. Para falar com o cliente agora, só com modelo de mensagem aprovado (disponível na próxima etapa).
-        </div>
+        <>
+          <div className="win closed">A janela de 24 horas fechou. Pela regra da Meta, só é possível enviar um modelo aprovado até o cliente responder.</div>
+          <TemplateComposer
+            slug={slug}
+            conversationId={c.id}
+            contactName={c.contactName}
+            viewerName={viewerName}
+            templates={templates}
+            manager={manager}
+            onSent={() => router.refresh()}
+          />
+        </>
+      ) : usingTemplate ? (
+        <>
+          <div className="win" suppressHydrationWarning>
+            Janela aberta até {windowEnd ? formatInTimeZone(windowEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}. Enviando modelo de mensagem.
+            <button type="button" className="ml-auto underline" onClick={() => setUsingTemplate(false)}>
+              Voltar ao texto livre
+            </button>
+          </div>
+          <TemplateComposer
+            slug={slug}
+            conversationId={c.id}
+            contactName={c.contactName}
+            viewerName={viewerName}
+            templates={templates}
+            manager={manager}
+            onSent={() => {
+              setUsingTemplate(false);
+              router.refresh();
+            }}
+          />
+        </>
       ) : (
         <>
           <div className="win" suppressHydrationWarning>
             Janela aberta até {windowEnd ? formatInTimeZone(windowEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}. Mensagens livres sem custo.
+            {templates.length > 0 && (
+              <button type="button" className="ml-auto underline" onClick={() => setUsingTemplate(true)}>
+                Usar modelo
+              </button>
+            )}
           </div>
           <div className="composer">
             <textarea
@@ -447,7 +498,7 @@ function MessageRow({ m, newDay, author }: { m: Message; newDay: boolean; author
           {dayLabel(m.sent_at)}
         </span>
       )}
-      <div className={`bub ${kind} ${m.status === "failed" ? "failed" : ""}`}>
+      <div className={`bub ${kind} ${m.msg_type === "template" ? "tpl" : ""} ${m.status === "failed" ? "failed" : ""}`}>
         {media && m.media_mime?.startsWith("image/") && (
           // eslint-disable-next-line @next/next/no-img-element -- URL assinada e temporária, servida pelo Supabase
           <img src={media} alt="Imagem enviada na conversa" loading="lazy" />
@@ -461,9 +512,113 @@ function MessageRow({ m, newDay, author }: { m: Message; newDay: boolean; author
         )}
         {body}
         <small suppressHydrationWarning>
-          {[who, hhmm(m.sent_at), m.direction === "out" ? STATUS_TEXT[m.status] : ""].filter(Boolean).join(" · ")}
+          {[who, m.template_name ? `modelo ${m.template_name}` : "", hhmm(m.sent_at), m.direction === "out" ? STATUS_TEXT[m.status] : ""].filter(Boolean).join(" · ")}
         </small>
       </div>
     </>
+  );
+}
+
+/** Valor inicial dos campos: nome = primeiro nome do cliente; vendedor = primeiro nome de quem está logado. */
+function defaultValues(t: InboxTemplate, contactName: string, viewerName: string): string[] {
+  return prefillValues(t.body, t.variables, { contactName, sellerName: viewerName });
+}
+
+function TemplateComposer({
+  slug,
+  conversationId,
+  contactName,
+  viewerName,
+  templates,
+  manager,
+  onSent,
+}: {
+  slug: string;
+  conversationId: string;
+  contactName: string;
+  viewerName: string;
+  templates: InboxTemplate[];
+  manager: boolean;
+  onSent: () => void;
+}) {
+  const toast = useToast();
+  const [pickId, setPickId] = useState(templates[0]?.id ?? "");
+  const t = templates.find((x) => x.id === pickId) ?? null;
+  const [values, setValues] = useState<string[]>(() => (t ? defaultValues(t, contactName, viewerName) : []));
+  const [sending, startSending] = useTransition();
+
+  if (!t) {
+    return (
+      <p className="ai-note pt-2.5">
+        Nenhum modelo aprovado.{" "}
+        {manager ? (
+          <Link className="underline" href={`/${slug}/config/canais`}>
+            Crie um em Canais e integrações.
+          </Link>
+        ) : (
+          "Peça ao gestor para criar um modelo em Canais e integrações."
+        )}
+      </p>
+    );
+  }
+
+  const names = variableNames(t.body, t.variables);
+  const complete = values.length === names.length && values.every((v) => v.trim());
+  const preview = fillTemplate(t.body, names, values);
+
+  function pick(id: string) {
+    setPickId(id);
+    const next = templates.find((x) => x.id === id);
+    setValues(next ? defaultValues(next, contactName, viewerName) : []);
+  }
+
+  function send() {
+    if (!t || !complete) return;
+    startSending(async () => {
+      const r = await sendTemplate(slug, { conversationId, templateId: t.id, values });
+      if (r.ok) {
+        toast(r.message ?? "Modelo enviado.", "ok");
+        onSent();
+      } else toast(r.error, "bad");
+    });
+  }
+
+  return (
+    <div className="composer tpl-composer">
+      <select className="inp" value={pickId} onChange={(e) => pick(e.target.value)} aria-label="Modelo de mensagem" disabled={sending}>
+        {templates.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name} ({CATEGORY_LABEL[x.category]})
+          </option>
+        ))}
+      </select>
+      {names.length > 0 && (
+        <div className="tpl-fields">
+          {names.map((n, i) => (
+            <TextField
+              key={`${t.id}-${n}-${i}`}
+              label={variableLabel(n)}
+              value={values[i] ?? ""}
+              onChange={(e) => setValues((list) => list.map((v, j) => (j === i ? e.target.value : v)))}
+              maxLength={200}
+              disabled={sending}
+              placeholder={n === "produto" ? "Ex.: cadeira de rodas" : undefined}
+            />
+          ))}
+        </div>
+      )}
+      <div className="tpl-prev" aria-label="Prévia da mensagem">
+        {preview}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex-1 text-[11.5px] text-muted">
+          Custo estimado deste envio: {formatBRL(templateCost(t.category))} (categoria {CATEGORY_LABEL[t.category]}, valor aproximado).
+          {!complete && " Preencha todos os campos."}
+        </span>
+        <Button variant="primary" loading={sending} disabled={!complete} onClick={send}>
+          Enviar modelo
+        </Button>
+      </div>
+    </div>
   );
 }

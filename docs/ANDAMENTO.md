@@ -37,9 +37,13 @@ decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
 - Preços confirmados do catálogo: depois (tabela do Sr. Ivo / LocPress).
 - Custos do WhatsApp para os decisores: artifact "Custos do WhatsApp no Orvya".
 
+## Construído, aguardando teste da usuária (14/10)
+- **3b-2** — modelos de mensagem: painel em Canais (criar/enviar para aprovação, atualizar status, excluir), envio de modelo na conversa (janela fechada), webhook `message_template_status_update`. Arquivos: `config/canais/template-actions.ts`, `templates-panel.tsx`, `lib/whatsapp/{templates,pricing,accounts}.ts`.
+- **3c** — "Precisa de mim" (`fila/`): conversas com pedido de atendimento e "sem resposta da equipe" (>30 min), reativação em lote com modelo, prévia e custo; fila `outbound_queue` (migration 0008) processada por `/api/jobs/fila-envio` (Bearer `CRON_SECRET`), disparada pelo pg_cron do Supabase (`supabase/exemplos/agendar_fila_envio.sql`, segredo colado só no SQL Editor) e cron diário de segurança em `vercel.json`. Lógica de envio centralizada em `lib/whatsapp/send.ts`; contador vermelho no menu.
+- Pendências de configuração: assinar `message_template_status_update` no webhook da Meta; `CRON_SECRET` na Vercel + redeploy; rodar 0008; rodar o SQL do pg_cron.
+
 ## Falta
-1. **3b-2** — modelos de mensagem: cadastro, envio para aprovação (`POST /{waba}/message_templates`), sincronização de status, envio fora da janela; trocar o texto "1.000 conversas grátis" (regra antiga) pela regra atual.
-2. **3c** — Precisa de mim + reativação de leads parados em lote (fila com intervalo 2–6 min, custo estimado).
+1. Testes da 3b-2 e 3c em produção.
 3. Aceitar várias `META_APP_SECRET`; app e número da IC Supra.
 4. Fase 5 restante: domínio próprio, Vercel Pro, Supabase Pro, e-mail transacional, jobs agendados (renovação de contratos, sincronização de modelos).
 5. Fase 4 (IA) e Fase 6 (integrações de anúncios e site) — sem data.
