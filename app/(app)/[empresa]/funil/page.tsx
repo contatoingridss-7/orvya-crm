@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import { subDays } from "date-fns";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
-import { isManager, type MemberRole } from "@/lib/auth/roles";
-import { requireCompany } from "@/lib/auth/viewer";
+import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
+import { requireRole } from "@/lib/auth/viewer";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { TIMEZONE } from "@/lib/format";
 import {
   LEAD_SELECT,
+  STAGE_SELECT,
   toBoardLead,
   type CatalogOption,
   type CustomField,
@@ -43,18 +46,20 @@ export default async function FunilPage({
   params: Promise<{ empresa: string }>;
   searchParams: Promise<{ funil?: string; lead?: string }>;
 }) {
-  const { viewer, company } = await requireCompany((await params).empresa);
+  const { viewer, company } = await requireRole((await params).empresa, SALES_ROLES);
   const sp = await searchParams;
   const seller = company.role === "vendedor";
   const supabase = await createClient();
 
-  const { data: pipelineRows } = await supabase
-    .from("pipelines")
-    .select("id, key, name, hint")
-    .eq("company_id", company.id)
-    .order("position")
-    .returns<Pipeline[]>();
-  const pipelines = pipelineRows ?? [];
+  const [{ data: pipelineRows }, { data: scopeRow }] = await Promise.all([
+    supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
+    // Vendedor restrito a funis (ex.: só CPAP): as abas mostram só os dele. O RLS garante os leads.
+    seller
+      ? supabase.from("memberships").select("pipeline_ids").eq("company_id", company.id).eq("user_id", viewer.id).maybeSingle<{ pipeline_ids: string[] | null }>()
+      : Promise.resolve({ data: null }),
+  ]);
+  const scope = scopeRow?.pipeline_ids ?? null;
+  const pipelines = (pipelineRows ?? []).filter((p) => !scope || scope.includes(p.id));
   const current = pipelines.find((p) => p.key === sp.funil) ?? pipelines[0];
 
   const header = (
@@ -72,8 +77,10 @@ export default async function FunilPage({
   }
 
   const closedSince = subDays(new Date(), CLOSED_WINDOW_DAYS).toISOString();
-  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes, aiRes] = await Promise.all([
-    supabase.from("stages").select("id, key, name, kind, position").eq("pipeline_id", current.id).order("position").returns<Stage[]>(),
+  const now = new Date().toISOString();
+  const endOfToday = fromZonedTime(`${formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd")}T23:59:59`, TIMEZONE).toISOString();
+  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes, aiRes, todayRes] = await Promise.all([
+    supabase.from("stages").select(STAGE_SELECT).eq("pipeline_id", current.id).order("position").returns<Stage[]>(),
     supabase
       .from("leads")
       .select(LEAD_SELECT)
@@ -103,7 +110,7 @@ export default async function FunilPage({
       .select("lead_id")
       .eq("company_id", company.id)
       .is("done_at", null)
-      .lt("due_at", new Date().toISOString())
+      .lt("due_at", now)
       .not("lead_id", "is", null)
       .returns<{ lead_id: string }[]>(),
     supabase
@@ -114,6 +121,16 @@ export default async function FunilPage({
       .returns<{ lead_id: string; end_date: string }[]>(),
     // Só gestor/admin leem a configuração da IA; para o vendedor fica "desligada" (sem etiqueta).
     supabase.from("ai_settings").select("enabled").eq("company_id", company.id).maybeSingle<{ enabled: boolean }>(),
+    // Tarefas que vencem ainda hoje (ex.: follow-up do CPAP): alerta no card.
+    supabase
+      .from("tasks")
+      .select("lead_id")
+      .eq("company_id", company.id)
+      .is("done_at", null)
+      .gte("due_at", now)
+      .lte("due_at", endOfToday)
+      .not("lead_id", "is", null)
+      .returns<{ lead_id: string }[]>(),
   ]);
 
   const overdue = new Set((overdueRes.data ?? []).map((t) => t.lead_id));
@@ -123,7 +140,8 @@ export default async function FunilPage({
     const d = daysUntil(c.end_date);
     if (!rentalDays.has(c.lead_id) || d < rentalDays.get(c.lead_id)!) rentalDays.set(c.lead_id, d);
   }
-  const leads = (leadsRes.data ?? []).map((r) => toBoardLead(r, overdue, rentalDays));
+  const dueToday = new Set((todayRes.data ?? []).map((t) => t.lead_id));
+  const leads = (leadsRes.data ?? []).map((r) => toBoardLead(r, overdue, rentalDays, dueToday));
 
   const people: Person[] = (membersRes.data ?? [])
     .filter((m) => m.profiles?.active)
@@ -171,7 +189,7 @@ export default async function FunilPage({
           catalog={catalog}
           viewerId={viewer.id}
           manager={isManager(company.role)}
-          hasRentals={company.slug === "locpress"}
+          hasRentals={company.slug === "locpress" || current.key === "cpap"}
           companyAi={aiRes.data?.enabled ?? false}
           initialLeadId={sp.lead ?? null}
           closedWindowDays={CLOSED_WINDOW_DAYS}

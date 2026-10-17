@@ -1,4 +1,4 @@
-# Orvya — andamento (atualizado em 13/10/2026)
+# Orvya — andamento (atualizado em 16/10/2026)
 
 Leia junto com `CLAUDE.md`, `KICKOFF.md` e `docs/SPEC.md`. Este arquivo registra o que já foi feito,
 decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
@@ -7,7 +7,7 @@ decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
 - Site: https://orvya-crm.vercel.app (Vercel, plano Hobby — passar para Pro antes do uso pelos clientes)
 - Banco: Supabase `psewjkrpwnmrmiwwmcgw` (São Paulo, plano gratuito — passar para Pro antes do uso real; pausa após 7 dias sem uso)
 - Repositório: github.com/contatoingridss-7/orvya-crm (commits com "Ingrid Soares <contatoingridss@gmail.com>")
-- Migrations aplicadas no Supabase: 0001 a 0007. Dados de exemplo ativos (`supabase/exemplos/*`; remover antes do uso real com `remover_exemplos.sql`).
+- Migrations aplicadas no Supabase: 0001 a 0007 (0008 e 0009 pendentes). Dados de exemplo ativos (`supabase/exemplos/*`; remover antes do uso real com `remover_exemplos.sql`).
 
 ## Pronto e testado
 | Fase | Conteúdo |
@@ -41,6 +41,17 @@ decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
 - **3b-2** — modelos de mensagem: painel em Canais (criar/enviar para aprovação, atualizar status, excluir), envio de modelo na conversa (janela fechada), webhook `message_template_status_update`. Arquivos: `config/canais/template-actions.ts`, `templates-panel.tsx`, `lib/whatsapp/{templates,pricing,accounts}.ts`.
 - **3c** — "Precisa de mim" (`fila/`): conversas com pedido de atendimento e "sem resposta da equipe" (>30 min), reativação em lote com modelo, prévia e custo; fila `outbound_queue` (migration 0008) processada por `/api/jobs/fila-envio` (Bearer `CRON_SECRET`), disparada pelo pg_cron do Supabase (`supabase/exemplos/agendar_fila_envio.sql`, segredo colado só no SQL Editor) e cron diário de segurança em `vercel.json`. Lógica de envio centralizada em `lib/whatsapp/send.ts`; contador vermelho no menu.
 - Pendências de configuração: assinar `message_template_status_update` no webhook da Meta; `CRON_SECRET` na Vercel + redeploy; rodar 0008; rodar o SQL do pg_cron.
+
+## Construído, aguardando teste da usuária (16/10) — ajustes pedidos pela gestão
+Migration **0009_logistica_cpap.sql** (testada localmente em PGlite: roda duas vezes seguidas e as permissões batem).
+- **Perfil Expedição** (`logistica`): tela `expedicao/` com pedidos agendados (Atrasados, Hoje, Amanhã, Próximos, Entregues), avanço Agendado → Separado → Faturado → Saiu para entrega → Entregue, ligar/abrir no mapa. Sem acesso a leads, contatos, conversas, tarefas nem dados de saúde (funções `logistics_orders` e `logistics_set_status`).
+- **Agendamento integrado**: etapas "Entrega agendada" (Varejo, Institucional, Venda, Locação, CPAP) e "Adaptação programada" (teste in loco do CPAP). Mover para elas pede data, hora, endereço e observação. Entregue → lead vai para o ganho.
+- **Follow-up do CPAP** 24 h, 7 e 15 dias após a entrega (automações "ao entregar", editáveis em Automações). Cards com "Tarefa atrasada" e "Tarefa para hoje".
+- **Funil CPAP na IC Supra** + vendedor restrito a funis (`memberships.pipeline_ids`), definido em Equipe → Funis (Thays).
+- **Fotos no catálogo** (bucket público `product-photos`): gestor, admin e expedição, pelo celular.
+- **Relatórios** (`relatorios/`): tarefas por pessoa, atrasadas, entregas, Baixar PDF. **E-mail aos sábados 8h** (`/api/jobs/relatorio-semanal`, cron da Vercel) — só números (LGPD).
+- **Precisa de mim**: alerta com 5 min sem resposta (antes 30), cronômetro ao vivo e atualização a cada 30 s.
+- Pendências de configuração: rodar **0009** ANTES de publicar o código (as telas leem colunas novas); criar conta no Resend + `RESEND_API_KEY` e `EMAIL_FROM` na Vercel (sem domínio próprio, o Resend só entrega para o e-mail dono da conta); cadastrar a Thays (vendedor na IC, funil CPAP) e o login da expedição.
 
 ## Falta
 1. Testes da 3b-2 e 3c em produção.

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { subDays } from "date-fns";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
-import { isManager, type MemberRole } from "@/lib/auth/roles";
-import { requireCompany } from "@/lib/auth/viewer";
+import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
+import { requireRole } from "@/lib/auth/viewer";
 import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
@@ -17,7 +17,7 @@ type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string |
 type LeadOptionRow = { id: string; contacts: { name: string } | null; stages: { kind: string } | null };
 
 export default async function TarefasPage({ params }: { params: Promise<{ empresa: string }> }) {
-  const { viewer, company } = await requireCompany((await params).empresa);
+  const { viewer, company } = await requireRole((await params).empresa, SALES_ROLES);
   const manager = isManager(company.role);
   const supabase = await createClient();
   const doneSince = subDays(new Date(), DONE_WINDOW_DAYS).toISOString();

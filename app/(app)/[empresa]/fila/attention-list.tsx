@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { TimeAgo } from "@/components/time-ago";
+import { WaitTimer } from "@/components/wait-timer";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
@@ -77,12 +77,12 @@ function Row({ slug, item, people, viewerId }: { slug: string; item: AttentionIt
         <b>{item.contactName}</b>
         <p>
           {item.reason ? <strong className="font-semibold text-[var(--bad-fg)]">{item.reason}</strong> : "Mensagem do cliente sem resposta"}
-          {item.waitingSince && (
-            <>
-              , esperando <TimeAgo date={item.waitingSince} />
-            </>
-          )}
         </p>
+        {item.waitingSince && (
+          <p className="flex items-center gap-1.5">
+            Esperando <WaitTimer since={item.waitingSince} />
+          </p>
+        )}
         {item.summary ? (
           <div className="summary mt-1.5">
             <b>Resumo da IA para a equipe</b>

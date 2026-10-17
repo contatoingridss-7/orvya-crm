@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { WAIT_MINUTES } from "@/lib/crm/attention";
 import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
 import type { MemberRole } from "@/lib/auth/roles";
@@ -13,8 +15,6 @@ import { SendQueue, type QueueRow } from "./send-queue";
 
 export const metadata: Metadata = { title: "Precisa de mim" };
 
-/** Última mensagem do cliente sem resposta há mais que isso aparece em "Sem resposta da equipe". */
-const WAIT_MINUTES = 30;
 /** Menor filtro de "parado" (chips 2, 5, 7 e 14 dias). */
 const MIN_STALE_DAYS = 2;
 
@@ -196,6 +196,8 @@ export default async function FilaPage({ params }: { params: Promise<{ empresa: 
     <>
       <PageHeader title="Precisa de mim" subtitle={`${company.name}: conversas que esperam a equipe e leads para reativar`} />
       <div className="content grid gap-4">
+        {/* Novos clientes passam dos 5 minutos a qualquer momento: a lista se atualiza sozinha. */}
+        <AutoRefresh seconds={30} />
         {loadError && <Notice tone="bad">Parte das conversas não carregou. Recarregue a página.</Notice>}
 
         <div className="grid items-start gap-4 xl:grid-cols-2">

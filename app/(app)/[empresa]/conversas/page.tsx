@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
-import { isManager, type MemberRole } from "@/lib/auth/roles";
-import { requireCompany } from "@/lib/auth/viewer";
+import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
+import { requireRole } from "@/lib/auth/viewer";
 import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
 import { Inbox, type InboxConversation, type InboxTemplate } from "./inbox";
@@ -30,7 +30,7 @@ type TemplateRow = { id: string; name: string; category: InboxTemplate["category
 type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null };
 
 export default async function ConversasPage({ params, searchParams }: { params: Promise<{ empresa: string }>; searchParams: Promise<{ c?: string }> }) {
-  const { viewer, company } = await requireCompany((await params).empresa);
+  const { viewer, company } = await requireRole((await params).empresa, SALES_ROLES);
   const sp = await searchParams;
   const supabase = await createClient();
 

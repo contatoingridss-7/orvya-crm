@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isManager } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { parseMoneyInput } from "@/lib/catalog/types";
+import { fromLocalInput } from "@/lib/crm/logistics";
 import { CONTRACT_SELECT, toContract, type ContractRow } from "@/lib/crm/rentals";
 import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import type { LeadDetail } from "@/lib/crm/types";
@@ -17,7 +18,7 @@ async function context(slug: string) {
   const viewer = await getViewer();
   if (!viewer?.active) return null;
   const company = viewer.companies.find((c) => c.slug === slug);
-  if (!company) return null;
+  if (!company || company.role === "logistica") return null;
   return { viewer, company, manager: isManager(company.role), supabase: await createClient() };
 }
 type Ctx = NonNullable<Awaited<ReturnType<typeof context>>>;
@@ -153,6 +154,53 @@ export async function createLead(slug: string, input: z.input<typeof newLeadSche
 }
 
 // ---------------------------------------------------------------------
+// Agendamento com a expedição (entrega ou adaptação in loco)
+// ---------------------------------------------------------------------
+const scheduleSchema = z.object({
+  at: z.string(),
+  address: z.string().trim().min(5, "Informe o endereço.").max(300),
+  notes: z.string().trim().max(1000),
+});
+export type ScheduleInput = z.input<typeof scheduleSchema>;
+
+/** Valida e converte para as colunas do lead. Reagendar volta o status para "agendado". */
+function scheduleColumns(input: ScheduleInput): { ok: true; cols: Record<string, unknown> } | { ok: false; error: string } {
+  const parsed = scheduleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Agendamento inválido." };
+  const at = fromLocalInput(parsed.data.at);
+  if (!at) return { ok: false, error: "Informe a data e a hora." };
+  if (new Date(at).getTime() < Date.now() - 24 * 3600_000) return { ok: false, error: "A data do agendamento já passou." };
+  return {
+    ok: true,
+    cols: {
+      scheduled_at: at,
+      logistics_address: parsed.data.address,
+      logistics_notes: parsed.data.notes || null,
+      logistics_status: "agendado",
+      delivered_at: null,
+    },
+  };
+}
+
+export async function scheduleLead(slug: string, leadId: string, input: ScheduleInput): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const lead = await loadLead(ctx, leadId);
+  if (!lead) return { ok: false, error: "Lead não encontrado." };
+  if (!canEdit(ctx, lead)) return { ok: false, error: "Este lead é de outro vendedor." };
+  const sched = scheduleColumns(input);
+  if (!sched.ok) return sched;
+
+  const { error } = await ctx.supabase.from("leads").update(sched.cols).eq("id", leadId);
+  if (error) return { ok: false, error: "Não foi possível salvar o agendamento." };
+  await ctx.supabase
+    .from("activities")
+    .insert({ company_id: ctx.company.id, lead_id: leadId, kind: "note", body: "Agendamento com a expedição atualizado.", user_id: ctx.viewer.id });
+  refresh(slug);
+  return { ok: true, message: "Agendamento salvo. A expedição já vê o pedido." };
+}
+
+// ---------------------------------------------------------------------
 // Mover de etapa (arrastar, seletor de etapa, ganho, perda)
 // ---------------------------------------------------------------------
 export async function moveLead(
@@ -160,6 +208,7 @@ export async function moveLead(
   leadId: string,
   stageId: string,
   lostReason?: string,
+  schedule?: ScheduleInput,
 ): Promise<ActionResult<{ tasks: string[]; tookLead: boolean }>> {
   const ctx = await context(slug);
   if (!ctx) return NO_ACCESS;
@@ -172,12 +221,21 @@ export async function moveLead(
 
   const { data: stage } = await ctx.supabase
     .from("stages")
-    .select("id, kind, name")
+    .select("id, kind, name, logistics")
     .eq("id", stageId)
     .eq("pipeline_id", lead.pipeline_id)
-    .maybeSingle<{ id: string; kind: string; name: string }>();
+    .maybeSingle<{ id: string; kind: string; name: string; logistics: string | null }>();
   if (!stage) return { ok: false, error: "Essa etapa não é deste funil." };
   if (stage.kind === "lost" && !lostReason?.trim()) return { ok: false, error: "Informe o motivo da perda." };
+
+  // Etapa da expedição exige data, hora e endereço (a expedição só vê o que foi agendado).
+  let scheduleCols: Record<string, unknown> = {};
+  if (stage.logistics) {
+    if (!schedule) return { ok: false, error: "Agende a data, a hora e o endereço antes de mover para esta etapa." };
+    const sched = scheduleColumns(schedule);
+    if (!sched.ok) return sched;
+    scheduleCols = sched.cols;
+  }
 
   const startedAt = new Date(Date.now() - 2000).toISOString();
   const { error } = await ctx.supabase
@@ -186,6 +244,7 @@ export async function moveLead(
       stage_id: stageId,
       lost_reason: stage.kind === "lost" ? lostReason!.trim().slice(0, 200) : null,
       ...(tookLead ? { owner_id: ctx.viewer.id } : {}),
+      ...scheduleCols,
     })
     .eq("id", leadId);
   if (error) return { ok: false, error: dbError(error.message, "Não foi possível mudar a etapa.") };

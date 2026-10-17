@@ -9,7 +9,7 @@ import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
-import type { Pipeline, StageKind } from "@/lib/crm/types";
+import type { Pipeline, StageKind, StageLogistics } from "@/lib/crm/types";
 import { createRule, deleteRule, toggleRule, type ActionResult } from "./actions";
 
 export type Rule = {
@@ -21,9 +21,11 @@ export type Rule = {
   taskTitle: string;
   dueInDays: number;
   enabled: boolean;
+  /** stage = ao entrar na etapa; delivered = quando a expedição confirma a entrega. */
+  trigger: "stage" | "delivered";
 };
 
-type StageOption = { id: string; name: string; kind: StageKind; pipelineId: string };
+type StageOption = { id: string; name: string; kind: StageKind; logistics: StageLogistics | null; pipelineId: string };
 
 // Do protótipo (tela Automações): regras que o sistema sempre aplica.
 const FIXED_RULES: [string, string][] = [
@@ -32,6 +34,8 @@ const FIXED_RULES: [string, string][] = [
   ["Desconto fora da política, urgência ou pedido de atendente vão para Precisa de mim", "A IA nunca inventa condição comercial."],
   ["Fora da janela de 24 horas do WhatsApp, só modelos aprovados", "Regra da API oficial da Meta. Vale para a equipe e para a IA."],
   ["Lead aberto sem contato há 7 dias aparece em Reativar leads parados", "O envio sempre passa por revisão e mostra o custo estimado."],
+  ["Cliente sem resposta há 5 minutos aparece em Precisa de mim", "Com cronômetro e contador vermelho no menu."],
+  ["Entrega ou adaptação só vai para a expedição com data, hora e endereço", "Ao confirmar a entrega, o negócio é concluído no funil."],
 ];
 const LOC_FIXED: [string, string][] = [
   ["Locação: o valor é sempre negociado por um vendedor", "A IA coleta equipamento, período e endereço e passa para a equipe."],
@@ -39,12 +43,17 @@ const LOC_FIXED: [string, string][] = [
 ];
 
 const dueText = (d: number) => (d === 0 ? "Prazo para o mesmo dia" : `Prazo de ${d} ${d === 1 ? "dia" : "dias"}`);
+const deliveredDueText = (d: number) => (d === 0 ? "Vence no dia da entrega" : d === 1 ? "Vence 24 horas após a entrega" : `Vence ${d} dias após a entrega`);
 
 export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: string; isLoc: boolean; rules: Rule[]; pipelines: Pipeline[]; stages: StageOption[] }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
   const [pipelineId, setPipelineId] = useState(pipelines[0]?.id ?? "");
+  const [stageId, setStageId] = useState("");
+  const [trigger, setTrigger] = useState<"stage" | "delivered">("stage");
+  const pipelineStages = stages.filter((s) => s.pipelineId === pipelineId && s.kind !== "lost");
+  const selectedStage = pipelineStages.find((s) => s.id === stageId) ?? pipelineStages[0];
   const [error, setError] = useState<string>();
 
   function run(fn: () => Promise<ActionResult>, after?: () => void) {
@@ -66,9 +75,10 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
     start(async () => {
       const r = await createRule(slug, {
         pipelineId,
-        stageId: String(f.get("stageId") ?? ""),
+        stageId: selectedStage?.id ?? "",
         taskTitle: String(f.get("taskTitle") ?? ""),
         dueInDays: String(f.get("dueInDays") ?? "1"),
+        trigger: selectedStage?.logistics ? trigger : "stage",
       });
       if (r.ok) {
         toast(r.message, "ok");
@@ -91,10 +101,14 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
               <div key={r.id} className={`flex flex-wrap items-center gap-3 py-3.5 ${r.enabled ? "" : "opacity-60"}`}>
                 <div className="min-w-[200px] flex-1">
                   <p className="m-0 text-[13.5px]">
-                    Entrou em <b className="font-semibold text-title">{r.stageName}</b> no funil <b className="font-semibold text-title">{r.pipelineName}</b>: criar
-                    a tarefa <b className="font-semibold text-title">“{r.taskTitle}”</b>
+                    {r.trigger === "delivered" ? "Expedição confirmou a entrega em " : "Entrou em "}
+                    <b className="font-semibold text-title">{r.stageName}</b> no funil <b className="font-semibold text-title">{r.pipelineName}</b>: criar a tarefa{" "}
+                    <b className="font-semibold text-title">“{r.taskTitle}”</b>
                   </p>
-                  <small className="text-xs text-muted">{dueText(r.dueInDays)}</small>
+                  <small className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                    {r.trigger === "delivered" && <Pill tone="ind">Ao entregar</Pill>}
+                    {r.trigger === "delivered" ? deliveredDueText(r.dueInDays) : dueText(r.dueInDays)}
+                  </small>
                 </div>
                 <Switch label={`${r.enabled ? "Desligar" : "Ligar"} regra`} checked={r.enabled} disabled={pending} onChange={(e) => run(() => toggleRule(slug, r.id, e.target.checked))} />
                 <Button size="sm" variant="ghost" className="danger" disabled={pending} onClick={() => run(() => deleteRule(slug, r.id))}>
@@ -115,14 +129,12 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
                 </option>
               ))}
             </SelectField>
-            <SelectField key={pipelineId} label="Etapa" name="stageId">
-              {stages
-                .filter((s) => s.pipelineId === pipelineId && s.kind !== "lost")
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
+            <SelectField key={pipelineId} label="Etapa" value={selectedStage?.id ?? ""} onChange={(e) => setStageId(e.target.value)}>
+              {pipelineStages.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
             </SelectField>
             <TextField label="Tarefa a criar" name="taskTitle" required minLength={3} placeholder="Ex.: enviar vídeo de uso do equipamento" className="sm:col-span-2 lg:col-span-1" />
             <TextField label="Prazo em dias" name="dueInDays" type="number" min={0} max={365} defaultValue={1} required />
@@ -130,6 +142,16 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
               Criar regra
             </Button>
           </div>
+          {selectedStage?.logistics && (
+            <div className="chips" role="group" aria-label="Quando criar a tarefa">
+              <button type="button" className="chip" aria-pressed={trigger === "stage"} onClick={() => setTrigger("stage")}>
+                Ao entrar na etapa
+              </button>
+              <button type="button" className="chip" aria-pressed={trigger === "delivered"} onClick={() => setTrigger("delivered")}>
+                Ao entregar (confirmado pela expedição)
+              </button>
+            </div>
+          )}
           {error && <Notice tone="bad">{error}</Notice>}
         </form>
       </Panel>

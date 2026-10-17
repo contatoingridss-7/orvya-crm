@@ -6,6 +6,7 @@ import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import type { Product } from "@/lib/catalog/types";
+import { photoUrl } from "@/lib/catalog/photos";
 import { formatBRL } from "@/lib/format";
 import { confirmReferencePrices } from "./actions";
 import { ProductDrawer } from "./product-drawer";
@@ -26,7 +27,9 @@ const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-�
 /** Sem preço confirmado e não é item negociado pela equipe: a IA vai passar para humano. */
 export const needsPrice = (p: Product) => p.active && p.salePrice === null && !p.requiresHuman;
 
-export function CatalogView({ products, slug, canEdit, isLoc }: { products: Product[]; slug: string; canEdit: boolean; isLoc: boolean }) {
+type CatalogViewProps = { products: Product[]; slug: string; companyId: string; canEdit: boolean; canPhoto: boolean; isLoc: boolean };
+
+export function CatalogView({ products, slug, companyId, canEdit, canPhoto, isLoc }: CatalogViewProps) {
   const toast = useToast();
   const [filter, setFilter] = useState<Filter>("ativos");
   const [query, setQuery] = useState("");
@@ -193,12 +196,22 @@ export function CatalogView({ products, slug, canEdit, isLoc }: { products: Prod
                       )}
                       {!isLoc && <td className="text-muted tabular-nums">{p.code ?? "—"}</td>}
                       <td>
-                        <b className="block font-semibold text-title">{p.name}</b>
-                        <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                          {p.category ?? "Sem categoria"}
-                          {p.unit && <span>· {p.unit}</span>}
-                          {p.promoLabel && <Pill tone="ind">{p.promoLabel}</Pill>}
-                          {!p.active && <Pill>Fora do catálogo</Pill>}
+                        <span className="flex items-center gap-2.5">
+                          {p.photoPath ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={photoUrl(p.photoPath)!} alt="" className="thumb" loading="lazy" />
+                          ) : (
+                            <span className="thumb" aria-hidden />
+                          )}
+                          <span className="min-w-0">
+                            <b className="block font-semibold text-title">{p.name}</b>
+                            <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                              {p.category ?? "Sem categoria"}
+                              {p.unit && <span>· {p.unit}</span>}
+                              {p.promoLabel && <Pill tone="ind">{p.promoLabel}</Pill>}
+                              {!p.active && <Pill>Fora do catálogo</Pill>}
+                            </span>
+                          </span>
                         </span>
                       </td>
                       <td className="text-right tabular-nums whitespace-nowrap">
@@ -262,7 +275,9 @@ export function CatalogView({ products, slug, canEdit, isLoc }: { products: Prod
         open={editing !== null}
         onClose={() => setEditing(null)}
         slug={slug}
+        companyId={companyId}
         canEdit={canEdit}
+        canPhoto={canPhoto}
         isLoc={isLoc}
         categories={categories}
       />

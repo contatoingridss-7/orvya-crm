@@ -24,6 +24,7 @@ const ruleSchema = z.object({
   stageId: z.uuid("Escolha a etapa."),
   taskTitle: z.string().trim().min(3, "Descreva a tarefa.").max(200),
   dueInDays: z.coerce.number().int().min(0, "Prazo inválido.").max(365, "Prazo de no máximo 365 dias."),
+  trigger: z.enum(["stage", "delivered"]).default("stage"),
 });
 
 export async function createRule(slug: string, input: z.input<typeof ruleSchema>): Promise<ActionResult> {
@@ -35,13 +36,14 @@ export async function createRule(slug: string, input: z.input<typeof ruleSchema>
 
   const { data: stage } = await ctx.supabase
     .from("stages")
-    .select("id, kind")
+    .select("id, kind, logistics")
     .eq("id", d.stageId)
     .eq("pipeline_id", d.pipelineId)
     .eq("company_id", ctx.company.id)
-    .maybeSingle<{ id: string; kind: string }>();
+    .maybeSingle<{ id: string; kind: string; logistics: string | null }>();
   if (!stage) return { ok: false, error: "Etapa não encontrada neste funil." };
   if (stage.kind === "lost") return { ok: false, error: "Não é possível criar tarefa automática para lead perdido." };
+  if (d.trigger === "delivered" && !stage.logistics) return { ok: false, error: "A opção ao entregar só vale para etapas de entrega ou adaptação." };
 
   const { error } = await ctx.supabase.from("automation_rules").insert({
     company_id: ctx.company.id,
@@ -50,10 +52,17 @@ export async function createRule(slug: string, input: z.input<typeof ruleSchema>
     task_title: d.taskTitle,
     due_in_days: d.dueInDays,
     enabled: true,
+    trigger_event: d.trigger,
   });
   if (error) return { ok: false, error: "Não foi possível criar a regra." };
   revalidatePath(`/${slug}/config/automacoes`);
-  return { ok: true, message: "Regra criada. Vale para os leads que entrarem na etapa a partir de agora." };
+  return {
+    ok: true,
+    message:
+      d.trigger === "delivered"
+        ? "Regra criada. Vale para as próximas entregas confirmadas pela expedição."
+        : "Regra criada. Vale para os leads que entrarem na etapa a partir de agora.",
+  };
 }
 
 export async function toggleRule(slug: string, ruleId: string, enabled: boolean): Promise<ActionResult> {

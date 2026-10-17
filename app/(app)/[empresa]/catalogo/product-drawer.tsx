@@ -8,30 +8,32 @@ import { Notice } from "@/components/ui/notice";
 import { Pill } from "@/components/ui/pill";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
+import { photoUrl } from "@/lib/catalog/photos";
 import type { Product } from "@/lib/catalog/types";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { saveProduct } from "./actions";
+import { PhotoUpload } from "./photo-upload";
 
 type Props = {
   product: Product | null;
   open: boolean;
   onClose: () => void;
   slug: string;
+  companyId: string;
   canEdit: boolean;
+  canPhoto: boolean;
   isLoc: boolean;
   categories: string[];
 };
 
 const moneyText = (v: number | null) => (v === null ? "" : v.toFixed(2).replace(".", ","));
 
-export function ProductDrawer({ product, open, onClose, slug, canEdit, isLoc, categories }: Props) {
+export function ProductDrawer({ open, ...props }: Props) {
   // A chave remonta o formulário a cada produto aberto, zerando o estado.
-  return open ? (
-    <ProductForm key={product?.id ?? "new"} product={product} onClose={onClose} slug={slug} canEdit={canEdit} isLoc={isLoc} categories={categories} />
-  ) : null;
+  return open ? <ProductForm key={props.product?.id ?? "new"} {...props} /> : null;
 }
 
-function ProductForm({ product, onClose, slug, canEdit, isLoc, categories }: Omit<Props, "open">) {
+function ProductForm({ product, onClose, slug, companyId, canEdit, canPhoto, isLoc, categories }: Omit<Props, "open">) {
   const toast = useToast();
   const [isRental, setIsRental] = useState(product?.isRental ?? false);
   const [requiresHuman, setRequiresHuman] = useState(product?.requiresHuman ?? false);
@@ -91,6 +93,11 @@ function ProductForm({ product, onClose, slug, canEdit, isLoc, categories }: Omi
         )
       }
     >
+      {product && canPhoto && <PhotoUpload companyId={companyId} productId={product.id} productName={product.name} path={product.photoPath} />}
+      {product && !canPhoto && product.photoPath && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl(product.photoPath)!} alt={`Foto de ${product.name}`} className="thumb lg" />
+      )}
       <form id="product-form" onSubmit={onSubmit} className="grid gap-5">
         <fieldset disabled={readOnly} className="m-0 grid gap-2.5 border-0 p-0 sm:grid-cols-2">
           <TextField label="Nome" name="name" defaultValue={product?.name} required className="sm:col-span-2" />

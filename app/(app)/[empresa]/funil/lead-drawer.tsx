@@ -18,7 +18,9 @@ import { endContract } from "./rental-actions";
 import { TaskLine } from "../tarefas/task-line";
 import { initials } from "@/lib/names";
 import { formatPhone } from "@/lib/phone";
-import { addNote, changePipeline, deleteLead, loadLeadDetail, setLeadProducts, takeLead, updateLead } from "./actions";
+import { KIND_LABEL, LOGISTICS_LABEL, LOGISTICS_STEPS, formatSchedule } from "@/lib/crm/logistics";
+import { addNote, changePipeline, deleteLead, loadLeadDetail, scheduleLead, setLeadProducts, takeLead, updateLead } from "./actions";
+import { ScheduleModal } from "./schedule-modal";
 import type { BoardProps } from "./board";
 
 type Props = BoardProps & { lead: BoardLead; onClose: () => void; onMove: (stageId: string) => void };
@@ -38,6 +40,8 @@ export function LeadDrawer(props: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string>();
   const [contractModal, setContractModal] = useState<{ renewing: RentalContract | null } | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string>();
 
   const canEdit = manager || lead.ownerId === viewerId;
   const stage = stages.find((s) => s.id === lead.stageId);
@@ -167,6 +171,39 @@ export function LeadDrawer(props: Props) {
           </div>
           {lead.lostReason && <Notice tone="bad">Motivo da perda: {lead.lostReason}</Notice>}
         </section>
+
+        {/* Agendamento com a expedição */}
+        {(stage?.logistics || lead.schedule) && (
+          <section className="dr-sec">
+            <h3>{stage?.logistics ? `${KIND_LABEL[stage.logistics]} com a expedição` : "Último agendamento"}</h3>
+            {lead.schedule ? (
+              <div className="grid gap-2 text-[13px]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <b className="font-semibold" suppressHydrationWarning>
+                    {formatSchedule(lead.schedule.at)}
+                  </b>
+                  <Pill tone={lead.schedule.status === "entregue" ? "ok" : "ind"}>{LOGISTICS_LABEL[lead.schedule.status]}</Pill>
+                </div>
+                {lead.schedule.address && <span className="text-muted">{lead.schedule.address}</span>}
+                {lead.schedule.notes && <span className="text-muted">Obs.: {lead.schedule.notes}</span>}
+                <ol className="steps" aria-label="Andamento na expedição">
+                  {LOGISTICS_STEPS.map((st, i) => (
+                    <li key={st} data-done={i <= LOGISTICS_STEPS.indexOf(lead.schedule!.status) ? "" : undefined}>
+                      {LOGISTICS_LABEL[st]}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : (
+              <p className="m-0 text-[13px] text-muted">Sem data marcada: a expedição ainda não vê este pedido.</p>
+            )}
+            {canEdit && stage?.logistics && (
+              <Button size="sm" className="mt-2.5" disabled={busy} onClick={() => setRescheduling(true)}>
+                {lead.schedule ? "Reagendar" : "Agendar"}
+              </Button>
+            )}
+          </section>
+        )}
 
         {/* Agente de IA */}
         <section className="dr-sec">
@@ -320,6 +357,31 @@ export function LeadDrawer(props: Props) {
         {/* Histórico */}
         <History detail={detail} lead={lead} canEdit={canEdit} onNote={(body, done) => act(() => addNote(slug, lead.id, body), done)} busy={busy} />
       </Drawer>
+
+      <ScheduleModal
+        open={rescheduling && !!stage?.logistics}
+        leadName={lead.contact.name.split(" ")[0] ?? lead.contact.name}
+        kind={stage?.logistics ?? "entrega"}
+        current={lead.schedule}
+        defaultAddress={lead.custom.endereco}
+        pending={busy}
+        error={scheduleError}
+        onClose={() => {
+          setRescheduling(false);
+          setScheduleError(undefined);
+        }}
+        onConfirm={(input) =>
+          startBusy(async () => {
+            const r = await scheduleLead(slug, lead.id, input);
+            if (!r.ok) return setScheduleError(r.error);
+            toast(r.message ?? "Agendamento salvo.", "ok");
+            setRescheduling(false);
+            setScheduleError(undefined);
+            router.refresh();
+            reload();
+          })
+        }
+      />
 
       <ContractModal
         open={contractModal !== null}

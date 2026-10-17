@@ -10,9 +10,10 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import { ROLE_LABEL, type MemberRole } from "@/lib/auth/roles";
 import { initials } from "@/lib/names";
-import { changeRole, inviteMember, setMemberActive, type ActionResult } from "./actions";
+import { changeRole, inviteMember, setMemberActive, setPipelineScope, type ActionResult } from "./actions";
 
-export type TeamMember = { id: string; name: string; email: string; role: MemberRole; active: boolean };
+export type TeamMember = { id: string; name: string; email: string; role: MemberRole; active: boolean; pipelineIds: string[] | null };
+type PipelineOption = { id: string; name: string };
 
 type TeamManagerProps = {
   members: TeamMember[];
@@ -20,14 +21,17 @@ type TeamManagerProps = {
   companyId: string;
   companyName: string;
   companies: { id: string; name: string }[];
+  pipelines: PipelineOption[];
   canEdit: boolean;
   viewerId: string;
 };
 
-export function TeamManager({ members, admins, companyId, companyName, companies, canEdit, viewerId }: TeamManagerProps) {
+export function TeamManager({ members, admins, companyId, companyName, companies, pipelines, canEdit, viewerId }: TeamManagerProps) {
   const toast = useToast();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [toToggle, setToToggle] = useState<TeamMember | null>(null);
+  const [scoping, setScoping] = useState<TeamMember | null>(null);
+  const pipelineName = new Map(pipelines.map((p) => [p.id, p.name]));
   const [pending, startTransition] = useTransition();
 
   function run(action: () => Promise<ActionResult>, after?: () => void) {
@@ -64,6 +68,7 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                 <tr>
                   <th>Nome</th>
                   <th>Perfil</th>
+                  <th>Funis</th>
                   <th>Situação</th>
                   {canEdit && <th className="text-right">Ações</th>}
                 </tr>
@@ -95,9 +100,24 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                         >
                           <option value="gestor">Gestor</option>
                           <option value="vendedor">Vendedor</option>
+                          <option value="logistica">Expedição</option>
                         </select>
                       ) : (
                         ROLE_LABEL[m.role]
+                      )}
+                    </td>
+                    <td className="text-[13px]">
+                      {m.role !== "vendedor" ? (
+                        <span className="text-muted">{m.role === "logistica" ? "Só entregas agendadas" : "Todos"}</span>
+                      ) : (
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {m.pipelineIds ? m.pipelineIds.map((id) => <Pill key={id} tone="ind">{pipelineName.get(id) ?? "Funil removido"}</Pill>) : <span>Todos</span>}
+                          {canEdit && (
+                            <button type="button" className="text-xs font-semibold text-tint-ink hover:underline" disabled={pending} onClick={() => setScoping(m)}>
+                              Alterar
+                            </button>
+                          )}
+                        </span>
                       )}
                     </td>
                     <td>{m.active ? <Pill tone="ok">Ativo</Pill> : <Pill tone="bad">Desativado</Pill>}</td>
@@ -155,6 +175,16 @@ export function TeamManager({ members, admins, companyId, companyName, companies
             toast(message, "ok");
             setInviteOpen(false);
           }}
+        />
+      )}
+
+      {scoping && (
+        <ScopeModal
+          member={scoping}
+          pipelines={pipelines}
+          pending={pending}
+          onClose={() => setScoping(null)}
+          onSave={(ids) => run(() => setPipelineScope({ userId: scoping.id, companyId, pipelineIds: ids }), () => setScoping(null))}
         />
       )}
 
@@ -237,6 +267,7 @@ function InviteModal({ open, onClose, companies, defaultCompanyId, onDone }: Inv
           <SelectField label="Perfil" name="role" defaultValue="vendedor">
             <option value="vendedor">Vendedor</option>
             <option value="gestor">Gestor</option>
+            <option value="logistica">Expedição (separação e entrega)</option>
           </SelectField>
         </div>
 
@@ -271,6 +302,72 @@ function InviteModal({ open, onClose, companies, defaultCompanyId, onDone }: Inv
           </Button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function ScopeModal({
+  member,
+  pipelines,
+  pending,
+  onClose,
+  onSave,
+}: {
+  member: TeamMember;
+  pipelines: PipelineOption[];
+  pending: boolean;
+  onClose: () => void;
+  onSave: (ids: string[] | null) => void;
+}) {
+  const [all, setAll] = useState(member.pipelineIds === null);
+  const [chosen, setChosen] = useState<Set<string>>(new Set(member.pipelineIds ?? []));
+
+  function toggle(id: string) {
+    setChosen((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Funis de ${member.name}`}
+      actions={
+        <>
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" loading={pending} disabled={!all && chosen.size === 0} onClick={() => onSave(all ? null : [...chosen])}>
+            Salvar
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-2.5 text-[13.5px]">
+        <label className="flex items-center gap-2.5">
+          <input type="radio" className="accent-accent" checked={all} onChange={() => setAll(true)} />
+          Todos os funis da empresa
+        </label>
+        <label className="flex items-center gap-2.5">
+          <input type="radio" className="accent-accent" checked={!all} onChange={() => setAll(false)} />
+          Só os funis escolhidos
+        </label>
+        {!all && (
+          <div className="ml-6 grid gap-1.5">
+            {pipelines.map((p) => (
+              <label key={p.id} className="flex items-center gap-2.5">
+                <input type="checkbox" className="accent-accent" checked={chosen.has(p.id)} onChange={() => toggle(p.id)} />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        )}
+        <p className="m-0 text-xs text-muted">
+          A pessoa só vê os leads, as conversas da fila e as tarefas desses funis. Gestores e administradores continuam vendo tudo.
+        </p>
+      </div>
     </Modal>
   );
 }

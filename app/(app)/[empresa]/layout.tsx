@@ -2,16 +2,17 @@ import { BottomNav } from "@/components/app-shell/bottom-nav";
 import { Sidebar, type ShellCompany } from "@/components/app-shell/sidebar";
 import { ThemeSync } from "@/components/theme-toggle";
 import { isManager } from "@/lib/auth/roles";
+import { WAIT_MINUTES } from "@/lib/crm/attention";
 import { requireCompany, type CompanyAccess } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Contador de "Precisa de mim": pedidos de atendimento + conversas cuja última mensagem é do
- * cliente há mais de 30 minutos. Duas contagens baratas (head: true) pelo cliente autenticado.
+ * cliente há mais de WAIT_MINUTES (5 min). Duas contagens baratas (head: true) pelo cliente autenticado.
  */
 async function attentionCount(companyId: string): Promise<number> {
   const supabase = await createClient();
-  const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
+  const cutoff = new Date(Date.now() - WAIT_MINUTES * 60_000).toISOString();
   const [needs, waiting] = await Promise.all([
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("needs_human", true),
     supabase
@@ -51,7 +52,7 @@ export default async function CompanyLayout({
         counts={{ fila: filaCount }}
       />
       <div className="main">{children}</div>
-      {company.role === "vendedor" && <BottomNav slug={company.slug} />}
+      {(company.role === "vendedor" || company.role === "logistica") && <BottomNav slug={company.slug} role={company.role} />}
     </div>
   );
 }

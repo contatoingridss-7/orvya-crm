@@ -25,11 +25,13 @@ import { TimeAgo } from "@/components/time-ago";
 import { formatBRL, formatBRLShort } from "@/lib/format";
 import { firstName, initials } from "@/lib/names";
 import { dueText, dueTone } from "@/lib/crm/rentals";
-import { moveLead } from "./actions";
+import { formatSchedule, LOGISTICS_LABEL } from "@/lib/crm/logistics";
+import { moveLead, type ScheduleInput } from "./actions";
 import { ContractModal } from "./contract-modal";
 import { LeadDrawer } from "./lead-drawer";
 import { LostModal } from "./lost-modal";
 import { NewLeadModal } from "./new-lead-modal";
+import { ScheduleModal } from "./schedule-modal";
 
 export type BoardProps = {
   slug: string;
@@ -89,6 +91,7 @@ export function Board(props: BoardProps) {
   const [newOpen, setNewOpen] = useState(false);
   const [dragging, setDragging] = useState<BoardLead | null>(null);
   const [contractLead, setContractLead] = useState<BoardLead | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<{ leadId: string; stageId: string } | null>(null);
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
   const stageById = useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages]);
@@ -118,12 +121,12 @@ export function Board(props: BoardProps) {
     useSensor(KeyboardSensor),
   );
 
-  function move(leadId: string, stageId: string, lostReason?: string) {
+  function move(leadId: string, stageId: string, lostReason?: string, schedule?: ScheduleInput) {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.stageId === stageId) return;
     setOverrides((o) => ({ ...o, [leadId]: stageId }));
     startTransition(async () => {
-      const result = await moveLead(slug, leadId, stageId, lostReason);
+      const result = await moveLead(slug, leadId, stageId, lostReason, schedule);
       if (!result.ok) {
         setOverrides((o) => {
           const next = { ...o };
@@ -147,7 +150,11 @@ export function Board(props: BoardProps) {
 
   /** Mudança de etapa vinda do arraste, do seletor do detalhe ou dos botões ganho/perdido. */
   function requestMove(leadId: string, stageId: string) {
-    if (stageById.get(stageId)?.kind === "lost") setLostTarget({ leadId, stageId });
+    const target = stageById.get(stageId);
+    if (leads.find((l) => l.id === leadId)?.stageId === stageId) return;
+    if (target?.kind === "lost") setLostTarget({ leadId, stageId });
+    // Entrega agendada / Adaptação programada: pede data, hora e endereço para a expedição.
+    else if (target?.logistics) setScheduleTarget({ leadId, stageId });
     else move(leadId, stageId);
   }
 
@@ -161,6 +168,8 @@ export function Board(props: BoardProps) {
 
   const openLead = leads.find((l) => l.id === openLeadId) ?? null;
   const lostLead = lostTarget ? leads.find((l) => l.id === lostTarget.leadId) : null;
+  const scheduleLead = scheduleTarget ? leads.find((l) => l.id === scheduleTarget.leadId) : null;
+  const scheduleStage = scheduleTarget ? stageById.get(scheduleTarget.stageId) : null;
   const filtersOn = owner !== "todos" || temperature || source || query;
 
   return (
@@ -248,7 +257,7 @@ export function Board(props: BoardProps) {
                   <p className="m-0 py-6 text-center text-xs text-muted">Arraste um card para cá</p>
                 ) : (
                   items.map((l) => (
-                    <DraggableCard key={l.id} lead={l} ownerName={l.ownerId ? (peopleById.get(l.ownerId) ?? "Responsável") : null} onOpen={() => setOpenLeadId(l.id)} />
+                    <DraggableCard key={l.id} lead={l} stage={stage} ownerName={l.ownerId ? (peopleById.get(l.ownerId) ?? "Responsável") : null} onOpen={() => setOpenLeadId(l.id)} />
                   ))
                 )}
               </Column>
@@ -278,6 +287,20 @@ export function Board(props: BoardProps) {
         onConfirm={(reason) => {
           if (lostTarget) move(lostTarget.leadId, lostTarget.stageId, reason);
           setLostTarget(null);
+        }}
+      />
+
+      <ScheduleModal
+        open={!!scheduleLead && !!scheduleStage?.logistics}
+        leadName={scheduleLead ? firstName(scheduleLead.contact.name) : ""}
+        kind={scheduleStage?.logistics ?? "entrega"}
+        // Já agendado e ainda não entregue: aproveita os dados (ex.: voltou de etapa).
+        current={scheduleLead?.schedule && scheduleLead.schedule.status !== "entregue" ? scheduleLead.schedule : null}
+        defaultAddress={scheduleLead?.schedule?.address ?? scheduleLead?.custom.endereco}
+        onClose={() => setScheduleTarget(null)}
+        onConfirm={(input) => {
+          if (scheduleTarget) move(scheduleTarget.leadId, scheduleTarget.stageId, undefined, input);
+          setScheduleTarget(null);
         }}
       />
 
@@ -336,13 +359,14 @@ function Column({ stage, count, total, closedWindowDays, children }: { stage: St
   );
 }
 
-function DraggableCard({ lead, ownerName, onOpen }: { lead: BoardLead; ownerName: string | null; onOpen: () => void }) {
+function DraggableCard({ lead, stage, ownerName, onOpen }: { lead: BoardLead; stage: Stage; ownerName: string | null; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
-  return <LeadCard lead={lead} ownerName={ownerName} onOpen={onOpen} nodeRef={setNodeRef} dragProps={{ ...attributes, ...listeners }} dragging={isDragging} />;
+  return <LeadCard lead={lead} stage={stage} ownerName={ownerName} onOpen={onOpen} nodeRef={setNodeRef} dragProps={{ ...attributes, ...listeners }} dragging={isDragging} />;
 }
 
 type LeadCardProps = {
   lead: BoardLead;
+  stage?: Stage;
   ownerName: string | null;
   onOpen?: () => void;
   overlay?: boolean;
@@ -351,7 +375,7 @@ type LeadCardProps = {
   dragProps?: React.HTMLAttributes<HTMLElement>;
 };
 
-function LeadCard({ lead: l, ownerName, onOpen, overlay, dragging, nodeRef, dragProps }: LeadCardProps) {
+function LeadCard({ lead: l, stage, ownerName, onOpen, overlay, dragging, nodeRef, dragProps }: LeadCardProps) {
   return (
     <button
       type="button"
@@ -372,7 +396,15 @@ function LeadCard({ lead: l, ownerName, onOpen, overlay, dragging, nodeRef, drag
         {l.needsHuman && <Pill tone="bad">Precisa de você</Pill>}
         {l.aiEnabled === true && !l.needsHuman && <Pill tone="ind">IA</Pill>}
         {l.aiEnabled === false && <Pill>Humano</Pill>}
-        {l.overdueTask && <Pill tone="warn">Tarefa atrasada</Pill>}
+        {l.overdueTask && <Pill tone="bad">Tarefa atrasada</Pill>}
+        {l.dueTodayTask && <Pill tone="warn">Tarefa para hoje</Pill>}
+        {l.schedule && stage?.logistics && (
+          <Pill tone={l.schedule.status === "entregue" ? "ok" : "ind"}>
+            <span suppressHydrationWarning>
+              {formatSchedule(l.schedule.at)} · {LOGISTICS_LABEL[l.schedule.status]}
+            </span>
+          </Pill>
+        )}
         {l.rentalDaysLeft !== null && l.rentalDaysLeft <= 30 && (
           <Pill tone={dueTone(l.rentalDaysLeft)}>
             <span suppressHydrationWarning>{dueText(l.rentalDaysLeft).replace(/^v/, "V")}</span>

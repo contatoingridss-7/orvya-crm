@@ -1657,11 +1657,13 @@ select option {
       padding: 16px 16px 32px;
     }
 
-    /* Vendedor no celular: menu fica embaixo, como em um app */
-    .app[data-role="vendedor"] .side .nav {
+    /* Vendedor e expedição no celular: menu fica embaixo, como em um app */
+    .app[data-role="vendedor"] .side .nav,
+    .app[data-role="logistica"] .side .nav {
       display: none;
     }
-    .app[data-role="vendedor"] .content {
+    .app[data-role="vendedor"] .content,
+    .app[data-role="logistica"] .content {
       padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     }
     .bottom-nav {
@@ -1671,7 +1673,8 @@ select option {
       bottom: 0;
       z-index: 10;
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
       background: color-mix(in srgb, var(--side) 92%, transparent);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
@@ -1825,6 +1828,211 @@ select option {
       max-width: none;
     }
   }
+}
+
+/* =====================================================================
+   Expedição, agendamento e relatórios
+   ===================================================================== */
+@layer components {
+  /* Abas com link (ex.: período dos relatórios) */
+  .tabs a {
+    border-radius: 9px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .tabs a:hover {
+    color: var(--ink);
+  }
+  .tabs a[aria-current="page"] {
+    background: var(--grad);
+    color: #fff;
+  }
+  /* Andamento do pedido: Agendado → Separado → Faturado → Saiu → Entregue */
+  .steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .steps li {
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .steps li[data-done] {
+    background: var(--tint);
+    color: var(--tint-ink);
+    border-color: transparent;
+  }
+  .ship {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .ship[data-late] {
+    border-color: color-mix(in srgb, var(--lost) 45%, var(--line));
+  }
+  .ship .ship-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .ship .ship-head b {
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--title);
+  }
+  .ship .when {
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+  }
+  .ship .items {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+  }
+  .ship .items li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .thumb {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border-radius: 9px;
+    object-fit: cover;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .thumb.lg {
+    width: 100%;
+    height: auto;
+    max-height: 260px;
+    aspect-ratio: 4 / 3;
+  }
+  .ship .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  /* Cronômetro de espera em "Precisa de mim" */
+  .timer {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 12.5px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .timer[data-level="warn"] {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+    border-color: transparent;
+  }
+  .timer[data-level="bad"] {
+    background: var(--bad-bg);
+    color: var(--bad-fg);
+    border-color: transparent;
+  }
+  /* Relatórios: barras simples */
+  .bar-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 180px) 1fr auto;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    padding: 5px 0;
+  }
+  .bar-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    display: flex;
+  }
+  .bar-track > span {
+    height: 100%;
+  }
+  .bar-track .done {
+    background: var(--won);
+  }
+  .bar-track .late {
+    background: var(--lost);
+  }
+  .bar-track .open {
+    background: var(--accent);
+    opacity: 0.55;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend i {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    margin-right: 5px;
+    vertical-align: -1px;
+  }
+}
+
+/* Relatório em PDF: a impressão mostra só o conteúdo, em fundo branco */
+@media print {
+  .side,
+  .bottom-nav,
+  .no-print,
+  .top .theme-toggle {
+    display: none !important;
+  }
+  .app,
+  .main {
+    display: block !important;
+    margin: 0 !important;
+  }
+  body,
+  .app,
+  .main,
+  .panel {
+    background: #fff !important;
+    color: #111 !important;
+    box-shadow: none !important;
+  }
+  .panel {
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+  }
+  .content {
+    padding: 0 !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+.print-only {
+  display: none;
 }
 
 @keyframes fade {

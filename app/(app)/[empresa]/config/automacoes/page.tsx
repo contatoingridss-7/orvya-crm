@@ -8,7 +8,7 @@ import { RulesManager, type Rule } from "./rules-manager";
 
 export const metadata: Metadata = { title: "Automações" };
 
-type RuleRow = { id: string; pipeline_id: string; stage_id: string; task_title: string; due_in_days: number; enabled: boolean };
+type RuleRow = { id: string; pipeline_id: string; stage_id: string; task_title: string; due_in_days: number; enabled: boolean; trigger_event: "stage" | "delivered" };
 type StageRow = Stage & { pipeline_id: string };
 
 export default async function AutomacoesPage({ params }: { params: Promise<{ empresa: string }> }) {
@@ -17,8 +17,8 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
 
   const [pipelinesRes, stagesRes, rulesRes] = await Promise.all([
     supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
-    supabase.from("stages").select("id, key, name, kind, position, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
-    supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
+    supabase.from("stages").select("id, key, name, kind, position, logistics, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
+    supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled, trigger_event").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
   ]);
 
   const pipelines = pipelinesRes.data ?? [];
@@ -36,11 +36,14 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       taskTitle: r.task_title,
       dueInDays: r.due_in_days,
       enabled: r.enabled,
+      trigger: r.trigger_event,
     }))
     .sort(
       (a, b) =>
         (pipelineOrder.get(a.pipelineId) ?? 0) - (pipelineOrder.get(b.pipelineId) ?? 0) ||
-        (stageOrder.get(a.stageId) ?? 0) - (stageOrder.get(b.stageId) ?? 0),
+        (stageOrder.get(a.stageId) ?? 0) - (stageOrder.get(b.stageId) ?? 0) ||
+        Number(a.trigger === "delivered") - Number(b.trigger === "delivered") ||
+        a.dueInDays - b.dueInDays,
     );
 
   return (
@@ -53,7 +56,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
           isLoc={company.slug === "locpress"}
           rules={rules}
           pipelines={pipelines}
-          stages={stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, pipelineId: s.pipeline_id }))}
+          stages={stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, logistics: s.logistics, pipelineId: s.pipeline_id }))}
         />
       </div>
     </>

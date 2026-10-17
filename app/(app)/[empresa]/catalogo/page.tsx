@@ -13,6 +13,8 @@ export const metadata: Metadata = { title: "Catálogo" };
 export default async function CatalogoPage({ params }: { params: Promise<{ empresa: string }> }) {
   const { company } = await requireCompany((await params).empresa);
   const canEdit = isManager(company.role);
+  // Foto: gestor, admin e expedição (a expedição não altera preço nem estoque).
+  const canPhoto = canEdit || company.role === "logistica";
   const isLoc = company.slug === "locpress";
 
   const supabase = await createClient();
@@ -41,7 +43,7 @@ export default async function CatalogoPage({ params }: { params: Promise<{ empre
       />
       <div className="content grid gap-4">
         {error && <Notice tone="bad">Não foi possível carregar o catálogo. Recarregue a página.</Notice>}
-        <CatalogView products={products} slug={company.slug} canEdit={canEdit} isLoc={isLoc} />
+        <CatalogView products={products} slug={company.slug} companyId={company.id} canEdit={canEdit} canPhoto={canPhoto} isLoc={isLoc} />
       </div>
     </>
   );

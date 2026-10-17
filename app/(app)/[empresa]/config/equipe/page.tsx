@@ -10,6 +10,7 @@ export const metadata: Metadata = { title: "Equipe" };
 
 type MembershipRow = {
   role: MemberRole;
+  pipeline_ids: string[] | null;
   profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null;
 };
 type ProfileRow = { id: string; full_name: string | null; email: string | null; active: boolean };
@@ -19,21 +20,22 @@ export default async function EquipePage({ params }: { params: Promise<{ empresa
   const canEdit = company.role === "admin";
   const supabase = await createClient();
 
-  const [membersRes, adminsRes] = await Promise.all([
+  const [membersRes, adminsRes, pipelinesRes] = await Promise.all([
     supabase
       .from("memberships")
-      .select("role, profiles(id, full_name, email, active)")
+      .select("role, pipeline_ids, profiles(id, full_name, email, active)")
       .eq("company_id", company.id)
       .returns<MembershipRow[]>(),
     canEdit
       ? supabase.from("profiles").select("id, full_name, email, active").eq("is_platform_admin", true).returns<ProfileRow[]>()
       : Promise.resolve({ data: [] as ProfileRow[], error: null }),
+    supabase.from("pipelines").select("id, name").eq("company_id", company.id).order("position").returns<{ id: string; name: string }[]>(),
   ]);
 
   const members: TeamMember[] = (membersRes.data ?? [])
     .flatMap((m) =>
       m.profiles
-        ? [{ id: m.profiles.id, name: m.profiles.full_name || m.profiles.email || "Sem nome", email: m.profiles.email ?? "", role: m.role, active: m.profiles.active }]
+        ? [{ id: m.profiles.id, name: m.profiles.full_name || m.profiles.email || "Sem nome", email: m.profiles.email ?? "", role: m.role, active: m.profiles.active, pipelineIds: m.pipeline_ids }]
         : [],
     )
     .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, "pt-BR"));
@@ -55,6 +57,7 @@ export default async function EquipePage({ params }: { params: Promise<{ empresa
           companyId={company.id}
           companyName={company.name}
           companies={viewer.companies.map((c) => ({ id: c.id, name: c.name }))}
+          pipelines={pipelinesRes.data ?? []}
           canEdit={canEdit}
           viewerId={viewer.id}
         />

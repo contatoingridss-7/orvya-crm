@@ -67,6 +67,18 @@ const I = {
       <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.7 3 2.5 3.5 5.2" />
     </svg>
   ),
+  expedicao: (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" />
+      <circle cx="7" cy="18" r="1.8" />
+      <circle cx="17.5" cy="18" r="1.8" />
+    </svg>
+  ),
+  relatorios: (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </svg>
+  ),
   ia: (
     <svg viewBox="0 0 24 24" aria-hidden>
       <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3z" />
@@ -83,6 +95,8 @@ const MANAGER_NAV: NavItem[] = [
   { section: "fila", label: "Precisa de mim", icon: I.fila },
   { section: "tarefas", label: "Tarefas", icon: I.tarefas },
   { section: "catalogo", label: "Catálogo", icon: I.catalogo },
+  { section: "expedicao", label: "Expedição", icon: I.expedicao },
+  { section: "relatorios", label: "Relatórios", icon: I.relatorios },
   { sep: true },
   { section: "config/automacoes", label: "Automações", icon: I.automacoes },
   { section: "config/canais", label: "Canais e integrações", icon: I.canais },
@@ -98,6 +112,13 @@ const SELLER_NAV: NavItem[] = [
   { section: "catalogo", label: "Catálogo", icon: I.catalogo },
 ];
 
+const LOGISTICS_NAV: NavItem[] = [
+  { section: "expedicao", label: "Expedição", icon: I.expedicao },
+  { section: "catalogo", label: "Catálogo", icon: I.catalogo },
+];
+
 export function navFor(role: Role): NavItem[] {
-  return role === "vendedor" ? SELLER_NAV : MANAGER_NAV;
+  if (role === "vendedor") return SELLER_NAV;
+  if (role === "logistica") return LOGISTICS_NAV;
+  return MANAGER_NAV;
 }

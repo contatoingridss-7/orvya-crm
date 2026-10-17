@@ -17,10 +17,11 @@ export type Product = {
   referenceQty: number | null;
   referenceNote: string | null;
   stockUpdatedAt: string | null;
+  photoPath: string | null;
 };
 
 export const PRODUCT_COLUMNS =
-  "id, code, name, category, unit, sale_price, rent_price_month, stock, rented_count, promo_label, ai_notes, active, is_rental, requires_human, reference_price, reference_qty, reference_note, stock_updated_at";
+  "id, code, name, category, unit, sale_price, rent_price_month, stock, rented_count, promo_label, ai_notes, active, is_rental, requires_human, reference_price, reference_qty, reference_note, stock_updated_at, photo_path";
 
 export type ProductRow = {
   id: string;
@@ -41,6 +42,7 @@ export type ProductRow = {
   reference_qty: number | string | null;
   reference_note: string | null;
   stock_updated_at: string | null;
+  photo_path: string | null;
 };
 
 // O PostgREST devolve numeric como texto; converte uma vez aqui.
@@ -66,6 +68,7 @@ export function toProduct(r: ProductRow): Product {
     referenceQty: n(r.reference_qty),
     referenceNote: r.reference_note,
     stockUpdatedAt: r.stock_updated_at,
+    photoPath: r.photo_path,
   };
 }
 

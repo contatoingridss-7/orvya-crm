@@ -7,31 +7,38 @@
 | **Administrador** | Responsável pela plataforma | `profiles.is_platform_admin = true` |
 | **Gestor** | Dono ou gerente de uma empresa (ex.: Sr. Ivo na IC Supra) | `memberships.role = 'gestor'` |
 | **Vendedor** | Quem atende (ex.: Renato, Camila) | `memberships.role = 'vendedor'` |
+| **Expedição** | Separação, faturamento e entrega | `memberships.role = 'logistica'` |
 
 Um usuário pode pertencer às duas empresas. O seletor de empresa só aparece para quem tem acesso a mais de uma.
 
+**Vendedor restrito a funis:** `memberships.pipeline_ids` (vazio = todos). Ex.: na IC Supra, a Thays só trabalha no funil CPAP: vê só os leads desse funil, a fila de conversas ligadas a leads dele e as tarefas desses leads. O administrador define em Equipe.
+
 ### Matriz de permissões
 
-| Ação | Admin | Gestor | Vendedor |
-|---|---|---|---|
-| Ver as duas empresas | ✅ | só as dele | só as dele |
-| Ver leads | todos | todos da empresa | **os dele + sem responsável** |
-| Pegar lead sem responsável | ✅ | ✅ | ✅ (vira dono) |
-| Transferir lead para outro vendedor | ✅ | ✅ | ❌ |
-| Mover etapa, editar lead, criar tarefa e anotação | ✅ | ✅ | nos dele |
-| Excluir lead ou contato | ✅ | ✅ | ❌ |
-| Ver conversas | todas | todas da empresa | **atribuídas a ele + fila sem responsável** |
-| Responder conversa / enviar modelo | ✅ | ✅ | nas dele |
-| Assumir conversa / devolver para IA | ✅ | ✅ | nas dele |
-| Reativação em lote | ✅ | ✅ | ❌ |
-| Catálogo | editar | editar | só consultar |
-| Automações por etapa | editar | editar | ❌ (não vê a tela) |
-| Funis, etapas e campos | editar | editar | ❌ |
-| Números de WhatsApp, modelos de mensagem, integrações, configuração da IA | editar | ver | ❌ |
-| Equipe (convidar, desativar, mudar perfil) | ✅ | ver | ❌ |
-| Painel com números da equipe | ✅ | ✅ | ❌ (vê "Meu dia") |
+| Ação | Admin | Gestor | Vendedor | Expedição |
+|---|---|---|---|---|
+| Ver as duas empresas | ✅ | só as dele | só as dele | só as dele |
+| Ver leads | todos | todos da empresa | **os dele + sem responsável** (só nos funis liberados) | ❌ (só os pedidos agendados, pela tela Expedição) |
+| Pegar lead sem responsável | ✅ | ✅ | ✅ (vira dono) | ❌ |
+| Transferir lead para outro vendedor | ✅ | ✅ | ❌ | ❌ |
+| Mover etapa, editar lead, criar tarefa e anotação | ✅ | ✅ | nos dele | ❌ |
+| Agendar entrega / adaptação (data, hora, endereço) | ✅ | ✅ | nos dele | ❌ |
+| Excluir lead ou contato | ✅ | ✅ | ❌ | ❌ |
+| Ver conversas | todas | todas da empresa | **atribuídas a ele + fila sem responsável** | ❌ |
+| Responder conversa / enviar modelo | ✅ | ✅ | nas dele | ❌ |
+| Assumir conversa / devolver para IA | ✅ | ✅ | nas dele | ❌ |
+| Reativação em lote | ✅ | ✅ | ❌ | ❌ |
+| Expedição: ver pedidos agendados e avançar status | ✅ | ✅ | ❌ | ✅ |
+| Catálogo | editar | editar | só consultar | consultar + **fotos** |
+| Automações por etapa | editar | editar | ❌ (não vê a tela) | ❌ |
+| Funis, etapas e campos | editar | editar | ❌ | ❌ |
+| Números de WhatsApp, modelos de mensagem, integrações, configuração da IA | editar | ver | ❌ | ❌ |
+| Equipe (convidar, desativar, mudar perfil, funis do vendedor) | ✅ | ver | ❌ | ❌ |
+| Painel e Relatórios | ✅ | ✅ | ❌ (vê "Meu dia") | ❌ |
 
-Tudo isso é garantido pelo RLS em `supabase/migrations/0001_init.sql`. A interface só esconde o que o banco já bloqueia.
+Tudo isso é garantido pelo RLS em `supabase/migrations/0001_init.sql` e `0009_logistica_cpap.sql`. A interface só esconde o que o banco já bloqueia.
+
+A expedição **não** tem acesso direto a leads, contatos, conversas, tarefas nem campos do funil (receita, médico, pressão). A tela Expedição usa a função `logistics_orders`, que devolve só cliente, telefone, endereço, data/hora, observação, produtos e quantidades. O avanço de status passa por `logistics_set_status`.
 
 ## 2. Autenticação
 
@@ -39,14 +46,16 @@ Tudo isso é garantido pelo RLS em `supabase/migrations/0001_init.sql`. A interf
 - Recuperação de senha por e-mail (Supabase Auth). Tela `/redefinir-senha`.
 - **Não existe cadastro aberto.** Usuários entram por convite do administrador (`auth.admin.inviteUserByEmail` em server action) já com empresa e perfil definidos.
 - Usuário desativado (`profiles.active = false`) perde acesso imediatamente (as funções de RLS checam `active`).
-- Após login: admin → seletor de empresa; gestor/vendedor com uma empresa → direto para ela. Vendedor cai em **Meu dia**; admin e gestor caem no **Painel**.
+- Após login: admin → seletor de empresa; gestor/vendedor com uma empresa → direto para ela. Vendedor cai em **Meu dia**; expedição cai em **Expedição**; admin e gestor caem no **Painel**.
 - Sessão persistente; sair pelo menu do usuário.
 
 ## 3. Navegação por perfil
 
-**Admin e gestor** (lateral, como no protótipo): Painel · Funil · Conversas · Precisa de mim · Tarefas · Catálogo · ── · Automações · Canais e integrações · Equipe · Agente de IA (as quatro últimas: gestor só leitura, exceto Automações que ele edita).
+**Admin e gestor** (lateral, como no protótipo): Painel · Funil · Conversas · Precisa de mim · Tarefas · Catálogo · Expedição · Relatórios · ── · Automações · Canais e integrações · Equipe · Agente de IA (as quatro últimas: gestor só leitura, exceto Automações que ele edita).
 
 **Vendedor** (barra inferior no celular, lateral no desktop): **Meu dia** · Conversas · Meu funil · Tarefas · Catálogo (consulta).
+
+**Expedição** (barra inferior no celular): **Expedição** · Catálogo (consulta + fotos).
 
 ## 4. Telas
 
@@ -67,11 +76,15 @@ Igual ao protótipo: 5 indicadores, funil por etapa (todos os funis), origem dos
 - Card: nome, empresa/instituição, canal e número, valor, temperatura, B2B, IA ativa/humano, "precisa de você", tarefa atrasada, "vence em X dias" (locação), responsável, último contato.
 - Soltar em etapa de perda abre o modal de motivo (lista `lost_reasons` + texto livre).
 - Mudança de etapa: o banco grava a atividade e cria as tarefas das automações (trigger). A tela mostra aviso de cada tarefa criada.
+- Card mostra **Tarefa atrasada** (vermelho) e **Tarefa para hoje** (amarelo), que servem de alerta para os follow-ups.
+- **Etapas da expedição** (`stages.logistics`): "Entrega agendada" (antes do ganho nos funis de venda, locação e CPAP) e "Adaptação programada" (teste in loco do CPAP). Mover para elas abre o agendamento: data e hora, endereço e observação para a expedição. Sem agendamento o lead não entra na etapa. O card mostra data e status da expedição.
 
 ### 4.4 Detalhe do lead (painel lateral)
 Cabeçalho com empresa, funil/etapa, canal/número. Bloco do agente de IA (estado, score, resumo, assumir/devolver). Seção Negócio (funil, etapa, valor, temperatura, responsável, origem, tipo de cliente, canal, número da empresa, nome, telefone, instituição). Campos personalizados do funil (`custom_fields`). Produtos de interesse (do catálogo; na locação mostra preço mensal). Tarefas do lead. Histórico (`activities`) com campo de anotação. Rodapé: abrir conversa, marcar ganho, perdido, excluir (só gestor/admin).
 
 Na LocPress, quando o lead entra em **Em locação**, abrir formulário de contrato (`rental_contracts`): equipamento, nº de série, início, fim, valor mensal, endereço.
+
+Em etapa da expedição: bloco **Entrega/Adaptação com a expedição** com data, endereço, observação e andamento (Agendado → Separado → Faturado → Saiu para entrega → Entregue); botão Reagendar (volta o status para Agendado).
 
 ### 4.5 Conversas
 - Lista à esquerda com filtro por número/canal, busca e etiquetas (precisa de você, IA respondendo, aguardando resposta). Thread à direita. No celular, uma coluna por vez.
@@ -87,16 +100,23 @@ Na LocPress, quando o lead entra em **Em locação**, abrir formulário de contr
 
 ### 4.6 Precisa de mim (admin/gestor)
 - Conversas com `needs_human = true`, ordenadas por score e espera, com motivo e resumo. Botão Assumir (atribui a quem clicou, se vendedor; gestor pode escolher o vendedor).
+- **Sem resposta da equipe**: última mensagem do cliente há mais de **5 minutos** (regra da empresa). Cada item tem **cronômetro** de espera (amarelo a partir de 5 min, vermelho a partir de 15). A lista se atualiza a cada 30 s e o contador vermelho do menu soma esses alertas.
 - **Reativar leads parados**: filtro 2/5/7/14 dias, seleção, escolha do modelo aprovado, prévia por lead, custo total estimado, envio em fila com intervalo de 2 a 6 minutos entre mensagens (job no servidor).
 
 ### 4.7 Tarefas
-Nova tarefa (título, lead, prazo, responsável — vendedor só cria para si). Grupos: Atrasadas, Hoje, Próximos dias, Concluídas. Filtro por responsável (gestor/admin).
+Nova tarefa (título, lead, prazo, responsável — vendedor só cria para si). Um lead pode ter quantas tarefas forem necessárias. Grupos: Atrasadas, Hoje, Próximos dias, Concluídas. Filtro por responsável (gestor/admin).
+
+### 4.7.1 Relatórios (admin/gestor)
+Visão geral para a gestão: tarefas concluídas (e % no prazo), criadas (por automação ou pela equipe), atrasadas agora, próximos 7 dias, entregas concluídas; barras por pessoa; lista das atrasadas mais antigas. Períodos: 7 dias, este mês, mês passado, 30 dias. **Baixar PDF** (impressão do navegador). **E-mail todo sábado às 8h** (`/api/jobs/relatorio-semanal`, cron da Vercel) para gestores e administradores de cada empresa, com os últimos 7 dias — só números por pessoa, sem nomes de pacientes nem títulos de tarefa (LGPD). Botão "Enviar e-mail de teste" manda só para quem clicou.
+
+### 4.7.2 Expedição (admin, gestor, expedição)
+Pedidos agendados agrupados em Atrasados, Hoje, Amanhã, Próximos dias e Entregues (7 dias), com filtro Entregas / Adaptações in loco. Cartão: cliente, data e hora, funil e vendedor, endereço (abrir no mapa), telefone (ligar), observação, produtos com foto, código e quantidade, andamento. Botão para o próximo status; "Confirmar entrega" pede confirmação. Ao entregar: o histórico do lead registra, as automações "ao entregar" criam tarefas e, na etapa Entrega agendada, o lead vai para a etapa de ganho. Na adaptação in loco o lead continua na etapa (o vendedor segue com o resultado do teste).
 
 ### 4.8 Catálogo
-Tabela pesquisável. IC Supra: código, produto, categoria, preço, estoque, campanha. LocPress: equipamento, categoria, preço de venda, aluguel por mês (vazio = só venda), estoque, em locação. Coluna "leads em aberto interessados". Campo `ai_notes` (informações que a IA pode usar: medidas, indicação de uso, garantia). Importação por planilha CSV (gestor/admin).
+Tabela pesquisável, com miniatura da foto. **Fotos**: gestor, admin e expedição incluem, trocam e removem pelo celular (câmera ou galeria; reduzida no aparelho para 1200 px). Ficam no bucket público `product-photos/{company_id}/` para poderem ser enviadas ao cliente. IC Supra: código, produto, categoria, preço, estoque, campanha. LocPress: equipamento, categoria, preço de venda, aluguel por mês (vazio = só venda), estoque, em locação. Coluna "leads em aberto interessados". Campo `ai_notes` (informações que a IA pode usar: medidas, indicação de uso, garantia). Importação por planilha CSV (gestor/admin).
 
 ### 4.9 Automações
-Regras por etapa (entrou na etapa X do funil Y → criar tarefa Z com prazo N dias para o responsável), com liga/desliga e exclusão. Bloco de regras fixas (informativo), como no protótipo.
+Regras por etapa (entrou na etapa X do funil Y → criar tarefa Z com prazo N dias para o responsável), com liga/desliga e exclusão. Em etapas da expedição, a regra pode ser **"ao entregar"** (`automation_rules.trigger_event = 'delivered'`): a tarefa nasce quando a expedição confirma a entrega. Já vem configurado o **follow-up do CPAP** (IC Supra e LocPress): 24 h, 7 dias e 15 dias após a entrega. Bloco de regras fixas (informativo), como no protótipo.
 
 ### 4.10 Canais e integrações (admin edita, gestor vê)
 - 2 cartões de número por empresa (slot 1 e 2): nome interno, telefone, status, qualidade, conversas iniciadas pelo cliente no mês, leads abertos, conectado há. Ações: conectar (Embedded Signup da Meta — fase 2; no MVP o admin cadastra `phone_number_id`, `waba_id` e token manualmente), renomear, desconectar.
@@ -104,7 +124,7 @@ Regras por etapa (entrou na etapa X do funil Y → criar tarefa Z com prazo N di
 - Integrações (fase 2): Meta Lead Ads, anúncios de clique para WhatsApp, API de Conversões, Google Ads formulários, Google Ads conversões, site, Instagram, Messenger.
 
 ### 4.11 Equipe (admin)
-Lista de usuários por empresa com perfil e status. Convidar (nome, e-mail, empresa, perfil). Alterar perfil. Desativar/reativar.
+Lista de usuários por empresa com perfil e status. Convidar (nome, e-mail, empresa, perfil: gestor, vendedor ou expedição). Alterar perfil. Funis do vendedor (todos ou só os escolhidos). Desativar/reativar.
 
 ### 4.12 Agente de IA (admin edita, gestor vê)
 Por empresa: ligado/desligado, horário de atendimento, modelo de resposta e de apoio, instruções da empresa (tom, políticas, formas de pagamento, entrega, desconto máximo que pode oferecer = 0 por padrão), gatilhos de passagem para humano. Botão "Testar agente" com conversa simulada.

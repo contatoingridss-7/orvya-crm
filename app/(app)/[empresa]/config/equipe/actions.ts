@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { ROLE_LABEL } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { publicEnv } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,7 +27,7 @@ const inviteSchema = z
     fullName: z.string().trim().min(2, "Informe o nome."),
     email: z.string().trim().toLowerCase().pipe(z.email("Informe um e-mail válido.")),
     companyId: z.uuid("Escolha a empresa."),
-    role: z.enum(["gestor", "vendedor"]),
+    role: z.enum(["gestor", "vendedor", "logistica"]),
     method: z.enum(["convite", "senha"]),
     password: z.string().optional(),
   })
@@ -94,7 +95,7 @@ function inviteErrorMessage(error: { status?: number; code?: string; message: st
   return `Não foi possível enviar o convite: ${error.message}`;
 }
 
-const roleSchema = z.object({ userId: z.uuid(), companyId: z.uuid(), role: z.enum(["gestor", "vendedor"]) });
+const roleSchema = z.object({ userId: z.uuid(), companyId: z.uuid(), role: z.enum(["gestor", "vendedor", "logistica"]) });
 
 export async function changeRole(input: z.input<typeof roleSchema>): Promise<ActionResult> {
   if (!(await requireAdmin())) return NOT_ALLOWED;
@@ -110,7 +111,36 @@ export async function changeRole(input: z.input<typeof roleSchema>): Promise<Act
   if (error || !count) return { ok: false, error: "Não foi possível mudar o perfil." };
 
   refresh();
-  return { ok: true, message: `Perfil alterado para ${parsed.data.role === "gestor" ? "Gestor" : "Vendedor"}.` };
+  return { ok: true, message: `Perfil alterado para ${ROLE_LABEL[parsed.data.role]}.` };
+}
+
+const scopeSchema = z.object({ userId: z.uuid(), companyId: z.uuid(), pipelineIds: z.array(z.uuid()).max(20).nullable() });
+
+/**
+ * Funis que o vendedor enxerga (null = todos). Ex.: a Thays só no CPAP da IC Supra.
+ * O RLS de leads e conversas aplica a restrição; gestor e admin sempre veem tudo.
+ */
+export async function setPipelineScope(input: z.input<typeof scopeSchema>): Promise<ActionResult> {
+  if (!(await requireAdmin())) return NOT_ALLOWED;
+  const parsed = scopeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  const ids = parsed.data.pipelineIds;
+  if (ids && ids.length === 0) return { ok: false, error: "Escolha pelo menos um funil, ou marque todos." };
+
+  const supabase = await createClient();
+  if (ids) {
+    const { data: found } = await supabase.from("pipelines").select("id").eq("company_id", parsed.data.companyId).in("id", ids);
+    if ((found?.length ?? 0) !== ids.length) return { ok: false, error: "Funil não encontrado nesta empresa." };
+  }
+  const { error, count } = await supabase
+    .from("memberships")
+    .update({ pipeline_ids: ids }, { count: "exact" })
+    .eq("user_id", parsed.data.userId)
+    .eq("company_id", parsed.data.companyId);
+  if (error || !count) return { ok: false, error: "Não foi possível salvar os funis." };
+
+  refresh();
+  return { ok: true, message: ids ? "Acesso limitado aos funis escolhidos." : "Acesso a todos os funis." };
 }
 
 const activeSchema = z.object({ userId: z.uuid(), active: z.boolean() });

@@ -5,7 +5,13 @@ export type Temperature = "quente" | "morno" | "frio";
 export type CustomerType = "B2C" | "B2B";
 
 export type Pipeline = { id: string; key: string; name: string; hint: string | null };
-export type Stage = { id: string; key: string; name: string; kind: StageKind; position: number };
+/** Etapa ligada à expedição: entrega agendada ou adaptação (teste in loco) programada. */
+export type StageLogistics = "entrega" | "adaptacao";
+export type Stage = { id: string; key: string; name: string; kind: StageKind; position: number; logistics: StageLogistics | null };
+export const STAGE_SELECT = "id, key, name, kind, position, logistics";
+
+export type LogisticsStatus = "agendado" | "separado" | "faturado" | "em_rota" | "entregue";
+export type Schedule = { at: string; address: string | null; notes: string | null; status: LogisticsStatus; deliveredAt: string | null };
 export type CustomField = {
   id: string;
   key: string;
@@ -45,12 +51,16 @@ export type BoardLead = {
   aiEnabled: boolean | null; // null = ainda sem conversa
   needsHuman: boolean;
   overdueTask: boolean;
+  /** Tarefa vencendo hoje (ex.: follow-up do CPAP). */
+  dueTodayTask: boolean;
+  /** Agendamento com a expedição (null = sem agendamento). */
+  schedule: Schedule | null;
   /** Dias até o fim do contrato de locação ativo que vence primeiro (null = sem contrato ativo). */
   rentalDaysLeft: number | null;
 };
 
 export const LEAD_SELECT =
-  "id, stage_id, pipeline_id, owner_id, source_id, value, temperature, score, custom, lost_reason, closed_at, last_contact_at, created_at, contacts(id, name, phone_e164, org_name, email, customer_type), conversations(ai_enabled, needs_human)";
+  "id, stage_id, pipeline_id, owner_id, source_id, value, temperature, score, custom, lost_reason, closed_at, last_contact_at, created_at, scheduled_at, logistics_address, logistics_notes, logistics_status, delivered_at, contacts(id, name, phone_e164, org_name, email, customer_type), conversations(ai_enabled, needs_human)";
 
 export type LeadRow = {
   id: string;
@@ -66,11 +76,16 @@ export type LeadRow = {
   closed_at: string | null;
   last_contact_at: string | null;
   created_at: string;
+  scheduled_at: string | null;
+  logistics_address: string | null;
+  logistics_notes: string | null;
+  logistics_status: LogisticsStatus | null;
+  delivered_at: string | null;
   contacts: { id: string; name: string; phone_e164: string | null; org_name: string | null; email: string | null; customer_type: CustomerType } | null;
   conversations: { ai_enabled: boolean; needs_human: boolean }[] | null;
 };
 
-export function toBoardLead(r: LeadRow, overdue: Set<string>, rentalDays?: Map<string, number>): BoardLead {
+export function toBoardLead(r: LeadRow, overdue: Set<string>, rentalDays?: Map<string, number>, dueToday?: Set<string>): BoardLead {
   const conv = r.conversations?.[0] ?? null;
   return {
     id: r.id,
@@ -97,6 +112,10 @@ export function toBoardLead(r: LeadRow, overdue: Set<string>, rentalDays?: Map<s
     aiEnabled: conv ? conv.ai_enabled : null,
     needsHuman: conv?.needs_human ?? false,
     overdueTask: overdue.has(r.id),
+    dueTodayTask: !overdue.has(r.id) && (dueToday?.has(r.id) ?? false),
+    schedule: r.scheduled_at
+      ? { at: r.scheduled_at, address: r.logistics_address, notes: r.logistics_notes, status: r.logistics_status ?? "agendado", deliveredAt: r.delivered_at }
+      : null,
     rentalDaysLeft: rentalDays?.get(r.id) ?? null,
   };
 }

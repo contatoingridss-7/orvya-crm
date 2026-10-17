@@ -14,7 +14,7 @@ async function context(slug: string) {
   const viewer = await getViewer();
   if (!viewer?.active) return null;
   const company = viewer.companies.find((c) => c.slug === slug);
-  if (!company) return null;
+  if (!company || company.role === "logistica") return null;
   return { viewer, company, manager: isManager(company.role), supabase: await createClient() };
 }
 
