@@ -97,7 +97,6 @@ export async function deleteRule(slug: string, ruleId: string): Promise<ActionRe
 const templateSchema = z.object({
   title: z.string().trim().min(3, "Escreva a tarefa.").max(200),
   pipelineId: z.string(),
-  dueInDays: z.coerce.number().int().min(0).max(365),
 });
 
 export async function createTemplate(slug: string, input: z.input<typeof templateSchema>): Promise<ActionResult> {
@@ -112,7 +111,7 @@ export async function createTemplate(slug: string, input: z.input<typeof templat
   }
   const { error } = await ctx.supabase
     .from("task_templates")
-    .insert({ company_id: ctx.company.id, pipeline_id: d.pipelineId || null, title: d.title, due_in_days: d.dueInDays, position: 100 });
+    .insert({ company_id: ctx.company.id, pipeline_id: d.pipelineId || null, title: d.title, position: 100 });
   if (error) return { ok: false, error: "Não foi possível salvar a tarefa pronta." };
   revalidatePath(`/${slug}/config/automacoes`);
   return { ok: true, message: "Tarefa pronta incluída. Já aparece para a equipe." };

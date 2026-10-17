@@ -34,7 +34,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
     supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled, trigger_event, after_days, repeat_days").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
     supabase
       .from("task_templates")
-      .select("id, pipeline_id, title, due_in_days, active")
+      .select("id, pipeline_id, title, active")
       .eq("company_id", company.id)
       .order("position")
       .order("title")

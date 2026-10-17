@@ -8,13 +8,10 @@ import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
-import { templateDueText } from "@/lib/crm/tasks";
 import type { Pipeline } from "@/lib/crm/types";
 import { createTemplate, deleteTemplate, toggleTemplate, type ActionResult } from "./actions";
 
-export type TemplateRow = { id: string; pipeline_id: string | null; title: string; due_in_days: number; active: boolean };
-
-const DUE_OPTIONS = [0, 1, 2, 3, 7];
+export type TemplateRow = { id: string; pipeline_id: string | null; title: string; active: boolean };
 
 /** Tarefas prontas: aparecem na lista de "O que precisa ser feito"; o vendedor escolhe e edita se precisar. */
 export function TemplatesManager({ slug, pipelines, templates, loadError }: { slug: string; pipelines: Pipeline[]; templates: TemplateRow[]; loadError: boolean }) {
@@ -40,7 +37,6 @@ export function TemplatesManager({ slug, pipelines, templates, loadError }: { sl
       const r = await createTemplate(slug, {
         title: String(f.get("title") ?? ""),
         pipelineId: String(f.get("pipelineId") ?? ""),
-        dueInDays: String(f.get("dueInDays") ?? "1"),
       });
       if (r.ok) {
         toast(r.message, "ok");
@@ -59,7 +55,7 @@ export function TemplatesManager({ slug, pipelines, templates, loadError }: { sl
   return (
     <Panel
       title="Tarefas prontas"
-      subtitle="Aparecem na lista de “O que precisa ser feito”, filtradas pelo funil do lead. O vendedor escolhe e, se precisar, edita o texto e o prazo."
+      subtitle="Aparecem na lista de “O que precisa ser feito”, filtradas pelo funil do lead. O atendente escolhe, edita o texto se precisar e define o prazo."
     >
       {loadError && <Notice tone="bad">Não foi possível carregar as tarefas prontas. Rode a migration 0010 no Supabase.</Notice>}
 
@@ -72,10 +68,7 @@ export function TemplatesManager({ slug, pipelines, templates, loadError }: { sl
               <div className="row-list">
                 {g.items.map((t) => (
                   <div key={t.id} className={`flex items-center gap-2.5 py-2 ${t.active ? "" : "opacity-55"}`}>
-                    <span className="min-w-0 flex-1 text-[13.5px]">
-                      {t.title}
-                      <small className="block text-xs text-muted">Prazo sugerido: {templateDueText(t.due_in_days)}</small>
-                    </span>
+                    <span className="min-w-0 flex-1 text-[13.5px]">{t.title}</span>
                     <Switch label={`${t.active ? "Esconder" : "Mostrar"} ${t.title}`} checked={t.active} disabled={pending} onChange={(e) => run(() => toggleTemplate(slug, t.id, e.target.checked))} />
                     <Button size="sm" variant="ghost" className="danger" disabled={pending} onClick={() => run(() => deleteTemplate(slug, t.id))}>
                       Excluir
@@ -90,20 +83,13 @@ export function TemplatesManager({ slug, pipelines, templates, loadError }: { sl
 
       <h3 className="mt-5 mb-2.5 text-[13px] font-[650]">Nova tarefa pronta</h3>
       <form onSubmit={onCreate} className="grid gap-2.5">
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] lg:items-end">
           <TextField label="Tarefa" name="title" required minLength={3} maxLength={200} placeholder="Ex.: enviar catálogo de cadeiras de rodas" className="sm:col-span-2 lg:col-span-1" />
           <SelectField label="Funil" name="pipelineId" defaultValue="">
             <option value="">Todos os funis</option>
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label="Prazo sugerido" name="dueInDays" defaultValue="1">
-            {DUE_OPTIONS.map((d) => (
-              <option key={d} value={d}>
-                {templateDueText(d)}
               </option>
             ))}
           </SelectField>

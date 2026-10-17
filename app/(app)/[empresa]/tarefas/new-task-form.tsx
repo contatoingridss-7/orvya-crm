@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SelectField, TextField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
-import { defaultDueLocal, templateDueLocal, templateDueText, type TaskTemplate } from "@/lib/crm/tasks";
+import { defaultDueLocal, type TaskTemplate } from "@/lib/crm/tasks";
 import type { Person } from "@/lib/crm/types";
 import { createTask } from "./actions";
 
@@ -54,9 +54,8 @@ export function NewTaskForm({ slug, manager, viewerId, people, leads, leadId, pi
     setPicked(id);
     const t = options.find((o) => o.id === id);
     if (!t) return;
-    // Só antecipa: o vendedor ainda pode editar o texto e o prazo.
+    // Só antecipa o texto (editável); o prazo quem escolhe é o atendente.
     setTitle(t.title);
-    setDue(templateDueLocal(t.dueInDays));
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -93,7 +92,7 @@ export function NewTaskForm({ slug, manager, viewerId, people, leads, leadId, pi
               <option value={OTHER}>Escolha uma tarefa pronta ou escreva abaixo</option>
               {options.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.title} ({templateDueText(t.dueInDays)})
+                  {t.title}
                 </option>
               ))}
             </SelectField>
