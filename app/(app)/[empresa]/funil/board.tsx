@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
+import type { TaskTemplate } from "@/lib/crm/tasks";
 import type { BoardLead, CatalogOption, CustomField, Option, Person, Pipeline, Stage } from "@/lib/crm/types";
 import { TEMPERATURE_LABEL } from "@/lib/crm/types";
 import { TimeAgo } from "@/components/time-ago";
@@ -45,6 +46,8 @@ export type BoardProps = {
   lostReasons: Option[];
   people: Person[];
   catalog: CatalogOption[];
+  /** Tarefas prontas para o campo "O que precisa ser feito". */
+  taskTemplates: TaskTemplate[];
   viewerId: string;
   manager: boolean;
   /** LocPress: contratos de locação. */

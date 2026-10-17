@@ -24,7 +24,9 @@ const ruleSchema = z.object({
   stageId: z.uuid("Escolha a etapa."),
   taskTitle: z.string().trim().min(3, "Descreva a tarefa.").max(200),
   dueInDays: z.coerce.number().int().min(0, "Prazo inválido.").max(365, "Prazo de no máximo 365 dias."),
-  trigger: z.enum(["stage", "delivered"]).default("stage"),
+  trigger: z.enum(["stage", "delivered", "stale"]).default("stage"),
+  afterDays: z.coerce.number().int().min(1, "Informe há quantos dias parado.").max(365).optional(),
+  repeatDays: z.coerce.number().int().min(1, "Repetição inválida.").max(365).optional(),
 });
 
 export async function createRule(slug: string, input: z.input<typeof ruleSchema>): Promise<ActionResult> {
@@ -44,6 +46,8 @@ export async function createRule(slug: string, input: z.input<typeof ruleSchema>
   if (!stage) return { ok: false, error: "Etapa não encontrada neste funil." };
   if (stage.kind === "lost") return { ok: false, error: "Não é possível criar tarefa automática para lead perdido." };
   if (d.trigger === "delivered" && !stage.logistics) return { ok: false, error: "A opção ao entregar só vale para etapas de entrega ou adaptação." };
+  if (d.trigger === "stale" && !d.afterDays) return { ok: false, error: "Informe há quantos dias o lead está parado." };
+  if (d.trigger === "stale" && stage.kind !== "open") return { ok: false, error: "Parado na etapa só vale para etapas em aberto." };
 
   const { error } = await ctx.supabase.from("automation_rules").insert({
     company_id: ctx.company.id,
@@ -53,6 +57,8 @@ export async function createRule(slug: string, input: z.input<typeof ruleSchema>
     due_in_days: d.dueInDays,
     enabled: true,
     trigger_event: d.trigger,
+    after_days: d.trigger === "stale" ? d.afterDays : null,
+    repeat_days: d.trigger === "stale" ? null : (d.repeatDays ?? null),
   });
   if (error) return { ok: false, error: "Não foi possível criar a regra." };
   revalidatePath(`/${slug}/config/automacoes`);
@@ -61,7 +67,9 @@ export async function createRule(slug: string, input: z.input<typeof ruleSchema>
     message:
       d.trigger === "delivered"
         ? "Regra criada. Vale para as próximas entregas confirmadas pela expedição."
-        : "Regra criada. Vale para os leads que entrarem na etapa a partir de agora.",
+        : d.trigger === "stale"
+          ? "Regra criada. O CRM confere os leads parados de hora em hora."
+          : "Regra criada. Vale para os leads que entrarem na etapa a partir de agora.",
   };
 }
 
@@ -81,4 +89,49 @@ export async function deleteRule(slug: string, ruleId: string): Promise<ActionRe
   if (error || !data?.length) return { ok: false, error: "Não foi possível excluir a regra." };
   revalidatePath(`/${slug}/config/automacoes`);
   return { ok: true, message: "Regra excluída. As tarefas que ela já criou continuam." };
+}
+
+// ---------------------------------------------------------------------
+// Tarefas prontas ("O que precisa ser feito")
+// ---------------------------------------------------------------------
+const templateSchema = z.object({
+  title: z.string().trim().min(3, "Escreva a tarefa.").max(200),
+  pipelineId: z.string(),
+  dueInDays: z.coerce.number().int().min(0).max(365),
+});
+
+export async function createTemplate(slug: string, input: z.input<typeof templateSchema>): Promise<ActionResult> {
+  const ctx = await managerContext(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const parsed = templateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const d = parsed.data;
+  if (d.pipelineId) {
+    const { data: p } = await ctx.supabase.from("pipelines").select("id").eq("id", d.pipelineId).eq("company_id", ctx.company.id).maybeSingle();
+    if (!p) return { ok: false, error: "Funil não encontrado." };
+  }
+  const { error } = await ctx.supabase
+    .from("task_templates")
+    .insert({ company_id: ctx.company.id, pipeline_id: d.pipelineId || null, title: d.title, due_in_days: d.dueInDays, position: 100 });
+  if (error) return { ok: false, error: "Não foi possível salvar a tarefa pronta." };
+  revalidatePath(`/${slug}/config/automacoes`);
+  return { ok: true, message: "Tarefa pronta incluída. Já aparece para a equipe." };
+}
+
+export async function toggleTemplate(slug: string, id: string, active: boolean): Promise<ActionResult> {
+  const ctx = await managerContext(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const { data, error } = await ctx.supabase.from("task_templates").update({ active }).eq("id", id).eq("company_id", ctx.company.id).select("id");
+  if (error || !data?.length) return { ok: false, error: "Não foi possível alterar a tarefa pronta." };
+  revalidatePath(`/${slug}/config/automacoes`);
+  return { ok: true, message: active ? "Tarefa pronta ligada." : "Tarefa pronta escondida da lista." };
+}
+
+export async function deleteTemplate(slug: string, id: string): Promise<ActionResult> {
+  const ctx = await managerContext(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const { data, error } = await ctx.supabase.from("task_templates").delete().eq("id", id).eq("company_id", ctx.company.id).select("id");
+  if (error || !data?.length) return { ok: false, error: "Não foi possível excluir a tarefa pronta." };
+  revalidatePath(`/${slug}/config/automacoes`);
+  return { ok: true, message: "Tarefa pronta excluída." };
 }

@@ -19,6 +19,7 @@ import {
   type Stage,
 } from "@/lib/crm/types";
 import { daysUntil } from "@/lib/crm/rentals";
+import { loadTaskTemplates } from "@/lib/crm/task-templates";
 import { createClient } from "@/lib/supabase/server";
 import { Board } from "./board";
 
@@ -79,7 +80,7 @@ export default async function FunilPage({
   const closedSince = subDays(new Date(), CLOSED_WINDOW_DAYS).toISOString();
   const now = new Date().toISOString();
   const endOfToday = fromZonedTime(`${formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd")}T23:59:59`, TIMEZONE).toISOString();
-  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes, aiRes, todayRes] = await Promise.all([
+  const [stagesRes, leadsRes, fieldsRes, sourcesRes, reasonsRes, membersRes, productsRes, overdueRes, contractsRes, aiRes, todayRes, templates] = await Promise.all([
     supabase.from("stages").select(STAGE_SELECT).eq("pipeline_id", current.id).order("position").returns<Stage[]>(),
     supabase
       .from("leads")
@@ -131,6 +132,7 @@ export default async function FunilPage({
       .lte("due_at", endOfToday)
       .not("lead_id", "is", null)
       .returns<{ lead_id: string }[]>(),
+    loadTaskTemplates(supabase, company.id),
   ]);
 
   const overdue = new Set((overdueRes.data ?? []).map((t) => t.lead_id));
@@ -187,6 +189,7 @@ export default async function FunilPage({
           lostReasons={reasonsRes.data ?? []}
           people={people}
           catalog={catalog}
+          taskTemplates={templates}
           viewerId={viewer.id}
           manager={isManager(company.role)}
           hasRentals={company.slug === "locpress" || current.key === "cpap"}

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { WAIT_MINUTES } from "@/lib/crm/attention";
+import { ESCALATE_HOURS, WAIT_MINUTES } from "@/lib/crm/attention";
+import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
 import type { MemberRole } from "@/lib/auth/roles";
@@ -10,6 +11,7 @@ import { daysSince } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { TemplateCategory } from "@/lib/whatsapp/pricing";
 import { AttentionList, type AttentionItem, type Person } from "./attention-list";
+import { LateTasks } from "./late-tasks";
 import { ReactivatePanel, type StaleLead, type ReactivateTemplate } from "./reactivate";
 import { SendQueue, type QueueRow } from "./send-queue";
 
@@ -66,7 +68,7 @@ export default async function FilaPage({ params }: { params: Promise<{ empresa: 
   const staleCutoff = new Date(now - MIN_STALE_DAYS * 86_400_000).toISOString();
 
   // Tudo pelo cliente autenticado: o RLS mostra ao gestor/admin só a empresa dele.
-  const [needsRes, waitingRes, membersRes, leadsRes, waConvRes, templatesRes, queueRes] = await Promise.all([
+  const [needsRes, waitingRes, membersRes, leadsRes, waConvRes, templatesRes, queueRes, lateRes] = await Promise.all([
     supabase.from("conversations").select(CONV_SELECT).eq("company_id", company.id).eq("needs_human", true).limit(200).returns<ConvRow[]>(),
     supabase
       .from("conversations")
@@ -114,6 +116,16 @@ export default async function FilaPage({ params }: { params: Promise<{ empresa: 
       .order("scheduled_at", { ascending: true })
       .limit(500)
       .returns<QueueDbRow[]>(),
+    // Tarefas vencidas há mais de 1 dia: o gestor cobra o responsável.
+    supabase
+      .from("tasks")
+      .select(TASK_SELECT)
+      .eq("company_id", company.id)
+      .is("done_at", null)
+      .lt("due_at", new Date(now - ESCALATE_HOURS * 3600_000).toISOString())
+      .order("due_at")
+      .limit(100)
+      .returns<TaskRow[]>(),
   ]);
 
   const people: Person[] = (membersRes.data ?? [])
@@ -211,6 +223,13 @@ export default async function FilaPage({ params }: { params: Promise<{ empresa: 
           </div>
 
           <div className="grid content-start gap-4">
+            <Panel title="Tarefas atrasadas da equipe" subtitle="Vencidas há mais de 1 dia, com o nome do responsável. As mais antigas primeiro.">
+              {lateRes.error ? (
+                <Notice tone="bad">Não foi possível carregar as tarefas atrasadas.</Notice>
+              ) : (
+                <LateTasks slug={company.slug} tasks={(lateRes.data ?? []).map(toTask)} viewerId={viewer.id} />
+              )}
+            </Panel>
             <Panel title="Reativar leads parados">
               {reactError ? (
                 <Notice tone="bad">Não foi possível carregar os leads parados. Recarregue a página.</Notice>

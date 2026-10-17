@@ -101,6 +101,7 @@ Em etapa da expedição: bloco **Entrega/Adaptação com a expedição** com dat
 ### 4.6 Precisa de mim (admin/gestor)
 - Conversas com `needs_human = true`, ordenadas por score e espera, com motivo e resumo. Botão Assumir (atribui a quem clicou, se vendedor; gestor pode escolher o vendedor).
 - **Sem resposta da equipe**: última mensagem do cliente há mais de **5 minutos** (regra da empresa). Cada item tem **cronômetro** de espera (amarelo a partir de 5 min, vermelho a partir de 15). A lista se atualiza a cada 30 s e o contador vermelho do menu soma esses alertas.
+- **Tarefas atrasadas da equipe**: vencidas há mais de 1 dia, com o responsável; o gestor conclui, adia ou exclui dali. Somam no contador do menu.
 - **Reativar leads parados**: filtro 2/5/7/14 dias, seleção, escolha do modelo aprovado, prévia por lead, custo total estimado, envio em fila com intervalo de 2 a 6 minutos entre mensagens (job no servidor).
 
 ### 4.7 Tarefas
@@ -117,6 +118,9 @@ Tabela pesquisável, com miniatura da foto. **Fotos**: gestor, admin e expediç�
 
 ### 4.9 Automações
 Regras por etapa (entrou na etapa X do funil Y → criar tarefa Z com prazo N dias para o responsável), com liga/desliga e exclusão. Em etapas da expedição, a regra pode ser **"ao entregar"** (`automation_rules.trigger_event = 'delivered'`): a tarefa nasce quando a expedição confirma a entrega. Já vem configurado o **follow-up do CPAP** (IC Supra e LocPress): 24 h, 7 dias e 15 dias após a entrega. Bloco de regras fixas (informativo), como no protótipo.
+- **Parado na etapa** (`trigger_event = 'stale'`, `after_days`): lead há N dias na mesma etapa (`leads.stage_entered_at`) vira tarefa para o responsável, uma vez por entrada na etapa. Função `run_stale_automations()`, rodada pelo pg_cron de hora em hora e pelo cron diário da Vercel (`/api/jobs/automacoes`). Vem configurado para Novo contato (1 dia), Orçamento (3), Negociação (5), Cotação (5), Documentação (2), Receita e avaliação e Proposta do CPAP (3).
+- **Repetição** (`repeat_days`): ao concluir a tarefa da regra, nasce a próxima (se o lead não foi perdido). Usado na **reposição de consumíveis do CPAP**: filtro a cada 30 dias e máscara a cada 90, a partir da entrega.
+- **Tarefas prontas** (`task_templates`): frases pré-cadastradas por funil (ou para todos) com prazo sugerido. Aparecem como lista em "O que precisa ser feito" na tela Tarefas e no detalhe do lead, filtradas pelo funil do lead; ao escolher, texto e prazo são preenchidos e podem ser editados. Gestor e admin cadastram, escondem e excluem.
 
 ### 4.10 Canais e integrações (admin edita, gestor vê)
 - 2 cartões de número por empresa (slot 1 e 2): nome interno, telefone, status, qualidade, conversas iniciadas pelo cliente no mês, leads abertos, conectado há. Ações: conectar (Embedded Signup da Meta — fase 2; no MVP o admin cadastra `phone_number_id`, `waba_id` e token manualmente), renomear, desconectar.

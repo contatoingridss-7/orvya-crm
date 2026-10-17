@@ -72,3 +72,21 @@ export function dueLabel(dueAt: string, now = new Date()): string {
 export function defaultDueLocal(now = new Date()): string {
   return `${day(new Date(now.getTime() + 86_400_000))}T09:00`;
 }
+
+/** Tarefa pronta (Automações → Tarefas prontas). pipelineId null = todos os funis. */
+export type TaskTemplate = { id: string; pipelineId: string | null; title: string; dueInDays: number };
+
+/** Prazo sugerido da tarefa pronta: 0 = hoje, daqui a 2 h (hora cheia); N = em N dias às 9h. */
+export function templateDueLocal(dueInDays: number, now = new Date()): string {
+  if (dueInDays <= 0) {
+    const inTwoHours = new Date(now.getTime() + 2 * 3600_000);
+    return formatInTimeZone(inTwoHours, TIMEZONE, "yyyy-MM-dd'T'HH':00'");
+  }
+  return `${day(new Date(now.getTime() + dueInDays * 86_400_000))}T09:00`;
+}
+
+export function templateDueText(dueInDays: number): string {
+  if (dueInDays <= 0) return "hoje, em 2 h";
+  if (dueInDays === 1) return "amanhã às 9h";
+  return `em ${dueInDays} dias às 9h`;
+}

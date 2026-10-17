@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
-import { groupOf, type TaskGroup, type TaskItem } from "@/lib/crm/tasks";
+import { groupOf, type TaskGroup, type TaskItem, type TaskTemplate } from "@/lib/crm/tasks";
 import type { Person } from "@/lib/crm/types";
 import { NewTaskForm } from "./new-task-form";
 import { TaskLine } from "./task-line";
@@ -12,7 +12,8 @@ import { TaskLine } from "./task-line";
 type Props = {
   slug: string;
   tasks: TaskItem[];
-  leads: { id: string; name: string }[];
+  leads: { id: string; name: string; pipelineId: string }[];
+  templates: TaskTemplate[];
   people: Person[];
   manager: boolean;
   viewerId: string;
@@ -26,7 +27,7 @@ const GROUPS: { id: TaskGroup; label: string }[] = [
   { id: "concluidas", label: "Concluídas" },
 ];
 
-export function TaskBoard({ slug, tasks, leads, people, manager, viewerId, doneWindowDays }: Props) {
+export function TaskBoard({ slug, tasks, leads, templates, people, manager, viewerId, doneWindowDays }: Props) {
   const router = useRouter();
   // Vendedor começa vendo as dele; gestor vê a equipe toda.
   const [owner, setOwner] = useState(manager ? "" : viewerId);
@@ -43,7 +44,7 @@ export function TaskBoard({ slug, tasks, leads, people, manager, viewerId, doneW
   return (
     <>
       <Panel title="Nova tarefa" subtitle="Ligue a tarefa a um lead para ninguém perder o contexto.">
-        <NewTaskForm slug={slug} manager={manager} viewerId={viewerId} people={people} leads={leads} onCreated={refresh} />
+        <NewTaskForm slug={slug} manager={manager} viewerId={viewerId} people={people} leads={leads} templates={templates} onCreated={refresh} />
       </Panel>
 
       <Panel

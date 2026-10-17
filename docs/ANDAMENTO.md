@@ -7,7 +7,7 @@ decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
 - Site: https://orvya-crm.vercel.app (Vercel, plano Hobby — passar para Pro antes do uso pelos clientes)
 - Banco: Supabase `psewjkrpwnmrmiwwmcgw` (São Paulo, plano gratuito — passar para Pro antes do uso real; pausa após 7 dias sem uso)
 - Repositório: github.com/contatoingridss-7/orvya-crm (commits com "Ingrid Soares <contatoingridss@gmail.com>")
-- Migrations aplicadas no Supabase: 0001 a 0007 (0008 e 0009 pendentes). Dados de exemplo ativos (`supabase/exemplos/*`; remover antes do uso real com `remover_exemplos.sql`).
+- Migrations aplicadas no Supabase: 0001 a 0007 (0008, 0009 e 0010 pendentes de confirmação). Dados de exemplo ativos (`supabase/exemplos/*`; remover antes do uso real com `remover_exemplos.sql`).
 
 ## Pronto e testado
 | Fase | Conteúdo |
@@ -52,6 +52,14 @@ Migration **0009_logistica_cpap.sql** (testada localmente em PGlite: roda duas v
 - **Relatórios** (`relatorios/`): tarefas por pessoa, atrasadas, entregas, Baixar PDF. **E-mail aos sábados 8h** (`/api/jobs/relatorio-semanal`, cron da Vercel) — só números (LGPD).
 - **Precisa de mim**: alerta com 5 min sem resposta (antes 30), cronômetro ao vivo e atualização a cada 30 s.
 - Pendências de configuração: rodar **0009** ANTES de publicar o código (as telas leem colunas novas); criar conta no Resend + `RESEND_API_KEY` e `EMAIL_FROM` na Vercel (sem domínio próprio, o Resend só entrega para o e-mail dono da conta); cadastrar a Thays (vendedor na IC, funil CPAP) e o login da expedição.
+
+## Construído, aguardando teste (17/10) — automações de controle da demanda
+Migration **0010_automacoes.sql** (testada em PGlite, idempotente).
+- **Tarefas prontas** em "O que precisa ser feito" (Tarefas e detalhe do lead), cadastradas em Automações → Tarefas prontas, já com uma lista por funil.
+- **Parado na etapa**: regras com `after_days`; `run_stale_automations()` pelo pg_cron (hora em hora, agendado pela própria migration se o pg_cron estiver ligado) e `/api/jobs/automacoes` (cron diário da Vercel).
+- **Tarefa atrasada há mais de 1 dia** aparece em Precisa de mim e soma no contador.
+- **Reposição de consumíveis do CPAP**: filtro (30 dias) e máscara (90 dias) após a entrega, repetindo ao concluir (`repeat_days`).
+- Ao rodar a 0010, leads antigos já parados recebem as tarefas na primeira rodada.
 
 ## Falta
 1. Testes da 3b-2 e 3c em produção.

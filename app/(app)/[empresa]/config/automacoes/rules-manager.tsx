@@ -21,9 +21,13 @@ export type Rule = {
   taskTitle: string;
   dueInDays: number;
   enabled: boolean;
-  /** stage = ao entrar na etapa; delivered = quando a expedição confirma a entrega. */
-  trigger: "stage" | "delivered";
+  /** stage = ao entrar na etapa; stale = parado na etapa; delivered = quando a expedição confirma a entrega. */
+  trigger: "stage" | "delivered" | "stale";
+  afterDays: number | null;
+  repeatDays: number | null;
 };
+
+type Trigger = Rule["trigger"];
 
 type StageOption = { id: string; name: string; kind: StageKind; logistics: StageLogistics | null; pipelineId: string };
 
@@ -36,6 +40,7 @@ const FIXED_RULES: [string, string][] = [
   ["Lead aberto sem contato há 7 dias aparece em Reativar leads parados", "O envio sempre passa por revisão e mostra o custo estimado."],
   ["Cliente sem resposta há 5 minutos aparece em Precisa de mim", "Com cronômetro e contador vermelho no menu."],
   ["Entrega ou adaptação só vai para a expedição com data, hora e endereço", "Ao confirmar a entrega, o negócio é concluído no funil."],
+  ["Tarefa atrasada há mais de 1 dia aparece para o gestor em Precisa de mim", "Com o nome do responsável, para cobrar sem abrir o funil."],
 ];
 const LOC_FIXED: [string, string][] = [
   ["Locação: o valor é sempre negociado por um vendedor", "A IA coleta equipamento, período e endereço e passa para a equipe."],
@@ -51,7 +56,8 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
   const [pending, start] = useTransition();
   const [pipelineId, setPipelineId] = useState(pipelines[0]?.id ?? "");
   const [stageId, setStageId] = useState("");
-  const [trigger, setTrigger] = useState<"stage" | "delivered">("stage");
+  const [trigger, setTrigger] = useState<Trigger>("stage");
+  const [repeat, setRepeat] = useState(false);
   const pipelineStages = stages.filter((s) => s.pipelineId === pipelineId && s.kind !== "lost");
   const selectedStage = pipelineStages.find((s) => s.id === stageId) ?? pipelineStages[0];
   const [error, setError] = useState<string>();
@@ -78,7 +84,9 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
         stageId: selectedStage?.id ?? "",
         taskTitle: String(f.get("taskTitle") ?? ""),
         dueInDays: String(f.get("dueInDays") ?? "1"),
-        trigger: selectedStage?.logistics ? trigger : "stage",
+        trigger: trigger === "delivered" && !selectedStage?.logistics ? "stage" : trigger,
+        afterDays: trigger === "stale" ? String(f.get("afterDays") ?? "") : undefined,
+        repeatDays: repeat && trigger !== "stale" ? String(f.get("repeatDays") ?? "") : undefined,
       });
       if (r.ok) {
         toast(r.message, "ok");
@@ -92,7 +100,7 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
 
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-      <Panel title="Regras por etapa" subtitle="Quando um lead entra na etapa, o CRM cria a tarefa para o responsável daquele lead.">
+      <Panel title="Regras por etapa" subtitle="O CRM cria a tarefa para o responsável do lead: ao entrar na etapa, quando fica parado nela ou quando a entrega é confirmada.">
         {rules.length === 0 ? (
           <div className="empty">Nenhuma regra ainda.</div>
         ) : (
@@ -101,12 +109,14 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
               <div key={r.id} className={`flex flex-wrap items-center gap-3 py-3.5 ${r.enabled ? "" : "opacity-60"}`}>
                 <div className="min-w-[200px] flex-1">
                   <p className="m-0 text-[13.5px]">
-                    {r.trigger === "delivered" ? "Expedição confirmou a entrega em " : "Entrou em "}
+                    {r.trigger === "delivered" ? "Expedição confirmou a entrega em " : r.trigger === "stale" ? `Parado há ${r.afterDays} ${r.afterDays === 1 ? "dia" : "dias"} em ` : "Entrou em "}
                     <b className="font-semibold text-title">{r.stageName}</b> no funil <b className="font-semibold text-title">{r.pipelineName}</b>: criar a tarefa{" "}
                     <b className="font-semibold text-title">“{r.taskTitle}”</b>
                   </p>
                   <small className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
                     {r.trigger === "delivered" && <Pill tone="ind">Ao entregar</Pill>}
+                    {r.trigger === "stale" && <Pill tone="warn">Parado na etapa</Pill>}
+                    {r.repeatDays && <Pill tone="ok">Repete a cada {r.repeatDays} dias</Pill>}
                     {r.trigger === "delivered" ? deliveredDueText(r.dueInDays) : dueText(r.dueInDays)}
                   </small>
                 </div>
@@ -122,14 +132,30 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
         <h3 className="mt-5 mb-2.5 text-[13px] font-[650]">Nova regra</h3>
         <form onSubmit={onCreate} className="grid gap-2.5">
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)_110px_auto] lg:items-end">
-            <SelectField label="Funil" value={pipelineId} onChange={(e) => setPipelineId(e.target.value)}>
+            <SelectField
+              label="Funil"
+              value={pipelineId}
+              onChange={(e) => {
+                setPipelineId(e.target.value);
+                setStageId("");
+                setTrigger("stage");
+              }}
+            >
               {pipelines.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
             </SelectField>
-            <SelectField key={pipelineId} label="Etapa" value={selectedStage?.id ?? ""} onChange={(e) => setStageId(e.target.value)}>
+            <SelectField
+              key={pipelineId}
+              label="Etapa"
+              value={selectedStage?.id ?? ""}
+              onChange={(e) => {
+                setStageId(e.target.value);
+                setTrigger("stage");
+              }}
+            >
               {pipelineStages.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -142,15 +168,36 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
               Criar regra
             </Button>
           </div>
-          {selectedStage?.logistics && (
-            <div className="chips" role="group" aria-label="Quando criar a tarefa">
-              <button type="button" className="chip" aria-pressed={trigger === "stage"} onClick={() => setTrigger("stage")}>
-                Ao entrar na etapa
+          <div className="chips" role="group" aria-label="Quando criar a tarefa">
+            <button type="button" className="chip" aria-pressed={trigger === "stage"} onClick={() => setTrigger("stage")}>
+              Ao entrar na etapa
+            </button>
+            {selectedStage?.kind === "open" && (
+              <button type="button" className="chip" aria-pressed={trigger === "stale"} onClick={() => setTrigger("stale")}>
+                Parado na etapa
               </button>
+            )}
+            {selectedStage?.logistics && (
               <button type="button" className="chip" aria-pressed={trigger === "delivered"} onClick={() => setTrigger("delivered")}>
                 Ao entregar (confirmado pela expedição)
               </button>
-            </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-end gap-2.5">
+            {trigger === "stale" ? (
+              <TextField label="Parado há quantos dias" name="afterDays" type="number" min={1} max={365} defaultValue={3} required className="w-44" />
+            ) : (
+              <label className="flex items-center gap-2 text-[13px]">
+                <input type="checkbox" className="accent-accent" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
+                Ao concluir, repetir a tarefa
+              </label>
+            )}
+            {repeat && trigger !== "stale" && (
+              <TextField label="A cada quantos dias" name="repeatDays" type="number" min={1} max={365} defaultValue={30} required className="w-44" />
+            )}
+          </div>
+          {trigger === "stale" && (
+            <p className="m-0 text-xs text-muted">O CRM confere de hora em hora. Cria uma tarefa por lead cada vez que ele fica parado na etapa (não repete enquanto continuar parado).</p>
           )}
           {error && <Notice tone="bad">{error}</Notice>}
         </form>

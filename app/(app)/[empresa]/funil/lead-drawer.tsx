@@ -342,6 +342,8 @@ export function LeadDrawer(props: Props) {
                   viewerId={viewerId}
                   people={people}
                   leadId={lead.id}
+                  pipelineId={pipeline.id}
+                  templates={props.taskTemplates}
                   defaultOwnerId={lead.ownerId}
                   compact
                   onCreated={() => {

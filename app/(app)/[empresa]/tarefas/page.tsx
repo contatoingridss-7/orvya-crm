@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
 import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
 import { requireRole } from "@/lib/auth/viewer";
+import { loadTaskTemplates } from "@/lib/crm/task-templates";
 import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
@@ -14,7 +15,7 @@ export const metadata: Metadata = { title: "Tarefas" };
 const DONE_WINDOW_DAYS = 14;
 
 type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null };
-type LeadOptionRow = { id: string; contacts: { name: string } | null; stages: { kind: string } | null };
+type LeadOptionRow = { id: string; pipeline_id: string; contacts: { name: string } | null; stages: { kind: string } | null };
 
 export default async function TarefasPage({ params }: { params: Promise<{ empresa: string }> }) {
   const { viewer, company } = await requireRole((await params).empresa, SALES_ROLES);
@@ -22,7 +23,7 @@ export default async function TarefasPage({ params }: { params: Promise<{ empres
   const supabase = await createClient();
   const doneSince = subDays(new Date(), DONE_WINDOW_DAYS).toISOString();
 
-  const [tasksRes, leadsRes, membersRes] = await Promise.all([
+  const [tasksRes, leadsRes, membersRes, templates] = await Promise.all([
     supabase
       .from("tasks")
       .select(TASK_SELECT)
@@ -34,13 +35,14 @@ export default async function TarefasPage({ params }: { params: Promise<{ empres
     // Leads abertos que a pessoa vê (o RLS já filtra os do vendedor).
     supabase
       .from("leads")
-      .select("id, contacts(name), stages(kind)")
+      .select("id, pipeline_id, contacts(name), stages(kind)")
       .eq("company_id", company.id)
       .is("closed_at", null)
       .order("updated_at", { ascending: false })
       .limit(500)
       .returns<LeadOptionRow[]>(),
     supabase.from("memberships").select("role, profiles(id, full_name, email, active)").eq("company_id", company.id).returns<MemberRow[]>(),
+    loadTaskTemplates(supabase, company.id),
   ]);
 
   const people: Person[] = (membersRes.data ?? [])
@@ -51,7 +53,7 @@ export default async function TarefasPage({ params }: { params: Promise<{ empres
 
   const leads = (leadsRes.data ?? [])
     .filter((l) => l.stages?.kind === "open")
-    .map((l) => ({ id: l.id, name: l.contacts?.name ?? "Sem nome" }))
+    .map((l) => ({ id: l.id, name: l.contacts?.name ?? "Sem nome", pipelineId: l.pipeline_id }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   return (
@@ -63,6 +65,7 @@ export default async function TarefasPage({ params }: { params: Promise<{ empres
           slug={company.slug}
           tasks={(tasksRes.data ?? []).map(toTask)}
           leads={leads}
+          templates={templates}
           people={people}
           manager={manager}
           viewerId={viewer.id}
