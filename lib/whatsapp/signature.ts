@@ -12,3 +12,8 @@ export function isValidSignature(rawBody: string, header: string | null, secret:
   const received = Buffer.from(header, "utf8");
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
+
+/** Um app da Meta por empresa: a assinatura vale se bater com o segredo de qualquer um deles. */
+export function isValidSignatureAny(rawBody: string, header: string | null, secrets: string[]): boolean {
+  return secrets.some((s) => isValidSignature(rawBody, header, s));
+}

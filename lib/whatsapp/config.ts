@@ -8,8 +8,15 @@ export function graphBase(): string {
   return `https://graph.facebook.com/${version}`;
 }
 
-export function appSecret(): string | null {
-  return process.env.META_APP_SECRET?.trim() || null;
+/**
+ * App Secret de cada app da Meta (um app por empresa: LocPress, IC Supra).
+ * Na Vercel: META_APP_SECRET com os segredos separados por vírgula.
+ */
+export function appSecrets(): string[] {
+  return (process.env.META_APP_SECRET ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export function verifyToken(): string | null {
@@ -19,7 +26,8 @@ export function verifyToken(): string | null {
 /** Para a tela Canais mostrar o que falta configurar (sem revelar valores). */
 export function whatsappEnvStatus() {
   return {
-    appSecret: !!appSecret(),
+    appSecret: appSecrets().length > 0,
+    appSecretCount: appSecrets().length,
     verifyToken: !!verifyToken(),
     graphVersion: process.env.META_GRAPH_VERSION?.trim() || `${DEFAULT_GRAPH_VERSION} (padrão)`,
   };

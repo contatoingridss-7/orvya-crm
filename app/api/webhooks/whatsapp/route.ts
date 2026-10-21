@@ -1,9 +1,9 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { appSecret, verifyToken } from "@/lib/whatsapp/config";
+import { appSecrets, verifyToken } from "@/lib/whatsapp/config";
 import { processWebhookEvent } from "@/lib/whatsapp/inbound";
 import type { WaWebhookPayload } from "@/lib/whatsapp/payload";
-import { isValidSignature } from "@/lib/whatsapp/signature";
+import { isValidSignatureAny } from "@/lib/whatsapp/signature";
 
 // Precisa de node:crypto e não pode ser cacheada.
 export const runtime = "nodejs";
@@ -24,11 +24,11 @@ export function GET(request: NextRequest) {
  * e processa em segundo plano (a Meta reenvia se a resposta demorar).
  */
 export async function POST(request: NextRequest) {
-  const secret = appSecret();
-  if (!secret) return new NextResponse("Webhook não configurado", { status: 503 });
+  const secrets = appSecrets();
+  if (!secrets.length) return new NextResponse("Webhook não configurado", { status: 503 });
 
   const raw = await request.text();
-  if (!isValidSignature(raw, request.headers.get("x-hub-signature-256"), secret)) {
+  if (!isValidSignatureAny(raw, request.headers.get("x-hub-signature-256"), secrets)) {
     return new NextResponse("Assinatura inválida", { status: 401 });
   }
 

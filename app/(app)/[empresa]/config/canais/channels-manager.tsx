@@ -35,7 +35,7 @@ type Props = {
   pipelines: { id: string; name: string }[];
   canEdit: boolean;
   webhookUrl: string;
-  env: { appSecret: boolean; verifyToken: boolean; graphVersion: string } | null;
+  env: { appSecret: boolean; appSecretCount: number; verifyToken: boolean; graphVersion: string } | null;
   templates: TemplateItem[];
   templatesError: boolean;
 };
@@ -93,7 +93,13 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
               <span className="text-xs text-muted">use o mesmo valor no campo “Verificar token” da Meta</span>
             </dd>
             <dt className="text-muted">Chave secreta do app</dt>
-            <dd className="m-0">{env.appSecret ? <Pill tone="ok">Configurada na Vercel</Pill> : <Pill tone="bad">Falta META_APP_SECRET na Vercel</Pill>}</dd>
+            <dd className="m-0">{env.appSecret ? (
+                <Pill tone="ok">
+                  {env.appSecretCount === 1 ? "1 app configurado na Vercel" : `${env.appSecretCount} apps configurados na Vercel`}
+                </Pill>
+              ) : (
+                <Pill tone="bad">Falta META_APP_SECRET na Vercel</Pill>
+              )}</dd>
             <dt className="text-muted">Campos a assinar</dt>
             <dd className="m-0">
               <code className="rounded-md bg-surface-2 px-1.5 py-0.5">messages</code>{" "}

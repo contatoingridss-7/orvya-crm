@@ -27,8 +27,8 @@ decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
 - App **Orvya LocPress** no Gerenciador de Negócios da LocPress, publicado (Ao vivo). Caso de uso WhatsApp, webhook verificado, campo `messages` assinado (versão no painel v26.0; `META_GRAPH_VERSION=v25.0` na Vercel).
 - Número de **teste** da Meta conectado na vaga 1 da LocPress (funil Locação), token **permanente** (usuário do sistema). Testado ponta a ponta: receber, mídia, responder.
 - Variáveis na Vercel: Supabase (3), `NEXT_PUBLIC_APP_URL`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_GRAPH_VERSION`.
-- **Um app por empresa** (não somos Tech Provider): a IC Supra terá app próprio no Gerenciador dela. Pendente: `META_APP_SECRET` aceitar mais de uma chave (lista) para validar a assinatura dos dois apps.
-- Verificação de empresa: **LocPress em análise**; **IC Supra bloqueada** (telefone do cartão CNPJ desatualizado — atualizar na Receita via contador ou enviar comprovante recente).
+- **Um app por empresa** (não somos Tech Provider). App **Orvya IC Supra** criado no portfólio "Hospitalar iC" (21/10). `META_APP_SECRET` aceita os segredos dos dois apps separados por vírgula. Domínio `icsuprahospitalar.com.br` verificado na Meta (DNS na Hostinger).
+- Verificação de empresa: **LocPress concluída**; **IC Supra** em andamento (telefone do CNPJ é da contabilidade: preencher dados à mão e confirmar pelo domínio verificado).
 
 ## Decisões
 - Números atuais (2 IC + 2 LocPress) continuam no app WhatsApp Business do celular. Coexistência exige Tech Provider ou parceiro (360dialog etc.) — adiado.
