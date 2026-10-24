@@ -2150,6 +2150,66 @@ h3,
     mask: url("/brand/vertice-wordmark.svg") no-repeat center / contain;
     vertical-align: baseline;
   }
+  /* Login dividido: filme da marca à esquerda, formulário à direita */
+  .auth-split {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .auth-hero {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .auth-split {
+      grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr);
+    }
+    .auth-hero {
+      position: relative;
+      display: block;
+      overflow: hidden;
+      min-height: 100dvh;
+      /* Mesmo azul do fundo do filme (#122A46) descendo para o grafite */
+      background: url("/brand/orvya-intro-poster.jpg") center top / 100% auto no-repeat, linear-gradient(180deg, #122a46 0%, #122a46 45%, #0d1a2b 75%, #0b0d0f 100%);
+      border-right: 1px solid rgba(244, 242, 237, 0.08);
+    }
+  }
+  .auth-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+  /* Funde o vídeo com o grafite do resto da tela e dá leitura ao texto */
+  .auth-shade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(18, 42, 70, 0) 40%, rgba(13, 26, 43, 0.6) 62%, rgba(11, 13, 15, 0.95) 100%),
+      radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(11, 13, 15, 0.35) 100%),
+      linear-gradient(90deg, rgba(11, 13, 15, 0) 75%, rgba(11, 13, 15, 0.5) 100%);
+  }
+  .auth-copy {
+    position: absolute;
+    left: clamp(32px, 5vw, 72px);
+    right: clamp(32px, 5vw, 72px);
+    bottom: clamp(36px, 7vh, 72px);
+    display: grid;
+    gap: 14px;
+    color: #f4f2ed;
+  }
+  .auth-slogan {
+    margin: 0;
+    font-family: var(--font-title);
+    font-weight: 600;
+    font-size: clamp(30px, 3.2vw, 46px);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+    color: #f4f2ed;
+  }
+  .auth-slogan em {
+    font-style: normal;
+    color: #72c5b5;
+  }
   /* Esqueleto de carregamento ao trocar de tela */
   .skeleton {
     display: block;

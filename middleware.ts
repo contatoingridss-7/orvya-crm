@@ -37,5 +37,5 @@ function withCookies(target: NextResponse, source: NextResponse) {
 
 export const config = {
   // Webhooks, jobs (protegidos por CRON_SECRET), formulário público e arquivos estáticos ficam fora: não têm sessão de usuário.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/jobs|api/public|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/jobs|api/public|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|mp4|webm)$).*)"],
 };
