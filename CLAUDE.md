@@ -65,16 +65,18 @@ supabase/ (migrations, seed.sql)
 9. **Mover lead para etapa de perda exige motivo** (o banco já bloqueia sem `lost_reason`).
 10. Segredos só em variáveis de ambiente ou na tabela `whatsapp_credentials` (sem acesso de usuário). Nunca no código nem no navegador.
 
-## Design (extraído do protótipo)
+## Design (identidade VÉR7ICE, a partir de 24/10/2026)
 
-- Fonte: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, system-ui, sans-serif` (Inter do Google Fonts como reserva).
-- Acento: `#7C5CFF`; gradiente `linear-gradient(135deg, #6D4AFF 0%, #9B7BFF 100%)`.
-- Ganho `#10B981`, perda `#EF4444`, alerta `#F59E0B`.
-- **Escuro:** fundo `#07070A`, lateral `#0C0C11`, superfície `#111117`, superfície 2 `#16161E`, elevada `#1C1C26`, borda `#22222C`, texto `#EDEDF2`, secundário `#8B8B9A`. Brilho violeta radial na parte de baixo da tela.
-- **Claro:** fundo `#F4F4F7`, superfície `#FFFFFF`, superfície 2 `#F8F8FB`, borda `#E7E7EE`, texto `#16161D`, secundário `#6E6E7C`, tom `#F1EEFF`.
-- Raio 16 px nos painéis, 12 px em botões e cards. Botão primário com gradiente.
+O protótipo continua valendo para layout, textos e comportamento. **Cores, fontes e marca seguem a identidade VÉR7ICE** (decisão da usuária):
+
+- Fontes: **Manrope** (títulos, 600) e **DM Sans** (texto), pelo `next/font/google`.
+- Paleta: grafite `#0B0D0F`, off-white `#F4F2ED`, marinho `#12233A`, **verde mineral `#72C5B5`** (uma ênfase por tela; no claro vira `#2C7366`), cinza azulado `#89929C` (no claro `#5A626B`). Gradiente digital `#273B8F → #72C5B5` só em luz de fundo. Botão primário: gradiente marinho → verde escuro (`--grad`).
+- **Atmosfera**: luz azul do alto à esquerda, brilho verde no canto oposto, vinheta e **grão** (`body::before`); painéis em vidro escuro no tema escuro (`--panel-bg`, `--panel-edge`, `--panel-hl`).
+- Ganho `#10B981`, perda `#EF4444`, alerta `#F59E0B` (cores de estado continuam).
+- Marca: símbolo de três vértices (o central em verde) + "Orvya" + slogan. Assinatura com o **logotipo oficial VÉR7ICE** (`public/brand/vertice-wordmark.svg`, aplicado como máscara; nunca redigitar, distorcer ou aplicar brilho).
+- Proibido: neon, brilho em contorno, ícones médicos, emoji, azul-claro ou verde hospitalar.
+- Tela inicial (`/`): todos passam por ela, com saudação pelo nome, dia da semana e resumo de cada empresa.
 - Alternância claro/escuro no topo de todas as telas; padrão = tema do aparelho; preferência salva por usuário.
-- Marca no topo da lateral: símbolo (círculo com ponto em órbita) + "Orvya" + slogan. Rodapé da lateral: "VÉR7ICE Orvya". Tela de login com marca, slogan e assinatura.
 - Mobile primeiro para o perfil **vendedor** (ele trabalha no celular).
 
 ## Comandos

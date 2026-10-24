@@ -1,7 +1,7 @@
 import { Brand, Signature } from "@/components/brand";
 import { LegalFooter } from "@/components/legal-footer";
 
-// Login, recuperação e redefinição de senha: sempre escuras, com o brilho violeta do protótipo.
+// Login, recuperação e redefinição de senha: sempre escuras, com a luz e o grão da VÉR7ICE.
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div data-theme="dark" className="auth-screen">
