@@ -71,6 +71,17 @@ export function markAsRead(phoneNumberId: string, token: string, wamid: string) 
   });
 }
 
+/**
+ * Registra o número real na API oficial com o PIN da verificação em duas etapas (6 dígitos).
+ * Sem isso o envio falha ("conta não registrada"). O número de teste da Meta já vem registrado.
+ */
+export function registerNumber(phoneNumberId: string, token: string, pin: string) {
+  return graph<{ success?: boolean }>(`${phoneNumberId}/register`, token, {
+    method: "POST",
+    body: { messaging_product: "whatsapp", pin },
+  });
+}
+
 /** Inscreve o app na conta do WhatsApp (WABA) para os webhooks chegarem. */
 export function subscribeApp(wabaId: string, token: string) {
   return graph<{ success?: boolean }>(`${wabaId}/subscribed_apps`, token, { method: "POST" });

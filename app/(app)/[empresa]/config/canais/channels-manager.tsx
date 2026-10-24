@@ -270,7 +270,7 @@ function ConnectModal({
   pipelines: Props["pipelines"];
   pending: boolean;
   onClose: () => void;
-  onSubmit: (i: SettingsInput & { phoneNumberId: string; wabaId: string; token: string }) => void;
+  onSubmit: (i: SettingsInput & { phoneNumberId: string; wabaId: string; token: string; pin: string }) => void;
 }) {
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -283,6 +283,7 @@ function ConnectModal({
       phoneNumberId: get("phoneNumberId"),
       wabaId: get("wabaId"),
       token: get("token"),
+      pin: get("pin"),
     });
   }
   const reconnecting = slot.status === "connected";
@@ -304,6 +305,17 @@ function ConnectModal({
           required={!reconnecting}
           placeholder={reconnecting ? "Deixe em branco para manter o atual" : "Token de usuário do sistema"}
           hint="Use um token permanente (usuário do sistema). O token temporário da Meta expira em 24 horas."
+        />
+        <TextField
+          label="PIN de 6 dígitos (número real)"
+          name="pin"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          pattern="\d{6}"
+          maxLength={6}
+          placeholder="Deixe em branco no número de teste"
+          hint="Registra o número na API oficial e protege contra o roubo da linha. O Orvya usa só agora e não guarda: anote em lugar seguro."
         />
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancelar</Button>

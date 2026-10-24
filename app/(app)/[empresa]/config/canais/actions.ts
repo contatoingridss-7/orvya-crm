@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getViewer } from "@/lib/auth/viewer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { fetchPhoneNumber, GraphError, subscribeApp } from "@/lib/whatsapp/graph";
+import { fetchPhoneNumber, GraphError, registerNumber, subscribeApp } from "@/lib/whatsapp/graph";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -29,6 +29,8 @@ const connectSchema = settingsSchema.extend({
   phoneNumberId: z.string().trim().regex(/^\d{5,25}$/, "Identificação do número inválida (só números)."),
   wabaId: z.string().trim().regex(/^\d{5,25}$/, "Identificação da conta (WABA) inválida (só números)."),
   token: z.string().trim().max(2000),
+  // PIN da verificação em duas etapas: só para registrar número real; não é guardado.
+  pin: z.string().trim().regex(/^(\d{6})?$/, "O PIN tem 6 números.").default(""),
 });
 
 function refresh(slug: string) {
@@ -92,6 +94,19 @@ export async function connectNumber(slug: string, input: z.input<typeof connectS
     return { ok: false, error: `A Meta recusou os dados: ${msg}. Confira a identificação do número e o token.` };
   }
 
+  // Número real: registra na API oficial com o PIN (o número de teste da Meta dispensa).
+  if (d.pin) {
+    try {
+      await registerNumber(d.phoneNumberId, token, d.pin);
+    } catch (e) {
+      const msg = e instanceof GraphError ? e.message : "sem resposta";
+      return {
+        ok: false,
+        error: `A Meta não registrou o número: ${msg}. Se o número já tinha um PIN, use o mesmo; para trocar, use o Gerenciador do WhatsApp.`,
+      };
+    }
+  }
+
   let subscribed = true;
   try {
     await subscribeApp(d.wabaId, token);
@@ -129,7 +144,7 @@ export async function connectNumber(slug: string, input: z.input<typeof connectS
   return {
     ok: true,
     message: subscribed
-      ? `Número ${info.display_phone_number ?? ""}${name} conectado.`
+      ? `Número ${info.display_phone_number ?? ""}${name} ${d.pin ? "registrado e conectado" : "conectado"}.`
       : `Número conectado, mas a inscrição do app na conta falhou. Confira a permissão do token (whatsapp_business_management).`,
   };
 }
