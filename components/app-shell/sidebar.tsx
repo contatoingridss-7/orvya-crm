@@ -29,9 +29,10 @@ export function Sidebar({ current, companies, role, userName, counts }: SidebarP
 
   return (
     <aside className="side">
-      <div className="brand-row">
+      {/* A marca leva de volta à tela de entrada (saudação e escolha da empresa). */}
+      <Link href="/" className="brand-row block rounded-[12px] transition-opacity hover:opacity-80" aria-label="Início: voltar à tela de entrada" title="Voltar ao início">
         <Brand />
-      </div>
+      </Link>
 
       {companies.length > 1 && (
         <nav className="co-switch" aria-label="Empresa">
