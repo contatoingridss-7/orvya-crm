@@ -64,6 +64,9 @@ Migration **0010_automacoes.sql** (testada em PGlite, idempotente).
 ## Construído, aguardando teste (25/10) — Tráfego (só administradora)
 Migration **0011_trafego.sql** (testada em PGlite). Tela `trafego/`, `lib/ads/{meta,sync,report}.ts`, `/api/jobs/trafego` (crons 9h e 16h UTC). Falta: rodar 0011; no app de cada empresa adicionar o caso de uso de Marketing API (ads_read), atribuir a conta de anúncios ao usuário do sistema "Orvya" (gerenciar, para ler o saldo) e gerar token com ads_read; conectar em Tráfego. Número oficial da LocPress (86) 9432-0549 conectado na vaga 2 em 25/10.
 
+## Construído, aguardando teste (25/10) — Histórico de vendas
+Migration **0012_historico_vendas.sql** (testada em PGlite). Tela `vendas/`, gravação na importação do catálogo, coluna "Vende/mês" no Catálogo. Vendedor só quantidades (regra no banco).
+
 ## Falta
 1. Testes da 3b-2 e 3c em produção.
 3. Aceitar várias `META_APP_SECRET`; app e número da IC Supra.

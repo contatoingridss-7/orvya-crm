@@ -12,7 +12,8 @@ import { parseNetUse, type NetUseReport } from "@/lib/catalog/netuse";
 import { pdfToRows } from "@/lib/catalog/pdf-rows";
 import { readSpreadsheet, templateCsv, type SheetRow } from "@/lib/catalog/spreadsheet";
 import { formatBRL } from "@/lib/format";
-import { applyImport } from "../actions";
+import { salesPayloads, type SalesReportPayload } from "@/lib/sales/history";
+import { applyImport, saveSalesReports } from "../actions";
 
 type LoadedFile = { name: string; label: string; ok: boolean; detail: string };
 type View = "marcados" | "novos" | "existentes" | "todos";
@@ -39,6 +40,10 @@ export function ImportWizard({ slug, companyName, existing }: { slug: string; co
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
   const [saving, startSaving] = useTransition();
+  // Relatórios de vendas viram períodos do histórico (tela Vendas).
+  const [sales, setSales] = useState<SalesReportPayload[]>([]);
+  const [salesWithoutPeriod, setSalesWithoutPeriod] = useState(0);
+  const [keepHistory, setKeepHistory] = useState(true);
 
   async function onFiles(list: FileList | null) {
     if (!list?.length) return;
@@ -79,6 +84,9 @@ export function ImportWizard({ slug, companyName, existing }: { slug: string; co
     }
 
     setFiles(loaded);
+    const history = salesPayloads(reports);
+    setSales(history.payloads);
+    setSalesWithoutPeriod(history.withoutPeriod);
     if (reports.length || sheet) {
       const next = buildPlan(existing, reports, sheet);
       setPlan(next);
@@ -129,10 +137,26 @@ export function ImportWizard({ slug, companyName, existing }: { slug: string; co
     });
   }
 
+  async function saveHistory(): Promise<boolean> {
+    if (!keepHistory || !sales.length) return true;
+    const r = await saveSalesReports(
+      slug,
+      sales.map((s) => ({ kind: s.kind, start: s.start, end: s.end, items: s.items })),
+    );
+    toast(r.ok ? r.message : r.error, r.ok ? "ok" : "bad");
+    return r.ok;
+  }
+
   function save() {
     if (!plan) return;
     const payload = toPayload(plan, selected, zeroMissing);
+    const hasCatalogChanges = payload.rows.length > 0 || payload.deactivate.length > 0;
     startSaving(async () => {
+      if (!(await saveHistory())) return;
+      if (!hasCatalogChanges) {
+        router.push(`/${slug}/vendas`);
+        return;
+      }
       const result = await applyImport(slug, payload);
       if (result.ok) {
         toast(result.message, "ok");
@@ -301,10 +325,42 @@ export function ImportWizard({ slug, companyName, existing }: { slug: string; co
               )}
               {stats.errors > 0 && <span className="text-muted"> · {stats.errors} com erro (não entram)</span>}.
             </p>
-            <Button variant="primary" loading={saving} disabled={stats.selected === 0 && stats.removed === 0} onClick={save}>
+            <Button
+              variant="primary"
+              loading={saving}
+              disabled={stats.selected === 0 && stats.removed === 0 && !(keepHistory && sales.length)}
+              onClick={save}
+            >
               Importar
             </Button>
           </div>
+          {(sales.length > 0 || salesWithoutPeriod > 0) && (
+            <div className="mt-3 grid gap-2 border-t border-line pt-3">
+              {sales.length > 0 && (
+                <label className="flex items-start gap-2.5 text-[13.5px]">
+                  <input type="checkbox" className="mt-1 accent-accent" checked={keepHistory} onChange={(e) => setKeepHistory(e.target.checked)} />
+                  <span>
+                    Guardar no histórico de vendas:{" "}
+                    {sales.map((s) => (
+                      <b key={`${s.kind}-${s.start}`} className="mr-2 inline-block font-semibold">
+                        {s.label} ({s.items.length} produtos, {formatBRL(s.totalValue)})
+                      </b>
+                    ))}
+                    <small className="block text-xs text-muted">
+                      Cada período fica salvo de vez. Importar o mesmo período de novo substitui só ele. A equipe vê as quantidades; os valores, só gestor e
+                      administrador.
+                    </small>
+                  </span>
+                </label>
+              )}
+              {salesWithoutPeriod > 0 && (
+                <Notice tone="warn">
+                  {salesWithoutPeriod} relatório(s) de vendas sem o período no cabeçalho não entram no histórico. Gere o relatório no Net Use com as datas
+                  de início e fim.
+                </Notice>
+              )}
+            </div>
+          )}
         </Panel>
       )}
     </div>

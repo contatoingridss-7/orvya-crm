@@ -24,6 +24,8 @@ type Props = {
   canPhoto: boolean;
   isLoc: boolean;
   categories: string[];
+  /** Média de unidades vendidas por mês (histórico do Net Use). */
+  salesPerMonth?: number;
 };
 
 const moneyText = (v: number | null) => (v === null ? "" : v.toFixed(2).replace(".", ","));
@@ -33,7 +35,7 @@ export function ProductDrawer({ open, ...props }: Props) {
   return open ? <ProductForm key={props.product?.id ?? "new"} {...props} /> : null;
 }
 
-function ProductForm({ product, onClose, slug, companyId, canEdit, canPhoto, isLoc, categories }: Omit<Props, "open">) {
+function ProductForm({ product, onClose, slug, companyId, canEdit, canPhoto, isLoc, categories, salesPerMonth }: Omit<Props, "open">) {
   const toast = useToast();
   const [isRental, setIsRental] = useState(product?.isRental ?? false);
   const [requiresHuman, setRequiresHuman] = useState(product?.requiresHuman ?? false);
@@ -97,6 +99,12 @@ function ProductForm({ product, onClose, slug, companyId, canEdit, canPhoto, isL
       {product && !canPhoto && product.photoPath && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photoUrl(product.photoPath)!} alt={`Foto de ${product.name}`} className="thumb lg" />
+      )}
+      {product && salesPerMonth !== undefined && (
+        <p className="m-0 text-[13px]">
+          Vende cerca de <b>{salesPerMonth.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b> {product.unit?.toLowerCase() ?? "un."} por mês
+          <small className="block text-xs text-muted">Média dos relatórios de vendas importados nos últimos 6 meses.</small>
+        </p>
       )}
       <form id="product-form" onSubmit={onSubmit} className="grid gap-5">
         <fieldset disabled={readOnly} className="m-0 grid gap-2.5 border-0 p-0 sm:grid-cols-2">

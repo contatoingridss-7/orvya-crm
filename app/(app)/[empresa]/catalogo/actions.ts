@@ -174,3 +174,42 @@ export async function applyImport(slug: string, input: z.input<typeof importSche
   ].filter(Boolean);
   return { ok: true, message: parts.length ? `Importação concluída: ${parts.join(", ")}.` : "Nada mudou." };
 }
+
+// ---------------------------------------------------------------------
+// Histórico de vendas (relatórios de vendas do Net Use)
+// ---------------------------------------------------------------------
+const salesItemSchema = z.object({
+  code: z.string().max(40),
+  name: z.string().min(1).max(300),
+  unit: z.string().max(10).nullable(),
+  qty: z.number().finite().min(0).max(1e9),
+  total: z.number().finite().min(0).max(1e12),
+  is_rental: z.boolean(),
+});
+const salesReportsSchema = z
+  .array(
+    z.object({
+      kind: z.enum(["vendas", "servicos"]),
+      start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      items: z.array(salesItemSchema).max(20000),
+    }),
+  )
+  .max(24);
+
+/** Salva cada relatório como um período do histórico (reimportar o mesmo período substitui só ele). */
+export async function saveSalesReports(slug: string, input: z.input<typeof salesReportsSchema>): Promise<ActionResult> {
+  const company = await managerCompany(slug);
+  if (!company) return NOT_ALLOWED;
+  const parsed = salesReportsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados de vendas inválidos." };
+  if (!parsed.data.length) return { ok: true, message: "Nenhum período de vendas para salvar." };
+
+  const supabase = await createClient();
+  for (const r of parsed.data) {
+    const { error } = await supabase.rpc("save_sales_report", { p_company: company.id, p_kind: r.kind, p_start: r.start, p_end: r.end, p_items: r.items });
+    if (error) return { ok: false, error: "Não foi possível salvar o histórico de vendas. Confira se a migration 0012 foi rodada." };
+  }
+  revalidatePath(`/${slug}/vendas`);
+  return { ok: true, message: `${parsed.data.length} período(s) salvo(s) no histórico de vendas.` };
+}

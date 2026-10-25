@@ -18,12 +18,14 @@ export default async function CatalogoPage({ params }: { params: Promise<{ empre
   const isLoc = company.slug === "locpress";
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select(PRODUCT_COLUMNS)
-    .eq("company_id", company.id)
-    .order("name")
-    .returns<ProductRow[]>();
+  const [{ data, error }, salesRes] = await Promise.all([
+    supabase.from("products").select(PRODUCT_COLUMNS).eq("company_id", company.id).order("name").returns<ProductRow[]>(),
+    // Média mensal de unidades vendidas (histórico do Net Use). Só quantidade: vale para todos.
+    supabase.rpc("product_monthly_sales", { p_company: company.id }),
+  ]);
+  const salesPerMonth = Object.fromEntries(
+    ((salesRes.data as { product_id: string; per_month: number | string }[] | null) ?? []).map((r) => [r.product_id, Number(r.per_month)]),
+  );
 
   const products = (data ?? []).map(toProduct);
   const sub = isLoc ? "equipamentos para venda e locação" : "produtos e preços que o agente pode informar";
@@ -43,7 +45,7 @@ export default async function CatalogoPage({ params }: { params: Promise<{ empre
       />
       <div className="content grid gap-4">
         {error && <Notice tone="bad">Não foi possível carregar o catálogo. Recarregue a página.</Notice>}
-        <CatalogView products={products} slug={company.slug} companyId={company.id} canEdit={canEdit} canPhoto={canPhoto} isLoc={isLoc} />
+        <CatalogView products={products} slug={company.slug} companyId={company.id} canEdit={canEdit} canPhoto={canPhoto} isLoc={isLoc} salesPerMonth={salesPerMonth} />
       </div>
     </>
   );

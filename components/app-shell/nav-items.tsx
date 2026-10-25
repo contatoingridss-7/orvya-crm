@@ -74,6 +74,13 @@ const I = {
       <circle cx="17.5" cy="18" r="1.8" />
     </svg>
   ),
+  vendas: (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M6 2h12l2 5H4l2-5Z" />
+      <path d="M4 7v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7" />
+      <path d="M9 12h6" />
+    </svg>
+  ),
   trafego: (
     <svg viewBox="0 0 24 24" aria-hidden>
       <path d="M3 17l5-5 4 4 8-8" />
@@ -101,6 +108,7 @@ const MANAGER_NAV: NavItem[] = [
   { section: "fila", label: "Precisa de mim", icon: I.fila },
   { section: "tarefas", label: "Tarefas", icon: I.tarefas },
   { section: "catalogo", label: "Catálogo", icon: I.catalogo },
+  { section: "vendas", label: "Vendas", icon: I.vendas },
   { section: "expedicao", label: "Expedição", icon: I.expedicao },
   { section: "relatorios", label: "Relatórios", icon: I.relatorios },
   { sep: true },
@@ -116,6 +124,7 @@ const SELLER_NAV: NavItem[] = [
   { section: "funil", label: "Meu funil", short: "Funil", icon: I.funil },
   { section: "tarefas", label: "Tarefas", icon: I.tarefas },
   { section: "catalogo", label: "Catálogo", icon: I.catalogo },
+  { section: "vendas", label: "Vendas", icon: I.vendas },
 ];
 
 const LOGISTICS_NAV: NavItem[] = [

@@ -7,7 +7,8 @@ export type CompanyHint = "ic-supra" | "locpress" | null;
 
 export type StockItem = { code: string; name: string; unit: string | null; qty: number };
 export type SalesItem = { code: string; name: string; unit: string | null; qty: number; total: number };
-export type ServiceSaleItem = { code: string; name: string; unit: string | null; prices: number[]; rental: boolean };
+/** prices: um preço por pedido (para o preço de referência); qty/total: somados para o histórico de vendas. */
+export type ServiceSaleItem = { code: string; name: string; unit: string | null; prices: number[]; rental: boolean; qty: number; total: number };
 
 export type NetUseReport =
   | { kind: "estoque"; company: CompanyHint; issuedAt: string | null; items: StockItem[] }
@@ -126,8 +127,12 @@ function parseServiceSales(rows: string[][]): ServiceSaleItem[] {
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const item = byCode.get(code) ?? { code, name, unit, prices: [], rental: /LOCA[CÇ][AÃ]O/i.test(name) };
+    const qtyCell = r[ncmAt + 3] ?? "";
+    const qty = /^\d+([.,]\d+)?$/.test(qtyCell) ? parseBRNumber(qtyCell) || 1 : 1;
+    const item = byCode.get(code) ?? { code, name, unit, prices: [], rental: /LOCA[CÇ][AÃ]O/i.test(name), qty: 0, total: 0 };
     item.prices.push(value);
+    item.qty += qty;
+    item.total += value * qty;
     byCode.set(code, item);
   }
   return [...byCode.values()];

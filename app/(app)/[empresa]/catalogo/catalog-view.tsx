@@ -27,9 +27,20 @@ const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-�
 /** Sem preço confirmado e não é item negociado pela equipe: a IA vai passar para humano. */
 export const needsPrice = (p: Product) => p.active && p.salePrice === null && !p.requiresHuman;
 
-type CatalogViewProps = { products: Product[]; slug: string; companyId: string; canEdit: boolean; canPhoto: boolean; isLoc: boolean };
+type CatalogViewProps = {
+  products: Product[];
+  slug: string;
+  companyId: string;
+  canEdit: boolean;
+  canPhoto: boolean;
+  isLoc: boolean;
+  /** Unidades vendidas por mês (média do histórico de vendas), por produto. */
+  salesPerMonth: Record<string, number>;
+};
 
-export function CatalogView({ products, slug, companyId, canEdit, canPhoto, isLoc }: CatalogViewProps) {
+const perMonth = (v: number | undefined) => (v === undefined ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 }));
+
+export function CatalogView({ products, slug, companyId, canEdit, canPhoto, isLoc, salesPerMonth }: CatalogViewProps) {
   const toast = useToast();
   const [filter, setFilter] = useState<Filter>("ativos");
   const [query, setQuery] = useState("");
@@ -173,6 +184,9 @@ export function CatalogView({ products, slug, companyId, canEdit, canPhoto, isLo
                   {isLoc && <th className="text-right">Aluguel/mês</th>}
                   {canEdit && <th className="text-right">Referência</th>}
                   <th className="text-right">Estoque</th>
+                  <th className="text-right" title="Média de unidades vendidas por mês nos relatórios importados">
+                    Vende/mês
+                  </th>
                   {isLoc && <th className="text-right">Em locação</th>}
                 </tr>
               </thead>
@@ -253,6 +267,7 @@ export function CatalogView({ products, slug, companyId, canEdit, canPhoto, isLo
                         </td>
                       )}
                       <td className={`text-right tabular-nums ${p.stock <= 0 ? "font-semibold text-[var(--bad-fg)]" : ""}`}>{p.stock}</td>
+                      <td className="text-right tabular-nums text-muted">{perMonth(salesPerMonth[p.id])}</td>
                       {isLoc && <td className="text-right tabular-nums">{p.isRental ? p.rentedCount : "—"}</td>}
                     </tr>
                   );
@@ -280,6 +295,7 @@ export function CatalogView({ products, slug, companyId, canEdit, canPhoto, isLo
         canPhoto={canPhoto}
         isLoc={isLoc}
         categories={categories}
+        salesPerMonth={editing && editing !== "new" ? salesPerMonth[editing.id] : undefined}
       />
     </>
   );
