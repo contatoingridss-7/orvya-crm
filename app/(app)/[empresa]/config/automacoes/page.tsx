@@ -4,6 +4,8 @@ import { Notice } from "@/components/ui/notice";
 import { requireRole } from "@/lib/auth/viewer";
 import type { Pipeline, Stage } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
+import { IgMenuManager, type IgMenuNumber } from "./ig-menu-manager";
+import { IgRepliesManager, type IgReply } from "./ig-replies-manager";
 import { RulesManager, type Rule } from "./rules-manager";
 import { TemplatesManager, type TemplateRow } from "./templates-manager";
 
@@ -28,7 +30,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
   const { company } = await requireRole((await params).empresa, ["admin", "gestor"]);
   const supabase = await createClient();
 
-  const [pipelinesRes, stagesRes, rulesRes, templatesRes] = await Promise.all([
+  const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes] = await Promise.all([
     supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
     supabase.from("stages").select("id, key, name, kind, position, logistics, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
     supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled, trigger_event, after_days, repeat_days").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
@@ -39,7 +41,24 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       .order("position")
       .order("title")
       .returns<TemplateRow[]>(),
+    supabase.from("ig_auto_replies").select("id, trigger, keywords, reply, active").eq("company_id", company.id).order("position").order("created_at").returns<IgReply[]>(),
+    supabase.from("instagram_accounts").select("id").eq("company_id", company.id).eq("status", "connected").limit(1),
+    supabase
+      .from("ig_welcome_menu")
+      .select("enabled, intro, options, link_reply, whatsapp_number_id")
+      .eq("company_id", company.id)
+      .maybeSingle<{ enabled: boolean; intro: string; options: string[]; link_reply: string; whatsapp_number_id: string | null }>(),
+    supabase
+      .from("whatsapp_numbers")
+      .select("id, label, display_phone, status")
+      .eq("company_id", company.id)
+      .order("slot")
+      .returns<{ id: string; label: string; display_phone: string | null; status: string }[]>(),
   ]);
+  const igMenu = igMenuRes.data;
+  const menuNumbers: IgMenuNumber[] = (numbersRes.data ?? [])
+    .filter((n) => n.status === "connected" && n.display_phone)
+    .map((n) => ({ id: n.id, label: n.label, phone: n.display_phone! }));
 
   const pipelines = pipelinesRes.data ?? [];
   const stages = stagesRes.data ?? [];
@@ -81,6 +100,17 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
           stages={stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, logistics: s.logistics, pipelineId: s.pipeline_id }))}
         />
         <TemplatesManager slug={company.slug} pipelines={pipelines} templates={templatesRes.data ?? []} loadError={!!templatesRes.error} />
+        <IgMenuManager
+          slug={company.slug}
+          menu={
+            igMenu
+              ? { enabled: igMenu.enabled, intro: igMenu.intro, options: igMenu.options, linkReply: igMenu.link_reply, whatsappNumberId: igMenu.whatsapp_number_id }
+              : null
+          }
+          numbers={menuNumbers}
+          loadError={!!igMenuRes.error}
+        />
+        <IgRepliesManager slug={company.slug} replies={igRepliesRes.data ?? []} connected={!!igAccountRes.data?.length} loadError={!!igRepliesRes.error} />
       </div>
     </>
   );

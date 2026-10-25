@@ -2306,6 +2306,38 @@ h3,
     stroke: var(--line-2);
     stroke-width: 1;
   }
+  /* Prévia do menu do Instagram (Automações) */
+  .ig-preview {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-2);
+  }
+  .ig-bubble {
+    max-width: 88%;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-size: 13px;
+    white-space: pre-line;
+  }
+  .ig-bubble.ig-me {
+    justify-self: end;
+    background: var(--navy, #12233a);
+    border-color: transparent;
+    color: #f4f2ed;
+  }
+  .ig-chip {
+    padding: 5px 10px;
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--ink);
+  }
   .kpi-delta {
     display: inline-flex;
     align-items: center;

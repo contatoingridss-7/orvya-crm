@@ -176,8 +176,8 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
         loadError={templatesError}
       />
 
-      <Panel title="Anúncios, site e outros canais" subtitle="Meta Ads, Google Ads, formulário do site, Instagram e Messenger.">
-        <ComingSoon phase="Fase 6">Integrações de anúncios e do site.</ComingSoon>
+      <Panel title="Site e outros canais" subtitle="Formulário do site e Messenger. Anúncios da Meta e do Google ficam em Tráfego.">
+        <ComingSoon phase="Fase 6">Formulário do site e Messenger.</ComingSoon>
       </Panel>
 
       {connecting && (

@@ -21,11 +21,14 @@ type ConvRow = {
   last_direction: "in" | "out" | null;
   unread_count: number;
   lead_id: string | null;
+  channel: "whatsapp" | "instagram";
   whatsapp_number_id: string | null;
-  contacts: { name: string; phone_e164: string | null; org_name: string | null } | null;
+  instagram_account_id: string | null;
+  contacts: { name: string; phone_e164: string | null; org_name: string | null; instagram_username: string | null } | null;
   leads: { id: string; closed_at: string | null; stages: { name: string } | null; pipelines: { key: string; name: string } | null } | null;
 };
 type NumberRow = { id: string; label: string; display_phone: string | null; status: string };
+type IgAccountRow = { id: string; username: string | null; status: string };
 type TemplateRow = { id: string; name: string; category: InboxTemplate["category"]; body: string; variables: string[] | null };
 type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null };
 
@@ -34,15 +37,15 @@ export default async function ConversasPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [convRes, numbersRes, membersRes, aiRes, templatesRes] = await Promise.all([
+  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes] = await Promise.all([
     // O RLS já filtra: vendedor vê as dele e as da fila; gestor/admin, todas.
     supabase
       .from("conversations")
       .select(
-        "id, assigned_to, ai_enabled, needs_human, needs_human_reason, last_inbound_at, last_message_at, last_preview, last_direction, unread_count, lead_id, whatsapp_number_id, contacts(name, phone_e164, org_name), leads(id, closed_at, stages(name), pipelines(key, name))",
+        "id, assigned_to, ai_enabled, needs_human, needs_human_reason, last_inbound_at, last_message_at, last_preview, last_direction, unread_count, lead_id, channel, whatsapp_number_id, instagram_account_id, contacts(name, phone_e164, org_name, instagram_username), leads(id, closed_at, stages(name), pipelines(key, name))",
       )
       .eq("company_id", company.id)
-      .eq("channel", "whatsapp")
+      .in("channel", ["whatsapp", "instagram"])
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(300)
       .returns<ConvRow[]>(),
@@ -58,7 +61,9 @@ export default async function ConversasPage({ params, searchParams }: { params: 
       .eq("status", "approved")
       .order("name")
       .returns<TemplateRow[]>(),
+    supabase.from("instagram_accounts").select("id, username, status").eq("company_id", company.id).returns<IgAccountRow[]>(),
   ]);
+  const igAccounts = (igRes.data ?? []).map((a) => ({ id: a.id, username: a.username, connected: a.status === "connected" }));
 
   const people: Person[] = (membersRes.data ?? [])
     .filter((m) => m.profiles)
@@ -76,7 +81,10 @@ export default async function ConversasPage({ params, searchParams }: { params: 
     lastPreview: c.last_preview,
     lastDirection: c.last_direction,
     unread: c.unread_count,
+    channel: c.channel,
     numberId: c.whatsapp_number_id,
+    igAccountId: c.instagram_account_id,
+    contactHandle: c.contacts?.instagram_username ?? null,
     contactName: c.contacts?.name ?? "Sem nome",
     contactPhone: c.contacts?.phone_e164 ?? null,
     contactOrg: c.contacts?.org_name ?? null,
@@ -87,7 +95,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
 
   return (
     <>
-      <PageHeader title="Conversas" subtitle={`${company.name}: WhatsApp em tempo real`} />
+      <PageHeader title="Conversas" subtitle={`${company.name}: ${igAccounts.length ? "WhatsApp e Instagram" : "WhatsApp"} em tempo real`} />
       <div className="content grid gap-3">
         {convRes.error && <Notice tone="bad">Não foi possível carregar as conversas. Recarregue a página.</Notice>}
         <Inbox
@@ -95,6 +103,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           companyId={company.id}
           conversations={conversations}
           numbers={(numbersRes.data ?? []).map((n) => ({ id: n.id, label: n.label, phone: n.display_phone, connected: n.status === "connected" }))}
+          igAccounts={igAccounts}
           people={people}
           viewerId={viewer.id}
           viewerName={viewer.fullName}

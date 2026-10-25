@@ -18,6 +18,8 @@ import {
 } from "@/lib/whatsapp/send";
 import { cleanParam, countParams } from "@/lib/whatsapp/templates";
 import { isWindowOpen } from "@/lib/whatsapp/window";
+import { instagramErrorText } from "@/lib/instagram/graph";
+import { sendInstagramText } from "@/lib/instagram/send";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -84,6 +86,23 @@ export async function sendText(slug: string, input: z.input<typeof sendSchema>):
   if (!ctx) return NO_ACCESS;
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Mensagem inválida." };
+
+  // Instagram Direct: mesmas regras de acesso, prazo do Instagram (24 h / 7 dias para a equipe).
+  const igConv = await loadConversation(ctx, parsed.data.conversationId);
+  if (igConv?.channel === "instagram") {
+    if (!ctx.manager && igConv.assigned_to && igConv.assigned_to !== ctx.viewer.id) return { ok: false, error: "Esta conversa é de outro vendedor." };
+    if (parsed.data.text.length > 1000) return { ok: false, error: "No Instagram, a mensagem pode ter até 1.000 caracteres." };
+    let sent: Awaited<ReturnType<typeof sendInstagramText>>;
+    try {
+      sent = await sendInstagramText(igConv, parsed.data.text);
+    } catch (e) {
+      return { ok: false, error: instagramErrorText(e) };
+    }
+    if (!sent.ok) return sent;
+    const r = await recordOutbound(ctx, igConv, { wamid: sent.mid, body: parsed.data.text, msgType: "text" });
+    revalidatePath(`/${slug}/conversas`);
+    return r;
+  }
 
   const prep = await prepareSend(ctx, parsed.data.conversationId);
   if (!prep.ok) return prep;

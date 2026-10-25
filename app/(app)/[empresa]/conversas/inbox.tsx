@@ -16,6 +16,7 @@ import { formatPhone } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/client";
 import { templateCost, type TemplateCategory } from "@/lib/whatsapp/pricing";
 import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNames } from "@/lib/whatsapp/templates";
+import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { assumeConversation, markRead, sendTemplate, sendText } from "./actions";
 
@@ -30,7 +31,11 @@ export type InboxConversation = {
   lastPreview: string | null;
   lastDirection: "in" | "out" | null;
   unread: number;
+  channel: "whatsapp" | "instagram";
   numberId: string | null;
+  igAccountId: string | null;
+  /** @ do Instagram (conversas do Direct). */
+  contactHandle: string | null;
   contactName: string;
   contactPhone: string | null;
   contactOrg: string | null;
@@ -38,6 +43,10 @@ export type InboxConversation = {
 };
 
 type InboxNumber = { id: string; label: string; phone: string | null; connected: boolean };
+type InboxIgAccount = { id: string; username: string | null; connected: boolean };
+
+/** Valor do filtro de canal para as conversas do Instagram (os demais são ids de número). */
+const IG_FILTER = "instagram";
 
 /** Modelo aprovado pela Meta (corpo com {{1}}, {{2}}... e nomes amigáveis em variables). */
 export type InboxTemplate = { id: string; name: string; category: TemplateCategory; body: string; variables: string[] };
@@ -47,6 +56,7 @@ type Props = {
   companyId: string;
   conversations: InboxConversation[];
   numbers: InboxNumber[];
+  igAccounts: InboxIgAccount[];
   people: Person[];
   viewerId: string;
   viewerName: string;
@@ -101,7 +111,7 @@ function dayLabel(iso: string): string {
 }
 
 export function Inbox(props: Props) {
-  const { slug, companyId, conversations, numbers, people, viewerId, viewerName, templates, manager, companyAi } = props;
+  const { slug, companyId, conversations, numbers, igAccounts, people, viewerId, viewerName, templates, manager, companyAi } = props;
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(props.initialId);
   const [filter, setFilter] = useState<Filter>("todas");
@@ -132,13 +142,18 @@ export function Inbox(props: Props) {
     const q = normalize(query.trim());
     const digits = query.replace(/\D/g, "");
     return conversations.filter((c) => {
-      if (numberFilter && c.numberId !== numberFilter) return false;
+      if (numberFilter === IG_FILTER ? c.channel !== "instagram" : numberFilter && c.numberId !== numberFilter) return false;
       if (filter === "nao-lidas" && c.unread === 0) return false;
       if (filter === "precisa" && !c.needsHuman) return false;
       if (filter === "minhas" && c.assignedTo !== viewerId) return false;
       if (filter === "fila" && c.assignedTo !== null) return false;
       if (!q) return true;
-      return normalize(c.contactName).includes(q) || normalize(c.contactOrg ?? "").includes(q) || (digits.length >= 3 && (c.contactPhone ?? "").includes(digits));
+      return (
+        normalize(c.contactName).includes(q) ||
+        normalize(c.contactOrg ?? "").includes(q) ||
+        normalize(c.contactHandle ?? "").includes(q.replace(/^@/, "")) ||
+        (digits.length >= 3 && (c.contactPhone ?? "").includes(digits))
+      );
     });
   }, [conversations, filter, numberFilter, query, viewerId]);
 
@@ -163,14 +178,15 @@ export function Inbox(props: Props) {
         <div className="conv-filter">
           <input type="search" className="inp" placeholder="Buscar nome ou telefone" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar conversa" />
           <div className="flex min-w-0 gap-2">
-            {numbers.length > 1 && (
-              <select className="inp !w-auto min-w-0 flex-1" value={numberFilter} onChange={(e) => setNumberFilter(e.target.value)} aria-label="Número">
-                <option value="">Todos os números</option>
+            {(numbers.length > 1 || igAccounts.length > 0) && (
+              <select className="inp !w-auto min-w-0 flex-1" value={numberFilter} onChange={(e) => setNumberFilter(e.target.value)} aria-label="Canal">
+                <option value="">{igAccounts.length ? "Todos os canais" : "Todos os números"}</option>
                 {numbers.map((n) => (
                   <option key={n.id} value={n.id}>
                     {n.label}
                   </option>
                 ))}
+                {igAccounts.length > 0 && <option value={IG_FILTER}>Instagram</option>}
               </select>
             )}
             <select className="inp !w-auto min-w-0 flex-1" value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Filtrar conversas">
@@ -206,7 +222,11 @@ export function Inbox(props: Props) {
                     {companyAi && c.aiEnabled && !c.needsHuman && <Pill tone="ind">IA respondendo</Pill>}
                     {!c.assignedTo && <Pill tone="warn">Fila</Pill>}
                     {c.assignedTo && c.assignedTo !== viewerId && <Pill>{firstName(peopleById.get(c.assignedTo) ?? "Equipe")}</Pill>}
-                    {numbers.length > 1 && c.numberId && <Pill>{numberById.get(c.numberId)?.label ?? "Número"}</Pill>}
+                    {c.channel === "instagram" ? (
+                      <Pill tone="ind">Instagram</Pill>
+                    ) : (
+                      numbers.length > 1 && c.numberId && <Pill>{numberById.get(c.numberId)?.label ?? "Número"}</Pill>
+                    )}
                   </span>
                 </span>
               </button>
@@ -221,6 +241,7 @@ export function Inbox(props: Props) {
           slug={slug}
           conversation={selected}
           number={selected.numberId ? (numberById.get(selected.numberId) ?? null) : null}
+          igAccount={selected.igAccountId ? (igAccounts.find((a) => a.id === selected.igAccountId) ?? null) : null}
           peopleById={peopleById}
           viewerId={viewerId}
           viewerName={viewerName}
@@ -242,6 +263,7 @@ function Thread({
   slug,
   conversation: c,
   number,
+  igAccount,
   peopleById,
   viewerId,
   viewerName,
@@ -252,6 +274,7 @@ function Thread({
   slug: string;
   conversation: InboxConversation;
   number: InboxNumber | null;
+  igAccount: InboxIgAccount | null;
   peopleById: Map<string, string>;
   viewerId: string;
   viewerName: string;
@@ -322,7 +345,12 @@ function Thread({
   const windowEnd = windowEndsAt(c.lastInboundAt);
   const mine = c.assignedTo === viewerId;
   const canReply = manager || !c.assignedTo || mine;
-  const connected = !!number?.connected;
+  const isIg = c.channel === "instagram";
+  const connected = isIg ? !!igAccount?.connected : !!number?.connected;
+  // Direct: resposta livre até 24 h; da equipe até 7 dias (etiqueta de atendimento humano). Sem modelos.
+  const igWindow = isIg ? instagramWindow(c.lastInboundAt, now) : null;
+  const igEnd = isIg && c.lastInboundAt ? instagramWindowEndsAt(c.lastInboundAt) : null;
+  const igFreeEnd = isIg && c.lastInboundAt ? new Date(new Date(c.lastInboundAt).getTime() + IG_WINDOW_MS) : null;
 
   const send = useCallback(() => {
     const body = text.trim();
@@ -359,7 +387,13 @@ function Thread({
         <div className="grow">
           <b>{c.contactName}</b>
           <small>
-            {[formatPhone(c.contactPhone), number?.label, c.lead?.stage && `${c.lead.pipelineName} · ${c.lead.stage}`].filter(Boolean).join(" · ")}
+            {[
+              isIg ? (c.contactHandle ? `@${c.contactHandle} · Instagram` : "Instagram") : formatPhone(c.contactPhone),
+              isIg ? null : number?.label,
+              c.lead?.stage && `${c.lead.pipelineName} · ${c.lead.stage}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </small>
         </div>
         {!mine && canReply && (
@@ -407,9 +441,40 @@ function Thread({
       </div>
 
       {!connected ? (
-        <div className="win closed">O número desta conversa não está conectado. Veja em Canais e integrações.</div>
+        <div className="win closed">
+          {isIg ? "O Instagram desta empresa não está conectado. Veja em Canais e integrações." : "O número desta conversa não está conectado. Veja em Canais e integrações."}
+        </div>
       ) : !canReply ? (
         <div className="win">Conversa de {firstName(peopleById.get(c.assignedTo ?? "") ?? "outro vendedor")}. Você pode acompanhar, mas não responder.</div>
+      ) : isIg ? (
+        igWindow === "closed" ? (
+          <div className="win closed">
+            Pela regra do Instagram, só dá para responder até 7 dias depois da última mensagem do cliente. Quando ele escrever de novo, a conversa reabre.
+          </div>
+        ) : (
+          <>
+            <div className="win" suppressHydrationWarning>
+              {igWindow === "open"
+                ? `Resposta livre até ${igFreeEnd ? formatInTimeZone(igFreeEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}.`
+                : `Passou de 24 horas: a resposta vai como atendimento da equipe, permitido até ${igEnd ? formatInTimeZone(igEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}.`}
+            </div>
+            <div className="composer">
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={`Responder ${firstName(c.contactName)} no Direct… (Enter envia, Shift+Enter quebra linha)`}
+                aria-label="Mensagem"
+                rows={1}
+                maxLength={1000}
+                disabled={sending}
+              />
+              <Button variant="primary" loading={sending} disabled={!text.trim()} onClick={send}>
+                Enviar
+              </Button>
+            </div>
+          </>
+        )
       ) : !windowOpen ? (
         <>
           <div className="win closed">A janela de 24 horas fechou. Pela regra da Meta, só é possível enviar um modelo aprovado até o cliente responder.</div>

@@ -96,6 +96,7 @@ Em etapa da expedição: bloco **Entrega/Adaptação com a expedição** com dat
   - Janela aberta: texto livre + anexo; aviso "Janela aberta até HH:MM".
   - Janela fechada: seletor de modelo aprovado, prévia preenchida, custo estimado, botão Enviar modelo.
   - Número não conectado: compositor bloqueado com aviso.
+- **Instagram Direct** (`conversations.channel = 'instagram'`): etiqueta "Instagram" na lista, @ do cliente no cabeçalho, filtro "Instagram" no seletor de canal. Prazo da Meta: resposta livre até 24 h depois da última mensagem do cliente; de 24 h a 7 dias, só resposta da equipe (vai com a etiqueta HUMAN_AGENT); depois de 7 dias, compositor bloqueado até o cliente escrever. Sem modelos; até 1.000 caracteres. Validado no servidor (`lib/instagram/send.ts`).
 - Atualização ao vivo via Supabase Realtime (mensagens, status, novas conversas).
 
 ### 4.6 Precisa de mim (admin/gestor)
@@ -127,12 +128,14 @@ Cada relatório de vendas importado em Catálogo → Importar ("Movimento Sinté
 Regras por etapa (entrou na etapa X do funil Y → criar tarefa Z com prazo N dias para o responsável), com liga/desliga e exclusão. Em etapas da expedição, a regra pode ser **"ao entregar"** (`automation_rules.trigger_event = 'delivered'`): a tarefa nasce quando a expedição confirma a entrega. Já vem configurado o **follow-up do CPAP** (IC Supra e LocPress): 24 h, 7 dias e 15 dias após a entrega. Bloco de regras fixas (informativo), como no protótipo.
 - **Parado na etapa** (`trigger_event = 'stale'`, `after_days`): lead há N dias na mesma etapa (`leads.stage_entered_at`) vira tarefa para o responsável, uma vez por entrada na etapa. Função `run_stale_automations()`, rodada pelo pg_cron de hora em hora e pelo cron diário da Vercel (`/api/jobs/automacoes`). Vem configurado para Novo contato (1 dia), Orçamento (3), Negociação (5), Cotação (5), Documentação (2), Receita e avaliação e Proposta do CPAP (3).
 - **Repetição** (`repeat_days`): ao concluir a tarefa da regra, nasce a próxima (se o lead não foi perdido). Usado na **reposição de consumíveis do CPAP**: filtro a cada 30 dias e máscara a cada 90, a partir da entrega.
+- **Respostas automáticas do Instagram** (`ig_auto_replies`): boas-vindas (uma por empresa, só na primeira conversa), palavra-chave no Direct e comentário com palavra-chave que vira mensagem privada (uma por comentário, registrada em `ig_comment_replies`). A mesma resposta não se repete na conversa em 12 h. Gestor e admin editam; a equipe lê; comentários respondidos só gestor e admin veem.
 - **Tarefas prontas** (`task_templates`): frases pré-cadastradas por funil (ou para todos). Aparecem como lista em "O que precisa ser feito" na tela Tarefas e no detalhe do lead, filtradas pelo funil do lead; ao escolher, o texto é preenchido e pode ser editado. O prazo é sempre escolhido pelo atendente. Gestor e admin cadastram, escondem e excluem.
 
 ### 4.10 Canais e integrações (admin edita, gestor vê)
 - 2 cartões de número por empresa (slot 1 e 2): nome interno, telefone, status, qualidade, conversas iniciadas pelo cliente no mês, leads abertos, conectado há. Ações: conectar (Embedded Signup da Meta — fase 2; no MVP o admin cadastra `phone_number_id`, `waba_id` e token manualmente), renomear, desconectar.
 - Modelos de mensagem: lista com categoria, status (sincronizado da Meta), custo estimado; criar modelo (envia para aprovação via Graph API).
-- Integrações (fase 2): Meta Lead Ads, anúncios de clique para WhatsApp, API de Conversões, Google Ads formulários, Google Ads conversões, site, Instagram, Messenger.
+- **Instagram Direct**: o admin cola o token do usuário do sistema, escolhe a conta (Página com Instagram profissional) e o funil dos leads. A conta (`instagram_accounts`) é visível para a equipe da empresa; só o admin da plataforma conecta e desconecta. O token da Página fica em `instagram_credentials`, sem acesso de usuário. Leads do Direct entram com origem "Instagram Direct" (ou "Meta Ads", quando vêm de anúncio).
+- Integrações (fase 2): Meta Lead Ads, API de Conversões, formulário do site, Messenger. Anúncios da Meta e do Google: tela Tráfego.
 
 ### 4.11 Equipe (admin)
 Lista de usuários por empresa com perfil e status. Convidar (nome, e-mail, empresa, perfil: gestor, vendedor ou expedição). Alterar perfil. Funis do vendedor (todos ou só os escolhidos). Desativar/reativar.

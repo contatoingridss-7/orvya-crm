@@ -10,16 +10,18 @@ import { fillTemplate } from "./templates";
 
 /** Colunas da conversa necessárias para enviar (vale para o cliente do usuário e o admin). */
 export const SEND_CONVERSATION_SELECT =
-  "id, company_id, assigned_to, lead_id, last_inbound_at, whatsapp_number_id, contacts(phone_e164), whatsapp_numbers(phone_number_id, status)";
+  "id, company_id, channel, assigned_to, lead_id, last_inbound_at, whatsapp_number_id, instagram_account_id, contacts(phone_e164, instagram_id), whatsapp_numbers(phone_number_id, status)";
 
 export type SendConversation = {
   id: string;
   company_id: string;
+  channel: "whatsapp" | "instagram" | "messenger";
   assigned_to: string | null;
   lead_id: string | null;
   last_inbound_at: string | null;
   whatsapp_number_id: string | null;
-  contacts: { phone_e164: string | null } | null;
+  instagram_account_id: string | null;
+  contacts: { phone_e164: string | null; instagram_id: string | null } | null;
   whatsapp_numbers: { phone_number_id: string | null; status: string } | null;
 };
 
@@ -67,6 +69,8 @@ function ninthDigitVariant(digits: string): string | null {
 
 /** Número conectado, telefone do contato e token (lido com service_role) antes de qualquer envio. */
 export async function resolveDestination(conv: SendConversation): Promise<{ ok: true; d: Destination } | { ok: false; error: string }> {
+  // Modelo e envio pela API do WhatsApp não valem para o Direct (a resposta do Instagram tem rota própria).
+  if (conv.channel !== "whatsapp") return { ok: false, error: "Esta conversa é do Instagram: responda pela caixa de texto, sem modelo." };
   const number = conv.whatsapp_numbers;
   if (!number?.phone_number_id || number.status !== "connected") {
     return { ok: false, error: "O número desta conversa não está conectado. Veja em Canais e integrações." };
