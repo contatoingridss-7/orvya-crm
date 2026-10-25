@@ -2270,6 +2270,42 @@ h3,
   .chart-bar[data-dim] {
     opacity: 0.35;
   }
+  .chart-tick[data-active] {
+    fill: var(--ink);
+    font-weight: 600;
+  }
+  .chart-value {
+    fill: var(--muted);
+    font-size: 10.5px;
+    font-family: var(--font);
+    font-variant-numeric: tabular-nums;
+    /* contorno da cor do painel: o número continua legível sobre a linha de tendência */
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .chart-line {
+    fill: none;
+    stroke: var(--chart-navy);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .chart-dot {
+    fill: var(--chart-navy);
+    stroke: var(--surface, var(--bg));
+    stroke-width: 2;
+  }
+  .chart-trend {
+    stroke: var(--muted);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+  }
+  .chart-crosshair {
+    stroke: var(--line-2);
+    stroke-width: 1;
+  }
   .kpi-delta {
     display: inline-flex;
     align-items: center;

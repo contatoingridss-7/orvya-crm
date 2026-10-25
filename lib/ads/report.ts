@@ -71,7 +71,7 @@ export type Kpis = {
 };
 
 export type CampaignRow = Kpis & { id: string; name: string; accountId: string; companyId: string; platform: "meta" | "google" };
-export type DayPoint = { date: string; spend: number; leads: number };
+export type DayPoint = { date: string; spend: number; leads: number; clicks: number };
 
 export type AccountHealth = {
   id: string;
@@ -260,6 +260,7 @@ export async function loadTraffic(supabase: SupabaseClient, companyIds: string[]
     date: d,
     spend: daily.filter((x) => x.date === d).reduce((s, x) => s + Number(x.spend), 0),
     leads: newLeads.filter((l) => day(new Date(l.created_at)) === d).length,
+    clicks: daily.filter((x) => x.date === d).reduce((s, x) => s + Number(x.clicks), 0),
   }));
 
   // Saúde das contas e alertas

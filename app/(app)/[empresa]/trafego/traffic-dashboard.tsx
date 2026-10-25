@@ -1,11 +1,11 @@
 "use client";
 
-import { DailyBars } from "@/components/daily-bars";
+import { DailyBars, DailyLine } from "@/components/daily-bars";
 import { PlatformLogo, PLATFORM_NAME } from "@/components/platform-logo";
 import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import type { TrafficData } from "@/lib/ads/report";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatBRLShort } from "@/lib/format";
 
 const int = new Intl.NumberFormat("pt-BR");
 const brl = (v: number | null) => (v === null ? "—" : formatBRL(v));
@@ -60,8 +60,14 @@ export function TrafficDashboard({ data, companyName, showCompany }: { data: Tra
           <Panel title="Dia a dia" subtitle="Investimento e leads separados, alinhados pela data. Passe o mouse para ver cada dia.">
             {hasData ? (
               <div className="grid gap-5">
-                <DailyBars title="Investimento por dia" points={data.series.map((p) => ({ date: p.date, value: p.spend }))} format={(v) => formatBRL(v)} />
+                <DailyBars
+                  title="Investimento por dia"
+                  points={data.series.map((p) => ({ date: p.date, value: p.spend }))}
+                  format={(v) => formatBRL(v)}
+                  label={(v) => formatBRLShort(v)}
+                />
                 <DailyBars title="Leads por dia (chegaram no Orvya)" points={data.series.map((p) => ({ date: p.date, value: p.leads }))} format={(v) => int.format(v)} tone="navy" />
+                <DailyLine title="Cliques por dia" points={data.series.map((p) => ({ date: p.date, value: p.clicks }))} format={(v) => int.format(v)} unit="cliques" />
               </div>
             ) : (
               <div className="empty">Sem investimento nem leads de anúncio neste período.</div>
