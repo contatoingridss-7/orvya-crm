@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { after } from "next/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Wordmark } from "@/components/brand";
 import { Notice } from "@/components/ui/notice";
 import { loadTraffic, resolveTrafficPeriod, TRAFFIC_PERIODS } from "@/lib/ads/report";
+import { syncAdAccount } from "@/lib/ads/sync";
 import { requireRole } from "@/lib/auth/viewer";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { TrafficDashboard } from "./traffic-dashboard";
 import { AccountsPanel } from "./accounts-panel";
 import { PrintButton } from "./print-button";
 
 export const metadata: Metadata = { title: "Tráfego" };
+
+/** Se a rotina das 6h/13h não rodou, a própria visita atualiza (o token fica guardado; nada a reconectar). */
+const STALE_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Tráfego pago: investimento (Meta) cruzado com leads e vendas do Orvya.
@@ -35,6 +41,13 @@ export default async function TrafegoPage({
     companies.map((c) => c.id),
     period,
   );
+  const stale = data.health.filter((h) => !h.lastSyncedAt || Date.now() - new Date(h.lastSyncedAt).getTime() > STALE_MS);
+  if (stale.length) {
+    after(async () => {
+      const admin = createAdminClient();
+      for (const h of stale) await syncAdAccount(admin, h.id);
+    });
+  }
   const companyName = new Map(viewer.companies.map((c) => [c.id, c.name]));
   const link = (periodo: string, todas: boolean) => `/${company.slug}/trafego?periodo=${periodo}${todas ? "&escopo=todas" : ""}`;
   const range = period.since === period.until ? formatDate(`${period.since}T12:00:00`) : `${formatDate(`${period.since}T12:00:00`)} a ${formatDate(`${period.until}T12:00:00`)}`;
@@ -80,7 +93,7 @@ export default async function TrafegoPage({
 
         <TrafficDashboard data={data} companyName={Object.fromEntries(companyName)} showCompany={all} />
 
-        <AccountsPanel slug={company.slug} companyName={company.name} accounts={data.health.filter((h) => h.companyId === company.id)} />
+        <AccountsPanel refreshing={stale.length > 0} slug={company.slug} companyName={company.name} accounts={data.health.filter((h) => h.companyId === company.id)} />
       </div>
     </>
   );

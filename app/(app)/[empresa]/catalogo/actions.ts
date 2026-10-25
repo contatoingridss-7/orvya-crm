@@ -7,7 +7,8 @@ import { getViewer } from "@/lib/auth/viewer";
 import { parseMoneyInput } from "@/lib/catalog/types";
 import { createClient } from "@/lib/supabase/server";
 
-export type ActionResult = { ok: true; message: string; id?: string } | { ok: false; error: string };
+export type ImportStats = { inserted: number; updated: number; deactivated: number };
+export type ActionResult = { ok: true; message: string; id?: string; stats?: ImportStats } | { ok: false; error: string };
 
 /** Gestor ou admin da empresa (o RLS confere de novo no banco). */
 async function managerCompany(slug: string) {
@@ -166,13 +167,41 @@ export async function applyImport(slug: string, input: z.input<typeof importSche
   }
 
   refresh(slug);
-  const r = data as { inserted: number; updated: number; deactivated: number };
+  const r = data as ImportStats;
   const parts = [
     r.inserted && `${r.inserted} novo(s)`,
     r.updated && `${r.updated} atualizado(s)`,
     r.deactivated && `${r.deactivated} retirado(s) do catálogo`,
   ].filter(Boolean);
-  return { ok: true, message: parts.length ? `Importação concluída: ${parts.join(", ")}.` : "Nada mudou." };
+  return { ok: true, message: parts.length ? `Importação concluída: ${parts.join(", ")}.` : "Nada mudou.", stats: r };
+}
+
+// ---------------------------------------------------------------------
+// Registro do carregamento (fica na tela até o próximo)
+// ---------------------------------------------------------------------
+const recordSchema = z.object({
+  files: z.array(z.object({ name: z.string().max(200), label: z.string().max(60), detail: z.string().max(300) })).max(50),
+  inserted: z.number().int().min(0),
+  updated: z.number().int().min(0),
+  deactivated: z.number().int().min(0),
+  salesPeriods: z.number().int().min(0),
+});
+
+export async function recordImport(slug: string, input: z.input<typeof recordSchema>): Promise<ActionResult> {
+  const company = await managerCompany(slug);
+  if (!company) return NOT_ALLOWED;
+  const parsed = recordSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Registro do carregamento inválido." };
+  const { files, inserted, updated, deactivated, salesPeriods } = parsed.data;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("catalog_imports")
+    .insert({ company_id: company.id, files, inserted, updated, deactivated, sales_periods: salesPeriods });
+  if (error) return { ok: false, error: "O catálogo foi salvo, mas o registro do carregamento não. Confira se a migration 0014 foi rodada." };
+  refresh(slug);
+  revalidatePath(`/${slug}/catalogo/importar`);
+  return { ok: true, message: "Carregamento registrado." };
 }
 
 // ---------------------------------------------------------------------

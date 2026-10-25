@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { requireRole } from "@/lib/auth/viewer";
 import type { ExistingProduct } from "@/lib/catalog/import-plan";
 import { createClient } from "@/lib/supabase/server";
+import { Panel } from "@/components/ui/panel";
+import { LastImportDetail, loadLastImport } from "../last-import";
 import { ImportWizard } from "./import-wizard";
 
 export const metadata: Metadata = { title: "Importar catálogo" };
@@ -13,11 +15,10 @@ type Row = { id: string; code: string | null; name: string; active: boolean; sto
 export default async function ImportarPage({ params }: { params: Promise<{ empresa: string }> }) {
   const { company } = await requireRole((await params).empresa, ["admin", "gestor"]);
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("products")
-    .select("id, code, name, active, stock, sale_price, is_rental")
-    .eq("company_id", company.id)
-    .returns<Row[]>();
+  const [{ data }, lastImport] = await Promise.all([
+    supabase.from("products").select("id, code, name, active, stock, sale_price, is_rental").eq("company_id", company.id).returns<Row[]>(),
+    loadLastImport(supabase, company.id),
+  ]);
 
   const existing: ExistingProduct[] = (data ?? []).map((p) => ({
     id: p.id,
@@ -40,7 +41,12 @@ export default async function ImportarPage({ params }: { params: Promise<{ empre
           </Link>
         }
       />
-      <div className="content">
+      <div className="content grid gap-4">
+        {lastImport && (
+          <Panel title="Último carregamento" subtitle="Fica valendo até você carregar novos arquivos.">
+            <LastImportDetail data={lastImport} />
+          </Panel>
+        )}
         <ImportWizard slug={company.slug} companyName={company.name} existing={existing} />
       </div>
     </>

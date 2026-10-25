@@ -67,8 +67,12 @@ Migration **0011_trafego.sql** (testada em PGlite). Tela `trafego/`, `lib/ads/{m
 ## Construído, aguardando teste (25/10) — Histórico de vendas
 Migration **0012_historico_vendas.sql** (testada em PGlite). Tela `vendas/`, gravação na importação do catálogo, coluna "Vende/mês" no Catálogo. Vendedor só quantidades (regra no banco).
 
+Migration **0014_carregamentos.sql** (testada em PGlite): registro de cada carregamento do catálogo (`catalog_imports`), mostrado no Catálogo e em Importar até o próximo. Tráfego: conta aparece como "Conectada", formulário de token recolhido e, se a rotina não rodou há mais de 6 h, a própria visita atualiza com o token guardado (`after`). Diagnóstico de 25/10: nada é apagado em deploy (dados no banco); as rotinas não rodavam porque `CRON_SECRET` não estava cadastrado na Vercel.
+
 ## Falta
-1. Testes da 3b-2 e 3c em produção.
-3. Aceitar várias `META_APP_SECRET`; app e número da IC Supra.
-4. Fase 5 restante: domínio próprio, Vercel Pro, Supabase Pro, e-mail transacional, jobs agendados (renovação de contratos, sincronização de modelos).
-5. Fase 4 (IA) e Fase 6 (integrações de anúncios e site) — sem data.
+1. **IC Supra** (25/10): número inscrito no app Orvya IC Supra e webhook verificado (token de verificação novo na Vercel). Falta publicar o app (ícone novo em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios) e conectar em Canais (vaga 1) e Tráfego. Verificação da empresa em análise na Meta.
+2. **Ida para produção (6/11)**: Vercel Pro, domínio `orvyacrm.com.br` (Registro.br), Resend (e-mail de sábado), anúncios de WhatsApp apontando para (86) 9432-0549 (página da LocPress já conectada ao número). Depois: Supabase Pro ou backup semanal criptografado.
+3. **Próxima fase: Instagram Direct** (decidido em 25/10). Receber e responder o Direct em Conversas (canal `instagram` já previsto no banco), respostas automáticas por palavra-chave, comentário em post/anúncio que vira mensagem privada e lead, origem "Instagram" no funil e no Tráfego. Regras: resposta grátis só até 24 h após a última mensagem do cliente (7 dias para resposta humana), não dá para iniciar conversa, conta profissional ligada à Página. Requer o caso de uso "Gerenciar mensagens e conteúdo no Instagram" no app de cada empresa.
+4. Formulários de anúncio da Meta (Lead Ads), devolução de vendas para a Meta (API de Conversões) e Google Ads (depende do token de desenvolvedor).
+5. Landing page do Orvya: em andamento numa conversa separada.
+6. Fase 4 (IA): desligada por custo; pode voltar como triagem (Claude Haiku 5.5, de baixo custo).

@@ -13,7 +13,7 @@ import { pdfToRows } from "@/lib/catalog/pdf-rows";
 import { readSpreadsheet, templateCsv, type SheetRow } from "@/lib/catalog/spreadsheet";
 import { formatBRL } from "@/lib/format";
 import { salesPayloads, type SalesReportPayload } from "@/lib/sales/history";
-import { applyImport, saveSalesReports } from "../actions";
+import { applyImport, recordImport, saveSalesReports, type ImportStats } from "../actions";
 
 type LoadedFile = { name: string; label: string; ok: boolean; detail: string };
 type View = "marcados" | "novos" | "existentes" | "todos";
@@ -153,12 +153,20 @@ export function ImportWizard({ slug, companyName, existing }: { slug: string; co
     const hasCatalogChanges = payload.rows.length > 0 || payload.deactivate.length > 0;
     startSaving(async () => {
       if (!(await saveHistory())) return;
+      const salesPeriods = keepHistory ? sales.length : 0;
+      // Registro do carregamento: fica visível no catálogo até o próximo.
+      const record = async (stats: ImportStats) => {
+        const r = await recordImport(slug, { files: files.filter((f) => f.ok), ...stats, salesPeriods });
+        if (!r.ok) toast(r.error, "bad");
+      };
       if (!hasCatalogChanges) {
+        await record({ inserted: 0, updated: 0, deactivated: 0 });
         router.push(`/${slug}/vendas`);
         return;
       }
       const result = await applyImport(slug, payload);
       if (result.ok) {
+        await record(result.stats ?? { inserted: 0, updated: 0, deactivated: 0 });
         toast(result.message, "ok");
         router.push(`/${slug}/catalogo`);
         router.refresh();

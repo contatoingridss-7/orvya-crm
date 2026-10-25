@@ -26,12 +26,24 @@ const STATUS_PILL: Record<number, { text: string; tone: "ok" | "warn" | "bad" }>
 };
 
 /** Contas de anúncio da empresa: conectar, atualizar, alerta de saldo e remover. */
-export function AccountsPanel({ slug, companyName, accounts }: { slug: string; companyName: string; accounts: AccountHealth[] }) {
+export function AccountsPanel({
+  slug,
+  companyName,
+  accounts,
+  refreshing,
+}: {
+  slug: string;
+  companyName: string;
+  accounts: AccountHealth[];
+  refreshing: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  // Com conta conectada, o formulário de token fica recolhido: não há o que reconectar.
+  const [showConnect, setShowConnect] = useState(accounts.length === 0);
 
   function run(fn: () => Promise<ActionResult>) {
     start(async () => {
@@ -51,6 +63,7 @@ export function AccountsPanel({ slug, companyName, accounts }: { slug: string; c
       if (r.ok) {
         toast(r.message, "ok");
         form.reset();
+        setShowConnect(false);
         router.refresh();
       } else setError(r.error);
     });
@@ -58,6 +71,9 @@ export function AccountsPanel({ slug, companyName, accounts }: { slug: string; c
 
   return (
     <Panel className="no-print" title={`Contas de anúncio · ${companyName}`} subtitle="Atualizam sozinhas às 6h e às 13h. Só você, como administradora, vê esta área.">
+      {refreshing && (
+        <Notice className="mb-3">Buscando os números mais recentes na Meta com o token guardado. Recarregue a página em alguns segundos.</Notice>
+      )}
       {accounts.length > 0 && (
         <div className="row-list mb-4">
           {accounts.map((a) => (
@@ -66,6 +82,7 @@ export function AccountsPanel({ slug, companyName, accounts }: { slug: string; c
                 <PlatformLogo platform={a.platform} size={20} />
                 <b className="font-semibold text-title">{a.name}</b>
                 <span className="text-xs text-muted">act_{a.externalId}</span>
+                <Pill tone="ok">Conectada</Pill>
                 {a.status !== null && STATUS_PILL[a.status] && <Pill tone={STATUS_PILL[a.status]!.tone}>{STATUS_PILL[a.status]!.text}</Pill>}
                 {a.isPrepay !== null && <Pill>{a.isPrepay ? "Pré-paga (boleto/PIX)" : "Pós-paga (cartão)"}</Pill>}
               </div>
@@ -128,30 +145,38 @@ export function AccountsPanel({ slug, companyName, accounts }: { slug: string; c
         </div>
       )}
 
-      <h3 className="mb-2 flex items-center gap-2 text-[13px] font-[650]">
-        <PlatformLogo platform="meta" /> Conectar conta da Meta
-      </h3>
-      <form onSubmit={onConnect} className="grid gap-2.5">
-        <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto] sm:items-end">
-          <TextField label="Número da conta de anúncios" name="externalId" required inputMode="numeric" placeholder="Ex.: 1234567890 (sem act_)" />
-          <TextField
-            label="Token do usuário do sistema (com ads_read)"
-            name="token"
-            type="password"
-            autoComplete="off"
-            required
-            placeholder="Cole o token"
-          />
-          <Button type="submit" variant="primary" loading={pending}>
-            Conectar
-          </Button>
-        </div>
-        <p className="m-0 text-xs text-muted">
-          O número da conta aparece no Gerenciador de Anúncios (ID da conta). O token fica guardado só no servidor e nunca aparece de novo. O Orvya só lê os
-          dados: não cria, pausa nem altera campanhas.
-        </p>
-        {error && <Notice tone="bad">{error}</Notice>}
-      </form>
+      {showConnect ? (
+        <>
+          <h3 className="mb-2 flex items-center gap-2 text-[13px] font-[650]">
+            <PlatformLogo platform="meta" /> Conectar conta da Meta
+          </h3>
+          <form onSubmit={onConnect} className="grid gap-2.5">
+            <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_auto] sm:items-end">
+              <TextField label="Número da conta de anúncios" name="externalId" required inputMode="numeric" placeholder="Ex.: 1234567890 (sem act_)" />
+              <TextField
+                label="Token do usuário do sistema (com ads_read)"
+                name="token"
+                type="password"
+                autoComplete="off"
+                required
+                placeholder="Cole o token"
+              />
+              <Button type="submit" variant="primary" loading={pending}>
+                Conectar
+              </Button>
+            </div>
+            <p className="m-0 text-xs text-muted">
+              O número da conta aparece no Gerenciador de Anúncios (ID da conta). O token fica guardado só no servidor e nunca aparece de novo. O Orvya só lê os
+              dados: não cria, pausa nem altera campanhas.
+            </p>
+            {error && <Notice tone="bad">{error}</Notice>}
+          </form>
+        </>
+      ) : (
+        <Button size="sm" variant="ghost" onClick={() => setShowConnect(true)}>
+          Conectar outra conta
+        </Button>
+      )}
     </Panel>
   );
 }
