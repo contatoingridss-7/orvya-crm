@@ -59,7 +59,8 @@ function Row({ slug, item, people, viewerId }: { slug: string; item: AttentionIt
     start(async () => {
       const r = await assignConversation(slug, { conversationId: item.id, userId });
       if (r.ok) {
-        toast(r.message ?? "Conversa assumida.", "ok");
+        // A conversa sai desta lista: o aviso traz o atalho para ela não se perder no volume do dia.
+        toast(r.message ?? "Conversa assumida.", "ok", { label: "Abrir conversa", href: `/${slug}/conversas?c=${item.id}` });
         router.refresh();
       } else toast(r.error, "bad");
     });

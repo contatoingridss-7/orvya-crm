@@ -607,6 +607,25 @@
   .toast.auto {
     border-left-color: var(--amber);
   }
+  .toast.has-action {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .toast-action {
+    flex: none;
+    padding: 6px 12px;
+    border-radius: 9px;
+    background: var(--grad);
+    color: #fff;
+    font-weight: 600;
+    font-size: 12.5px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .toast-action:hover {
+    filter: brightness(1.1);
+  }
   .toast.ok {
     border-left-color: var(--won);
   }
