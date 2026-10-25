@@ -11,9 +11,12 @@ export function graphBase(): string {
 /**
  * App Secret de cada app da Meta (um app por empresa: LocPress, IC Supra).
  * Na Vercel: META_APP_SECRET com os segredos separados por vírgula.
+ * O webhook do Instagram configurado em "API com login do Instagram" assina com a chave
+ * secreta do app do Instagram: META_INSTAGRAM_APP_SECRET (também separada por vírgula).
  */
 export function appSecrets(): string[] {
-  return (process.env.META_APP_SECRET ?? "")
+  return [process.env.META_APP_SECRET, process.env.META_INSTAGRAM_APP_SECRET]
+    .join(",")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);

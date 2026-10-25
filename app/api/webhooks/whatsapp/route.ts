@@ -33,6 +33,14 @@ export async function POST(request: NextRequest) {
 
   const raw = await request.text();
   if (!isValidSignatureAny(raw, request.headers.get("x-hub-signature-256"), secrets)) {
+    // Registra só que houve recusa e de qual objeto (sem o conteúdo, LGPD), para achar chave faltando.
+    let object = "desconhecido";
+    try {
+      object = String((JSON.parse(raw) as { object?: unknown }).object ?? "desconhecido");
+    } catch {}
+    await createAdminClient()
+      .from("webhook_events")
+      .insert({ source: "recusado", payload: { object, motivo: "assinatura inválida" }, processed_at: new Date().toISOString() });
     return new NextResponse("Assinatura inválida", { status: 401 });
   }
 
