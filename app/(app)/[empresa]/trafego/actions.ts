@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getViewer } from "@/lib/auth/viewer";
+import { listGoogleAccounts, googleErrorText } from "@/lib/ads/google";
+import { loadGoogleGrant } from "@/lib/ads/google-grants";
 import { fetchMetaAccount, metaErrorText } from "@/lib/ads/meta";
 import { syncAdAccount } from "@/lib/ads/sync";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -17,7 +19,7 @@ async function adminFor(slug: string) {
   const viewer = await getViewer();
   if (!viewer?.active || !viewer.isAdmin) return null;
   const company = viewer.companies.find((c) => c.slug === slug);
-  return company ? { company, supabase: await createClient() } : null;
+  return company ? { viewer, company, supabase: await createClient() } : null;
 }
 
 function refresh(slug: string) {
@@ -68,6 +70,59 @@ export async function connectAdAccount(slug: string, input: z.input<typeof conne
   refresh(slug);
   return sync.ok
     ? { ok: true, message: `${info.name} conectada. Últimos 90 dias importados.` }
+    : { ok: false, error: `Conta conectada, mas a importação falhou: ${sync.error}` };
+}
+
+const googleSchema = z.object({ grantId: z.uuid(), customerId: z.string().regex(/^\d{6,12}$/) });
+
+/** Liga a conta do Google Ads escolhida à empresa, com o acesso do login da Google, e puxa 90 dias. */
+export async function connectGoogleAccount(slug: string, input: z.input<typeof googleSchema>): Promise<ActionResult> {
+  const ctx = await adminFor(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const parsed = googleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Conta inválida." };
+
+  const admin = createAdminClient();
+  const grant = await loadGoogleGrant(admin, parsed.data.grantId, ctx.viewer.id);
+  if (!grant) return { ok: false, error: "O login da Google expirou. Clique em Conectar Google Ads de novo." };
+
+  let accounts;
+  try {
+    accounts = await listGoogleAccounts(grant.refreshToken);
+  } catch (e) {
+    return { ok: false, error: googleErrorText(e) };
+  }
+  const chosen = accounts.find((a) => a.customerId === parsed.data.customerId);
+  if (!chosen) return { ok: false, error: "Este login da Google não alcança essa conta." };
+
+  const { data: acc, error } = await ctx.supabase
+    .from("ad_accounts")
+    .upsert(
+      {
+        company_id: ctx.company.id,
+        platform: "google",
+        external_id: chosen.customerId,
+        name: chosen.name,
+        currency: chosen.currency,
+        timezone: chosen.timezone,
+        login_customer_id: chosen.loginCustomerId,
+        active: true,
+      },
+      { onConflict: "platform,external_id" },
+    )
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !acc) return { ok: false, error: "Não foi possível salvar a conta. Confira se a migration 0015 foi rodada." };
+
+  const { error: credError } = await admin
+    .from("ad_credentials")
+    .upsert({ ad_account_id: acc.id, access_token: grant.refreshToken, updated_at: new Date().toISOString() }, { onConflict: "ad_account_id" });
+  if (credError) return { ok: false, error: "Conta salva, mas o acesso não foi guardado. Tente de novo." };
+
+  const sync = await syncAdAccount(admin, acc.id, 90);
+  refresh(slug);
+  return sync.ok
+    ? { ok: true, message: `${chosen.name} conectada. Últimos 90 dias importados.` }
     : { ok: false, error: `Conta conectada, mas a importação falhou: ${sync.error}` };
 }
 

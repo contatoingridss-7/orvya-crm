@@ -10,9 +10,10 @@ import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
+import type { GoogleChoice } from "@/lib/ads/google-grants";
 import type { AccountHealth } from "@/lib/ads/report";
 import { formatBRL } from "@/lib/format";
-import { connectAdAccount, removeAdAccount, saveAccountSettings, syncNow, type ActionResult } from "./actions";
+import { connectAdAccount, connectGoogleAccount, removeAdAccount, saveAccountSettings, syncNow, type ActionResult } from "./actions";
 
 const STATUS_PILL: Record<number, { text: string; tone: "ok" | "warn" | "bad" }> = {
   1: { text: "Ativa", tone: "ok" },
@@ -25,17 +26,26 @@ const STATUS_PILL: Record<number, { text: string; tone: "ok" | "warn" | "bad" }>
   101: { text: "Encerrada", tone: "bad" },
 };
 
+/** "1234567890" → "123-456-7890", como o Google Ads mostra. */
+const googleId = (id: string) => id.replace(/^(\d{3})(\d{3})(\d+)$/, "$1-$2-$3");
+
 /** Contas de anúncio da empresa: conectar, atualizar, alerta de saldo e remover. */
 export function AccountsPanel({
   slug,
   companyName,
   accounts,
   refreshing,
+  googleReady,
+  googleChoice,
+  googleNotice,
 }: {
   slug: string;
   companyName: string;
   accounts: AccountHealth[];
   refreshing: boolean;
+  googleReady: boolean;
+  googleChoice: GoogleChoice | null;
+  googleNotice: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -50,6 +60,18 @@ export function AccountsPanel({
       const r = await fn();
       toast(r.ok ? r.message : r.error, r.ok ? "ok" : "bad");
       if (r.ok) router.refresh();
+    });
+  }
+
+  function onChooseGoogle(grantId: string, customerId: string) {
+    start(async () => {
+      const r = await connectGoogleAccount(slug, { grantId, customerId });
+      toast(r.ok ? r.message : r.error, r.ok ? "ok" : "bad");
+      if (r.ok) {
+        setShowConnect(false);
+        router.replace(`/${slug}/trafego`);
+        router.refresh();
+      }
     });
   }
 
@@ -71,6 +93,45 @@ export function AccountsPanel({
 
   return (
     <Panel className="no-print" title={`Contas de anúncio · ${companyName}`} subtitle="Atualizam sozinhas às 6h e às 13h. Só você, como administradora, vê esta área.">
+      {googleNotice && (
+        <Notice tone="warn" className="mb-3">
+          {googleNotice}
+        </Notice>
+      )}
+      {googleChoice && (
+        <div className="mb-4 grid gap-2 rounded-lg border border-line p-3">
+          <h3 className="m-0 flex items-center gap-2 text-[13px] font-[650]">
+            <PlatformLogo platform="google" /> Qual conta do Google Ads é da {companyName}?
+          </h3>
+          {"error" in googleChoice ? (
+            <Notice tone="bad">{googleChoice.error}</Notice>
+          ) : googleChoice.accounts.length === 0 ? (
+            <Notice tone="warn">Este login da Google não tem acesso a nenhuma conta de anúncios. Entre com o e-mail que administra as contas.</Notice>
+          ) : (
+            <div className="row-list">
+              {googleChoice.accounts.map((g) => {
+                const linked = accounts.some((a) => a.platform === "google" && a.externalId === g.customerId);
+                return (
+                  <div key={g.customerId} className="flex flex-wrap items-center gap-2 py-2 text-[13px]">
+                    <b className="font-semibold">{g.name}</b>
+                    <span className="text-xs text-muted">{googleId(g.customerId)}</span>
+                    {g.loginCustomerId && <span className="text-xs text-muted">via administrador {googleId(g.loginCustomerId)}</span>}
+                    {linked ? (
+                      <Pill tone="ok" className="ml-auto">
+                        Já conectada
+                      </Pill>
+                    ) : (
+                      <Button size="sm" variant="primary" className="ml-auto" loading={pending} onClick={() => onChooseGoogle(googleChoice.grantId, g.customerId)}>
+                        Conectar a esta empresa
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       {refreshing && (
         <Notice className="mb-3">Buscando os números mais recentes na Meta com o token guardado. Recarregue a página em alguns segundos.</Notice>
       )}
@@ -81,16 +142,20 @@ export function AccountsPanel({
               <div className="flex flex-wrap items-center gap-2">
                 <PlatformLogo platform={a.platform} size={20} />
                 <b className="font-semibold text-title">{a.name}</b>
-                <span className="text-xs text-muted">act_{a.externalId}</span>
+                <span className="text-xs text-muted">{a.platform === "google" ? googleId(a.externalId) : `act_${a.externalId}`}</span>
                 <Pill tone="ok">Conectada</Pill>
                 {a.status !== null && STATUS_PILL[a.status] && <Pill tone={STATUS_PILL[a.status]!.tone}>{STATUS_PILL[a.status]!.text}</Pill>}
                 {a.isPrepay !== null && <Pill>{a.isPrepay ? "Pré-paga (boleto/PIX)" : "Pós-paga (cartão)"}</Pill>}
               </div>
               <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
-                <span>
-                  {a.availableBalance !== null ? "Saldo disponível" : a.capRemaining !== null ? "Restante do limite" : "Saldo"}:{" "}
-                  <b>{a.availableBalance !== null ? formatBRL(a.availableBalance) : a.capRemaining !== null ? formatBRL(a.capRemaining) : "a Meta não informou"}</b>
-                </span>
+                {a.platform === "google" ? (
+                  <span className="text-muted">Saldo e pagamento: acompanhe no Google Ads.</span>
+                ) : (
+                  <span>
+                    {a.availableBalance !== null ? "Saldo disponível" : a.capRemaining !== null ? "Restante do limite" : "Saldo"}:{" "}
+                    <b>{a.availableBalance !== null ? formatBRL(a.availableBalance) : a.capRemaining !== null ? formatBRL(a.capRemaining) : "a Meta não informou"}</b>
+                  </span>
+                )}
                 <span>
                   Gasto médio por dia (7 dias): <b>{formatBRL(a.avgDailySpend)}</b>
                 </span>
@@ -147,6 +212,24 @@ export function AccountsPanel({
 
       {showConnect ? (
         <>
+          <div className="mb-4 grid gap-2">
+            <h3 className="m-0 flex items-center gap-2 text-[13px] font-[650]">
+              <PlatformLogo platform="google" /> Conectar Google Ads
+            </h3>
+            {googleReady ? (
+              <>
+                <a href={`/api/google-ads/connect?empresa=${slug}`} className="btn w-full sm:w-auto sm:justify-self-start">
+                  Entrar com a Google
+                </a>
+                <p className="m-0 text-xs text-muted">
+                  Use o e-mail que administra as contas de anúncio. Na tela &ldquo;Google não verificou este app&rdquo;, clique em Avançado e depois em
+                  Acessar Orvya. O acesso fica guardado só no servidor e não expira; o Orvya só lê os números.
+                </p>
+              </>
+            ) : (
+              <p className="m-0 text-xs text-muted">Falta cadastrar GOOGLE_ADS_CLIENT_ID e GOOGLE_ADS_CLIENT_SECRET na Vercel.</p>
+            )}
+          </div>
           <h3 className="mb-2 flex items-center gap-2 text-[13px] font-[650]">
             <PlatformLogo platform="meta" /> Conectar conta da Meta
           </h3>

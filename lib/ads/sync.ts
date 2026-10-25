@@ -3,9 +3,10 @@ import "server-only";
 import { formatInTimeZone } from "date-fns-tz";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TIMEZONE } from "@/lib/format";
+import { fetchGoogleData, googleErrorText, googleStatusCode, GoogleAdsError } from "./google";
 import { fetchAds, fetchCampaignDays, fetchMetaAccount, metaErrorText } from "./meta";
 
-type AccountRow = { id: string; company_id: string; platform: string; external_id: string; timezone: string | null };
+type AccountRow = { id: string; company_id: string; platform: string; external_id: string; timezone: string | null; login_customer_id: string | null };
 
 /**
  * Atualiza uma conta: dados e saldo, desempenho diário por campanha e o mapa de anúncios.
@@ -13,11 +14,11 @@ type AccountRow = { id: string; company_id: string; platform: string; external_i
  * `days`: quantos dias para trás buscar (a Meta ainda ajusta os números dos últimos dias).
  */
 export async function syncAdAccount(admin: SupabaseClient, accountId: string, days = 35): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: acc } = await admin.from("ad_accounts").select("id, company_id, platform, external_id, timezone").eq("id", accountId).maybeSingle<AccountRow>();
+  const { data: acc } = await admin.from("ad_accounts").select("id, company_id, platform, external_id, timezone, login_customer_id").eq("id", accountId).maybeSingle<AccountRow>();
   if (!acc) return { ok: false, error: "Conta não encontrada." };
-  if (acc.platform !== "meta") return { ok: false, error: "Google Ads ainda não está disponível." };
   const { data: cred } = await admin.from("ad_credentials").select("access_token").eq("ad_account_id", acc.id).maybeSingle<{ access_token: string }>();
   if (!cred) return { ok: false, error: "Token da conta não cadastrado." };
+  if (acc.platform === "google") return syncGoogle(admin, acc, cred.access_token, days);
 
   try {
     const info = await fetchMetaAccount(acc.external_id, cred.access_token);
@@ -73,6 +74,53 @@ export async function syncAdAccount(admin: SupabaseClient, accountId: string, da
     return { ok: true };
   } catch (e) {
     const error = e instanceof Error && !("status" in e) ? e.message : metaErrorText(e);
+    await admin.from("ad_accounts").update({ sync_error: error, last_synced_at: new Date().toISOString() }).eq("id", acc.id);
+    return { ok: false, error };
+  }
+}
+
+/** Google Ads: o "token" guardado é o refresh token do login da Google. Sem saldo (a API em Exploração não lê faturamento). */
+async function syncGoogle(admin: SupabaseClient, acc: AccountRow, refreshToken: string, days: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const tz = acc.timezone ?? TIMEZONE;
+    const until = formatInTimeZone(new Date(), tz, "yyyy-MM-dd");
+    const since = formatInTimeZone(new Date(Date.now() - days * 86_400_000), tz, "yyyy-MM-dd");
+    const { account, days: rows } = await fetchGoogleData(acc.external_id, refreshToken, acc.login_customer_id, since, until);
+
+    await admin.from("ad_campaign_daily").delete().eq("ad_account_id", acc.id).gte("date", since).lte("date", until);
+    if (rows.length) {
+      const { error } = await admin.from("ad_campaign_daily").insert(
+        rows.map((r) => ({
+          ad_account_id: acc.id,
+          company_id: acc.company_id,
+          date: r.date,
+          campaign_id: r.campaignId,
+          campaign_name: r.campaignName,
+          spend: r.spend,
+          impressions: r.impressions,
+          reach: 0,
+          clicks: r.clicks,
+          meta_leads: Math.round(r.conversions), // conversões que o Google conta
+          conversations: 0,
+        })),
+      );
+      if (error) throw new Error("Falha ao gravar o desempenho.");
+    }
+
+    await admin
+      .from("ad_accounts")
+      .update({
+        ...(account?.descriptiveName ? { name: account.descriptiveName } : {}),
+        currency: account?.currencyCode ?? null,
+        timezone: account?.timeZone ?? acc.timezone,
+        account_status: googleStatusCode(account?.status),
+        last_synced_at: new Date().toISOString(),
+        sync_error: null,
+      })
+      .eq("id", acc.id);
+    return { ok: true };
+  } catch (e) {
+    const error = e instanceof GoogleAdsError ? googleErrorText(e) : e instanceof Error ? e.message : googleErrorText(e);
     await admin.from("ad_accounts").update({ sync_error: error, last_synced_at: new Date().toISOString() }).eq("id", acc.id);
     return { ok: false, error };
   }

@@ -35,7 +35,7 @@ export function TrafficDashboard({ data, companyName, showCompany }: { data: Tra
       )}
 
       {data.health.length === 0 ? (
-        <Panel title="Nenhuma conta de anúncios conectada" subtitle="Conecte a conta da Meta desta empresa logo abaixo, em Contas de anúncio.">
+        <Panel title="Nenhuma conta de anúncios conectada" subtitle="Conecte a conta da Meta ou do Google Ads desta empresa logo abaixo, em Contas de anúncio.">
           <p className="m-0 text-[13px] text-muted">
             Depois de conectar, o Orvya puxa o investimento dos últimos 90 dias e passa a atualizar sozinho duas vezes por dia.
           </p>
@@ -44,7 +44,7 @@ export function TrafficDashboard({ data, companyName, showCompany }: { data: Tra
         <>
           <div className="kpis">
             <Kpi label="Investimento" value={brl(t.spend)} sub={`${int.format(t.impressions)} impressões`} highlight />
-            <Kpi label="Leads dos anúncios" value={int.format(t.leads)} sub={`Chegaram no Orvya · Meta: ${int.format(t.conversations + t.metaLeads)}`} />
+            <Kpi label="Leads dos anúncios" value={int.format(t.leads)} sub={`Chegaram no Orvya · nas plataformas: ${int.format(t.conversations + t.metaLeads)}`} />
             <Kpi label="Custo por lead (real)" value={brl(t.cpl)} sub="Investimento ÷ leads no Orvya" />
             <Kpi label="Vendas" value={int.format(t.sales)} sub={`Custo por venda: ${brl(t.costPerSale)}`} />
             <Kpi label="Retorno (ROAS)" value={roasText(t.roas)} sub={`Faturamento: ${brl(t.revenue)}`} />
@@ -53,7 +53,7 @@ export function TrafficDashboard({ data, companyName, showCompany }: { data: Tra
             <Kpi label="Cliques" value={int.format(t.clicks)} sub={`CPC ${brl(t.cpc)}`} />
             <Kpi label="Taxa de cliques (CTR)" value={pct(t.ctr)} sub="Cliques ÷ impressões" />
             <Kpi label="Conversas iniciadas" value={int.format(t.conversations)} sub="Contadas pela Meta" />
-            <Kpi label="Leads de formulário" value={int.format(t.metaLeads)} sub="Contados pela Meta" />
+            <Kpi label="Formulários e conversões" value={int.format(t.metaLeads)} sub="Formulários da Meta e conversões do Google" />
             <Kpi label="Leads sem campanha" value={int.format(data.unattributed)} sub="Do anúncio, sem campanha identificada" />
           </div>
 
@@ -81,7 +81,7 @@ export function TrafficDashboard({ data, companyName, showCompany }: { data: Tra
                       <th className="text-right">Impressões</th>
                       <th className="text-right">Cliques</th>
                       <th className="text-right">CTR</th>
-                      <th className="text-right">Conversas (Meta)</th>
+                      <th className="text-right">Leads na plataforma</th>
                       <th className="text-right">Leads (Orvya)</th>
                       <th className="text-right">CPL real</th>
                       <th className="text-right">Vendas</th>
