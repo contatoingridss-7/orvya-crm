@@ -71,10 +71,28 @@ Migration **0014_carregamentos.sql** (testada em PGlite): registro de cada carre
 
 Migration **0015_google_ads.sql** (testada em PGlite): Google Ads no Tráfego. Login da Google (`/api/google-ads/connect` → `/callback`), acesso de longa duração guardado em `ad_credentials` (só servidor), escolha da conta (inclusive via MCC, `login_customer_id`), sincronização diária junto com a Meta (`lib/ads/google.ts`, API v26, sem developer token). Projeto "Orvya" no Google Cloud com tela de consentimento em produção; acesso Exploração solicitado em 25/10. Variáveis na Vercel: `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET` (opcional: `GOOGLE_ADS_API_VERSION`; a MCC é detectada sozinha).
 
+## Instagram Direct (funcionando na LocPress desde 25/10)
+
+Migration **0013_instagram.sql**. Direct em Conversas, menu de boas-vindas com botões que leva ao WhatsApp, palavra-chave, comentário que vira mensagem privada, lead com origem "Instagram Direct". Testado de ponta a ponta com a @locpress.saudeteresina.
+
+Passo a passo que funcionou (repetir para a IC):
+1. Instagram profissional ligado à Página do Facebook da empresa.
+2. App da empresa → Casos de uso → **API do Instagram** → Permissões e recursos: `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`, `pages_read_engagement`, `pages_show_list`, `business_management` e os recursos **Human Agent** e **Business Asset User Profile Access**. (`pages_manage_metadata` não aparece nesse caso de uso; o Orvya conecta sem ela.)
+3. Webhook: só é aceito em **"Configuração da API com login do Instagram" → Configurar webhooks** (a página geral de Webhooks recusa). URL `https://orvya-crm.vercel.app/api/webhooks/whatsapp`, token = `META_WEBHOOK_VERIFY_TOKEN`, campos `messages` e `comments` na v26.0.
+4. Esse webhook assina com a **chave secreta do app do Instagram** (topo da mesma página): na Vercel, `META_INSTAGRAM_APP_SECRET` (separada por vírgula se houver mais de uma). Recusas de assinatura ficam em `webhook_events` com `source = 'recusado'`.
+5. Funções do app → Adicionar pessoas → **Testador do Instagram** para a conta da empresa e para quem vai testar; aceitar em instagram.com/accounts/manage_access (Convites de testador).
+6. "Configuração da API com login do Instagram" → Gerar tokens de acesso → **Adicionar conta** (a da empresa) → ligar **Assinatura de webhook**. Sem isso, a Meta entrega só o evento de teste, não as mensagens reais.
+7. Gerenciador de Negócios → Usuários do sistema → Orvya → atribuir a Página (controle total) → gerar token (validade Nunca) com as permissões do item 2.
+8. Instagram da empresa → Configurações → Mensagens e respostas aos stories → Ferramentas conectadas → **Permitir acesso às mensagens**.
+9. Orvya → Canais e integrações → Instagram Direct → colar o token → Buscar contas → conta e funil → Conectar. Menu e respostas em Automações.
+
+Limite atual: sem Acesso Avançado, só Testadores do Instagram chegam ao Orvya; mensagens de clientes continuam no app do Instagram. Para liberar: Análise do App (`instagram_manage_messages`, `instagram_manage_comments`, Human Agent) com texto de uso e vídeo de tela.
+
 ## Falta
-1. **IC Supra** (25/10): número inscrito no app Orvya IC Supra e webhook verificado (token de verificação novo na Vercel). Falta publicar o app (ícone novo em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios) e conectar em Canais (vaga 1) e Tráfego. Verificação da empresa em análise na Meta.
-2. **Ida para produção (6/11)**: Vercel Pro, domínio `orvyacrm.com.br` (Registro.br), Resend (e-mail de sábado), anúncios de WhatsApp apontando para (86) 9432-0549 (página da LocPress já conectada ao número). Depois: Supabase Pro ou backup semanal criptografado.
-3. **Instagram Direct** (código pronto em 25/10, migration **0013_instagram.sql**). Falta: rodar a 0013 antes do deploy; no app da Meta de cada empresa, caso de uso Instagram (`instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`, `pages_manage_metadata`, `pages_read_engagement`, `pages_show_list`), webhook objeto Instagram (`messages`, `comments`) na mesma URL; atribuir a Página ao usuário do sistema; ativar "Permitir acesso às mensagens" no Instagram; conectar em Canais. Acesso padrão da Meta só conversa com pessoas com função no app: para clientes reais, pedir Acesso Avançado (análise do app).
-4. Formulários de anúncio da Meta (Lead Ads) e devolução de vendas para a Meta (API de Conversões). Google Ads: aguardando aprovação do acesso Exploração; LocPress precisa dar acesso de leitura ao contatoingridss@gmail.com.
-5. Landing page do Orvya: em andamento numa conversa separada.
-6. Fase 4 (IA): desligada por custo; pode voltar como triagem (Claude Haiku 5.5, de baixo custo).
+1. **IC Supra / WhatsApp e Meta Ads**: aguardando verificação da empresa na Meta. Depois: publicar o app (ícone em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios), conectar em Canais (vaga 1) e Tráfego. Número inscrito e webhook já verificados.
+2. **Google Ads**: IC conectada ("IC Supra Hospitalar NOVA") e sincronizando. LocPress: falta dar acesso de leitura ao contatoingridss@gmail.com e conectar em Tráfego.
+3. **Instagram para clientes reais**: Análise do App na Meta (Acesso Avançado). Instagram da IC: seguir o passo a passo acima quando o app dela estiver liberado.
+4. **Ida para produção (6/11)**: Vercel Pro, domínio `orvyacrm.com.br` (Registro.br; depois trocar URLs na Vercel, Supabase, Meta e Google Cloud), Resend (e-mail de sábado), anúncios da LocPress apontando para (86) 9432-0549. Depois: Supabase Pro ou backup semanal criptografado.
+5. Formulários de anúncio da Meta (Lead Ads) e devolução de vendas para a Meta (API de Conversões).
+6. Landing page do Orvya: em andamento numa conversa separada.
+7. Fase 4 (IA): desligada por custo; pode voltar como triagem (Claude Haiku 5.5, de baixo custo).
