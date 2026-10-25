@@ -24,9 +24,27 @@ export async function listInstagramPages(systemToken: string): Promise<IgPage[]>
     }));
 }
 
-/** Instala o app na Página para os webhooks do Instagram chegarem. */
+/** Instala o app na Página para os webhooks do Instagram chegarem (exige pages_manage_metadata). */
 export function subscribePage(pageId: string, pageToken: string) {
   return graph<{ success?: boolean }>(`${pageId}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,feed`, pageToken, { method: "POST" });
+}
+
+/**
+ * Ativa os avisos: pela Página e, se a Meta recusar (app sem pages_manage_metadata), direto na conta
+ * do Instagram. Devolve o erro só quando os dois caminhos falham; a conexão segue assim mesmo.
+ */
+export async function subscribeInstagram(pageId: string, igUserId: string, pageToken: string): Promise<string | null> {
+  try {
+    await subscribePage(pageId, pageToken);
+    return null;
+  } catch (pageError) {
+    try {
+      await graph<{ success?: boolean }>(`${igUserId}/subscribed_apps?subscribed_fields=messages,comments`, pageToken, { method: "POST" });
+      return null;
+    } catch {
+      return instagramErrorText(pageError);
+    }
+  }
 }
 
 type SendResult = { recipient_id?: string; message_id?: string };

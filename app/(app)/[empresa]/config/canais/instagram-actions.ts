@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getViewer } from "@/lib/auth/viewer";
-import { instagramErrorText, listInstagramPages, subscribePage } from "@/lib/instagram/graph";
+import { instagramErrorText, listInstagramPages, subscribeInstagram } from "@/lib/instagram/graph";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -60,11 +60,8 @@ export async function connectInstagram(slug: string, input: z.input<typeof conne
   }
   if (!page) return { ok: false, error: "Essa Página não aparece mais no token. Liste de novo." };
 
-  try {
-    await subscribePage(page.pageId, page.pageToken);
-  } catch (e) {
-    return { ok: false, error: `A Meta não ativou os avisos da Página: ${instagramErrorText(e)}` };
-  }
+  // Sem os avisos ativados, a conta conecta e o erro fica visível em Canais (o webhook do app pode já bastar).
+  const subscribeError = await subscribeInstagram(page.pageId, page.igUserId, page.pageToken);
 
   // Conta já ligada a outra empresa não troca de dona sem ser desconectada lá.
   const admin = createAdminClient();
@@ -79,7 +76,7 @@ export async function connectInstagram(slug: string, input: z.input<typeof conne
     name: page.name ?? page.pageName,
     default_pipeline_id: parsed.data.pipelineId,
     status: "connected",
-    last_error: null,
+    last_error: subscribeError ? `Avisos da Página não ativados: ${subscribeError}` : null,
     connected_at: new Date().toISOString(),
   };
   const { data: acc, error } = await ctx.supabase.from("instagram_accounts").upsert(values, { onConflict: "ig_user_id" }).select("id").single<{ id: string }>();
@@ -91,7 +88,12 @@ export async function connectInstagram(slug: string, input: z.input<typeof conne
   if (credError) return { ok: false, error: "Conta salva, mas o token não foi guardado. Tente de novo." };
 
   refresh(slug);
-  return { ok: true, message: `@${page.username ?? page.pageName} conectado. As mensagens do Direct entram em Conversas.` };
+  return {
+    ok: true,
+    message: subscribeError
+      ? `@${page.username ?? page.pageName} conectado. Mande uma mensagem de teste no Direct para confirmar que chega.`
+      : `@${page.username ?? page.pageName} conectado. As mensagens do Direct entram em Conversas.`,
+  };
 }
 
 const settingsSchema = z.object({ accountId: z.uuid(), pipelineId: z.uuid("Escolha o funil.") });
