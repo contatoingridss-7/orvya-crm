@@ -10,6 +10,7 @@
   --accent-2: #72c5b5;
   --v-in: #2c7366;
   --navy: #12233a;
+  --chart-navy: #2f4f86;
   --grad: linear-gradient(135deg, #12233a 0%, #1f4a6b 55%, #2c7366 100%);
   --grad-digital: linear-gradient(135deg, #273b8f 0%, #72c5b5 100%);
   --won: #10b981;
@@ -55,6 +56,7 @@
   :root:not([data-theme="light"]) {
     --accent: #72c5b5;
     --v-in: #72c5b5;
+    --chart-navy: #8aa6d8;
     --grad: linear-gradient(135deg, #1a2d55 0%, #234c6e 55%, #2f7f72 100%);
     --bg: #0b0d0f;
     --side: rgba(13, 17, 21, 0.78);
@@ -95,6 +97,7 @@
 [data-theme="dark"] {
   --accent: #72c5b5;
   --v-in: #72c5b5;
+  --chart-navy: #8aa6d8;
   --grad: linear-gradient(135deg, #1a2d55 0%, #234c6e 55%, #2f7f72 100%);
   --bg: #0b0d0f;
   --side: rgba(13, 17, 21, 0.78);
@@ -2240,6 +2243,39 @@ h3,
     font-style: normal;
     color: #72c5b5;
   }
+  /* Gráficos (barras diárias) */
+  .chart {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .chart-axis {
+    stroke: var(--line-2);
+    stroke-width: 1;
+  }
+  .chart-tick {
+    fill: var(--muted);
+    font-size: 11px;
+    font-family: var(--font);
+  }
+  .chart-bar {
+    transition: opacity 0.15s;
+  }
+  .chart-bar.accent {
+    fill: var(--accent);
+  }
+  .chart-bar.navy {
+    fill: var(--chart-navy);
+  }
+  .chart-bar[data-dim] {
+    opacity: 0.35;
+  }
+  .kpi-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   /* Esqueleto de carregamento ao trocar de tela */
   .skeleton {
     display: block;

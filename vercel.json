@@ -4,6 +4,8 @@
   "crons": [
     { "path": "/api/jobs/fila-envio", "schedule": "0 12 * * *" },
     { "path": "/api/jobs/automacoes", "schedule": "0 10 * * *" },
-    { "path": "/api/jobs/relatorio-semanal", "schedule": "0 11 * * 6" }
+    { "path": "/api/jobs/relatorio-semanal", "schedule": "0 11 * * 6" },
+    { "path": "/api/jobs/trafego", "schedule": "0 9 * * *" },
+    { "path": "/api/jobs/trafego?turno=tarde", "schedule": "0 16 * * *" }
   ]
 }

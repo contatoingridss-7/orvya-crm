@@ -74,6 +74,12 @@ const I = {
       <circle cx="17.5" cy="18" r="1.8" />
     </svg>
   ),
+  trafego: (
+    <svg viewBox="0 0 24 24" aria-hidden>
+      <path d="M3 17l5-5 4 4 8-8" />
+      <path d="M15 8h5v5" />
+    </svg>
+  ),
   relatorios: (
     <svg viewBox="0 0 24 24" aria-hidden>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
@@ -117,8 +123,13 @@ const LOGISTICS_NAV: NavItem[] = [
   { section: "catalogo", label: "Catálogo", icon: I.catalogo },
 ];
 
+// Tráfego pago: só o administrador da plataforma (quem gere os anúncios das empresas).
+const ADMIN_NAV: NavItem[] = MANAGER_NAV.flatMap((item) =>
+  "section" in item && item.section === "relatorios" ? [item, { section: "trafego", label: "Tráfego", icon: I.trafego }] : [item],
+);
+
 export function navFor(role: Role): NavItem[] {
   if (role === "vendedor") return SELLER_NAV;
   if (role === "logistica") return LOGISTICS_NAV;
-  return MANAGER_NAV;
+  return role === "admin" ? ADMIN_NAV : MANAGER_NAV;
 }
