@@ -35,7 +35,11 @@ export function AuthFilm() {
     });
   }, [show]);
 
-  if (!show) return null;
+  // Sem vídeo (animações reduzidas): fica a imagem final, com o símbolo.
+  if (!show) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="auth-video" src="/brand/orvya-intro-poster.jpg" alt="" loading="lazy" />;
+  }
   return (
     <video ref={ref} className="auth-video" autoPlay muted loop playsInline preload="auto" poster="/brand/orvya-intro-poster.jpg">
       <source src="/brand/orvya-intro.mp4" type="video/mp4" />

@@ -162,9 +162,9 @@ export function Inbox(props: Props) {
       <aside className="conv-side" aria-label="Lista de conversas">
         <div className="conv-filter">
           <input type="search" className="inp" placeholder="Buscar nome ou telefone" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar conversa" />
-          <div className="flex gap-2">
+          <div className="flex min-w-0 gap-2">
             {numbers.length > 1 && (
-              <select className="inp !w-auto flex-1" value={numberFilter} onChange={(e) => setNumberFilter(e.target.value)} aria-label="Número">
+              <select className="inp !w-auto min-w-0 flex-1" value={numberFilter} onChange={(e) => setNumberFilter(e.target.value)} aria-label="Número">
                 <option value="">Todos os números</option>
                 {numbers.map((n) => (
                   <option key={n.id} value={n.id}>
@@ -173,7 +173,7 @@ export function Inbox(props: Props) {
                 ))}
               </select>
             )}
-            <select className="inp !w-auto flex-1" value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Filtrar conversas">
+            <select className="inp !w-auto min-w-0 flex-1" value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Filtrar conversas">
               {FILTERS.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}

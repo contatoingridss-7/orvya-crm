@@ -1096,12 +1096,20 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    /* Opções longas dos filtros (nome do número + telefone) não podem alargar a coluna */
+    min-width: 0;
+    overflow: hidden;
   }
   .conv-filter {
     padding: 10px;
     border-bottom: 1px solid var(--line);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+  }
+  .conv-filter .inp {
+    min-width: 0;
+    text-overflow: ellipsis;
   }
   .conv-list {
     overflow-y: auto;
@@ -2168,7 +2176,7 @@ h3,
       overflow: hidden;
       min-height: 100dvh;
       /* Mesmo azul do fundo do filme (#122A46) descendo para o grafite */
-      background: url("/brand/orvya-intro-poster.jpg") center top / 100% auto no-repeat, linear-gradient(180deg, #122a46 0%, #122a46 45%, #0d1a2b 75%, #0b0d0f 100%);
+      background: linear-gradient(180deg, #122a46 0%, #122a46 45%, #0d1a2b 75%, #0b0d0f 100%);
       border-right: 1px solid rgba(244, 242, 237, 0.08);
     }
   }
@@ -2179,6 +2187,9 @@ h3,
     width: 100%;
     height: auto;
     aspect-ratio: 3 / 2;
+    /* Borda de baixo some no fundo, sem linha reta onde o vídeo termina */
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 62%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0%, #000 62%, transparent 100%);
   }
   /* Funde o vídeo com o grafite do resto da tela e dá leitura ao texto */
   .auth-shade {
