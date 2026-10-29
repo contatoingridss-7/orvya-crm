@@ -94,11 +94,20 @@ Limite atual: sem Acesso Avançado, só Testadores do Instagram chegam ao Orvya;
 
 **Coexistência** (mesmo número no app WhatsApp Business e no Orvya, sem chip novo): migration **0016_coexistencia.sql**; botão "Conectar com a Meta" em Canais (Embedded Signup com `featureType: whatsapp_business_app_onboarding`), troca do código por token da empresa, inscrição na WABA, pedido de sincronização de contatos e histórico (`smb_app_data`, prazo de 24 h), webhooks `smb_message_echoes` (já tratados), `history` (já tratado), `smb_app_state_sync` (contatos) e `account_update` (desconexão pelo app). Falta o lado da Meta: VÉR7ICE verificada, app próprio da VÉR7ICE como Tech Provider (análise de `whatsapp_business_messaging` e `whatsapp_business_management`), configuração do Login do Facebook para Empresas (Embedded Signup) e, na Vercel, `META_ES_APP_ID`, `META_ES_CONFIG_ID`, `META_ES_APP_SECRET`.
 
+## Construído, aguardando teste (29/10) — Indicadores e relatórios de tráfego
+
+Migration **0018_trafego_indicadores.sql** (rodar no Supabase). A atualização da Meta passa a puxar também **por anúncio e por dia** (`ad_ad_daily`) e a **frequência real dos últimos 7 dias** (`ad_ad_window`, calculada pela Meta para o período inteiro). Na tela Tráfego:
+- **O que olhar agora**: leitura automática por regras (`lib/ads/insights.ts`), sem IA: criativo saturado (frequência 7d ≥ limite e CTR caindo ≥ 25%), frequência alta, CTR em queda ou abaixo do mínimo, custo por conversa acima da meta (ou +30% sem meta), custo por lead, por venda e ROAS contra a meta, CPM subindo, leads do anúncio esperando resposta, primeira resposta lenta (mediana, seg a sáb 7h–19h), leads sem venda, conversas que não viraram lead, saldo, melhor criativo.
+- Indicadores com variação contra o período anterior e contra a meta; **funil** impressões → cliques → conversas → leads → respondidos → vendas; **criativos** com miniatura, saúde (Saudável, Atenção, Saturado), frequência, tendência de CTR e custo por conversa.
+- **Metas do cliente** (`traffic_goals`): custo por conversa, por lead, por venda, ROAS mínimo, frequência máxima (3) e CTR mínimo (0,8%).
+- **Relatórios para o cliente** (`traffic_reports`): todo dia às 6h o rascunho de ontem; às segundas, também o da semana passada. A gestora escreve "o que fizemos" e "próximos passos", desmarca leituras que não quer mostrar e libera. Depois de liberado: texto pronto para o WhatsApp (copiar ou abrir no WhatsApp) e link `/r/{token}` que o cliente abre sem login. Só métricas de anúncio e atendimento.
+
 ## Falta
 1. **IC Supra / WhatsApp e Meta Ads**: aguardando verificação da empresa na Meta. Depois: publicar o app (ícone em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios), conectar em Canais (vaga 1) e Tráfego. Número inscrito e webhook já verificados.
 2. **Google Ads**: IC conectada ("IC Supra Hospitalar NOVA") e sincronizando. LocPress: falta dar acesso de leitura ao contatoingridss@gmail.com e conectar em Tráfego.
-3. **Instagram para clientes reais**: Análise do App na Meta (Acesso Avançado). Instagram da IC: seguir o passo a passo acima quando o app dela estiver liberado.
-4. **Ida para produção (6/11)**: Vercel Pro, domínio `orvyacrm.com.br` (Registro.br; depois trocar URLs na Vercel, Supabase, Meta e Google Cloud), Resend (e-mail de sábado), anúncios da LocPress apontando para (86) 9432-0549. Depois: Supabase Pro ou backup semanal criptografado.
-5. Formulários de anúncio da Meta (Lead Ads) e devolução de vendas para a Meta (API de Conversões).
-6. Landing page do Orvya: em andamento numa conversa separada.
-7. Fase 4 (IA): desligada por custo; pode voltar como triagem (Claude Haiku 5.5, de baixo custo).
+3. **Rodar a migration 0018** no Supabase e clicar em "Atualizar agora" em cada conta de anúncios (a frequência e os criativos aparecem depois disso). Definir as metas de cada cliente.
+4. **Instagram para clientes reais**: Análise do App na Meta (Acesso Avançado). Instagram da IC: seguir o passo a passo acima quando o app dela estiver liberado.
+5. **Ida para produção (6/11)**: Vercel Pro, domínio `orvyacrm.com.br` (Registro.br; depois trocar URLs na Vercel, Supabase, Meta e Google Cloud), Resend (e-mail de sábado), anúncios da LocPress apontando para (86) 9432-0549. Depois: Supabase Pro ou backup semanal criptografado.
+6. Formulários de anúncio da Meta (Lead Ads) e devolução de vendas para a Meta (API de Conversões).
+7. Landing page do Orvya: em andamento numa conversa separada.
+8. Fase 4 (IA): desligada por custo; pode voltar como triagem (Claude Haiku 5.5, de baixo custo).

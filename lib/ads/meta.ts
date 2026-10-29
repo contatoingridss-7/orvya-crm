@@ -142,13 +142,107 @@ export async function fetchCampaignDays(externalId: string, token: string, since
   }));
 }
 
-/** Anúncios da conta com a campanha de cada um (liga o "referral" do WhatsApp à campanha). */
+type AdRow = {
+  id: string;
+  name?: string;
+  campaign_id: string;
+  effective_status?: string;
+  created_time?: string;
+  adset?: { name?: string };
+  creative?: { thumbnail_url?: string };
+};
+
+/** Anúncios da conta: campanha (liga o "referral" do WhatsApp à campanha), situação, miniatura e idade. */
 export async function fetchAds(externalId: string, token: string) {
-  const rows = await allPages<{ id: string; name?: string; campaign_id: string }>(
-    `${actId(externalId)}/ads?fields=id,name,campaign_id&limit=500`,
+  const rows = await allPages<AdRow>(
+    `${actId(externalId)}/ads?fields=id,name,campaign_id,effective_status,created_time,adset{name},creative{thumbnail_url}&limit=200`,
     token,
   );
-  return rows.map((r) => ({ adId: r.id, campaignId: r.campaign_id, name: r.name ?? null }));
+  return rows.map((r) => ({
+    adId: r.id,
+    campaignId: r.campaign_id,
+    name: r.name ?? null,
+    status: r.effective_status ?? null,
+    createdTime: r.created_time ?? null,
+    adsetName: r.adset?.name ?? null,
+    thumbnailUrl: r.creative?.thumbnail_url ?? null,
+  }));
+}
+
+type AdInsightRow = {
+  ad_id: string;
+  campaign_id: string;
+  date_start: string;
+  spend?: string;
+  impressions?: string;
+  reach?: string;
+  frequency?: string;
+  inline_link_clicks?: string;
+  actions?: Action[];
+};
+
+export type AdDay = {
+  date: string;
+  adId: string;
+  campaignId: string;
+  spend: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  metaLeads: number;
+  conversations: number;
+};
+
+/** Desempenho por anúncio e por dia (cliques = cliques no link). */
+export async function fetchAdDays(externalId: string, token: string, since: string, until: string): Promise<AdDay[]> {
+  const range = encodeURIComponent(JSON.stringify({ since, until }));
+  const rows = await allPages<AdInsightRow>(
+    `${actId(externalId)}/insights?level=ad&time_increment=1&time_range=${range}&fields=ad_id,campaign_id,spend,impressions,reach,inline_link_clicks,actions&limit=500`,
+    token,
+    60,
+  );
+  return rows.map((r) => ({
+    date: r.date_start,
+    adId: r.ad_id,
+    campaignId: r.campaign_id,
+    spend: Number(r.spend ?? 0),
+    impressions: Number(r.impressions ?? 0),
+    reach: Number(r.reach ?? 0),
+    clicks: Number(r.inline_link_clicks ?? 0),
+    metaLeads: actionValue(r.actions, LEAD_TYPES),
+    conversations: actionValue(r.actions, [CONVERSATION_TYPE]),
+  }));
+}
+
+export type AdWindow = {
+  adId: string;
+  spend: number;
+  impressions: number;
+  reach: number;
+  frequency: number | null;
+  clicks: number;
+  conversations: number;
+};
+
+/**
+ * Retrato do período inteiro por anúncio, sem quebrar por dia: é a única forma correta de ter
+ * alcance e frequência de vários dias (pessoas únicas não se somam dia a dia).
+ */
+export async function fetchAdWindow(externalId: string, token: string, since: string, until: string): Promise<AdWindow[]> {
+  const range = encodeURIComponent(JSON.stringify({ since, until }));
+  const rows = await allPages<AdInsightRow>(
+    `${actId(externalId)}/insights?level=ad&time_range=${range}&fields=ad_id,spend,impressions,reach,frequency,inline_link_clicks,actions&limit=500`,
+    token,
+  );
+  return rows.map((r) => ({
+    adId: r.ad_id,
+    spend: Number(r.spend ?? 0),
+    impressions: Number(r.impressions ?? 0),
+    reach: Number(r.reach ?? 0),
+    frequency: r.frequency ? Number(r.frequency) : null,
+    clicks: Number(r.inline_link_clicks ?? 0),
+    conversations: actionValue(r.actions, [CONVERSATION_TYPE]),
+  }));
 }
 
 export function metaErrorText(e: unknown): string {

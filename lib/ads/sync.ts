@@ -4,7 +4,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TIMEZONE } from "@/lib/format";
 import { fetchGoogleData, googleErrorText, googleStatusCode, GoogleAdsError } from "./google";
-import { fetchAds, fetchCampaignDays, fetchMetaAccount, metaErrorText } from "./meta";
+import { fetchAdDays, fetchAds, fetchAdWindow, fetchCampaignDays, fetchMetaAccount, metaErrorText } from "./meta";
 
 type AccountRow = { id: string; company_id: string; platform: string; external_id: string; timezone: string | null; login_customer_id: string | null };
 
@@ -48,9 +48,26 @@ export async function syncAdAccount(admin: SupabaseClient, accountId: string, da
       if (error) throw new Error("Falha ao gravar o desempenho.");
     }
     if (ads.length) {
-      await admin
-        .from("ad_ads")
-        .upsert(ads.map((a) => ({ ad_account_id: acc.id, ad_id: a.adId, campaign_id: a.campaignId, ad_name: a.name })), { onConflict: "ad_account_id,ad_id" });
+      await admin.from("ad_ads").upsert(
+        ads.map((a) => ({
+          ad_account_id: acc.id,
+          ad_id: a.adId,
+          campaign_id: a.campaignId,
+          ad_name: a.name,
+          status: a.status,
+          thumbnail_url: a.thumbnailUrl,
+          created_time: a.createdTime,
+          adset_name: a.adsetName,
+        })),
+        { onConflict: "ad_account_id,ad_id" },
+      );
+    }
+
+    // Indicadores por anúncio (criativo): falha aqui não derruba a atualização das campanhas.
+    try {
+      await syncMetaAds(admin, acc, cred.access_token, tz, since, until);
+    } catch {
+      // Tabelas da migration 0018 ausentes ou limite da Meta: tenta de novo na próxima rotina.
     }
 
     await admin
@@ -76,6 +93,53 @@ export async function syncAdAccount(admin: SupabaseClient, accountId: string, da
     const error = e instanceof Error && !("status" in e) ? e.message : metaErrorText(e);
     await admin.from("ad_accounts").update({ sync_error: error, last_synced_at: new Date().toISOString() }).eq("id", acc.id);
     return { ok: false, error };
+  }
+}
+
+/** Por anúncio e por dia, mais o retrato dos últimos 7 dias (frequência real) de cada anúncio. */
+async function syncMetaAds(admin: SupabaseClient, acc: AccountRow, token: string, tz: string, since: string, until: string) {
+  const weekSince = formatInTimeZone(new Date(Date.now() - 6 * 86_400_000), tz, "yyyy-MM-dd");
+  const [days, window] = await Promise.all([fetchAdDays(acc.external_id, token, since, until), fetchAdWindow(acc.external_id, token, weekSince, until)]);
+
+  await admin.from("ad_ad_daily").delete().eq("ad_account_id", acc.id).gte("date", since).lte("date", until);
+  for (let i = 0; i < days.length; i += 1000) {
+    const { error } = await admin.from("ad_ad_daily").insert(
+      days.slice(i, i + 1000).map((d) => ({
+        ad_account_id: acc.id,
+        company_id: acc.company_id,
+        date: d.date,
+        ad_id: d.adId,
+        campaign_id: d.campaignId,
+        spend: d.spend,
+        impressions: d.impressions,
+        reach: d.reach,
+        clicks: d.clicks,
+        meta_leads: d.metaLeads,
+        conversations: d.conversations,
+      })),
+    );
+    if (error) throw new Error("Falha ao gravar o desempenho por anúncio.");
+  }
+
+  await admin.from("ad_ad_window").delete().eq("ad_account_id", acc.id).eq("days", 7);
+  if (window.length) {
+    await admin.from("ad_ad_window").insert(
+      window.map((w) => ({
+        ad_account_id: acc.id,
+        company_id: acc.company_id,
+        ad_id: w.adId,
+        days: 7,
+        since: weekSince,
+        until,
+        spend: w.spend,
+        impressions: w.impressions,
+        reach: w.reach,
+        frequency: w.frequency,
+        clicks: w.clicks,
+        conversations: w.conversations,
+        updated_at: new Date().toISOString(),
+      })),
+    );
   }
 }
 

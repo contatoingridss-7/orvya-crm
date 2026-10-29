@@ -1,12 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { syncAllAdAccounts } from "@/lib/ads/sync";
+import { createScheduledDrafts } from "@/lib/ads/traffic-report";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Atualiza o tráfego pago (Meta) de todas as contas: cron da Vercel de manhã e no início da tarde.
+// Atualiza o tráfego pago (Meta e Google) de todas as contas: cron da Vercel de manhã e no início da tarde.
+// Na rodada da manhã também cria os rascunhos dos relatórios (diário de ontem; semanal às segundas).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function authorized(header: string | null, secret: string): boolean {
   const a = Buffer.from(header ?? "");
@@ -20,8 +22,11 @@ async function handle(request: NextRequest) {
   if (!authorized(request.headers.get("authorization"), secret)) {
     return NextResponse.json({ erro: "Não autorizado." }, { status: 401 });
   }
-  const resultados = await syncAllAdAccounts(createAdminClient());
-  return NextResponse.json({ ok: resultados.every((r) => r.ok), resultados });
+  const admin = createAdminClient();
+  const resultados = await syncAllAdAccounts(admin);
+  const tarde = request.nextUrl.searchParams.get("turno") === "tarde";
+  const relatorios = tarde ? [] : await createScheduledDrafts(admin).catch(() => [{ empresa: "", tipo: "diario" as const, ok: false }]);
+  return NextResponse.json({ ok: resultados.every((r) => r.ok) && relatorios.every((r) => r.ok), resultados, relatorios });
 }
 
 export const GET = handle;

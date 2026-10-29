@@ -7,6 +7,7 @@ import { listGoogleAccounts, googleErrorText } from "@/lib/ads/google";
 import { loadGoogleGrant } from "@/lib/ads/google-grants";
 import { fetchMetaAccount, metaErrorText } from "@/lib/ads/meta";
 import { syncAdAccount } from "@/lib/ads/sync";
+import { buildReportData, reportRange, upsertDraft } from "@/lib/ads/traffic-report";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -158,4 +159,117 @@ export async function removeAdAccount(slug: string, accountId: string): Promise<
   if (error || !data?.length) return { ok: false, error: "Não foi possível remover a conta." };
   refresh(slug);
   return { ok: true, message: "Conta removida do Orvya. Nada muda na Meta." };
+}
+
+const money = z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(String(v).replace(",", "."))), z.number().min(0).max(1_000_000).nullable());
+const goalsSchema = z.object({
+  costPerConversationMax: money,
+  cplMax: money,
+  costPerSaleMax: money,
+  roasMin: money,
+  frequencyMax: z.preprocess((v) => Number(String(v).replace(",", ".")), z.number().min(1, "Frequência mínima: 1.").max(20)),
+  ctrMin: z.preprocess((v) => Number(String(v).replace(",", ".")), z.number().min(0).max(20)),
+});
+
+/** Metas da gestora para a empresa: calibram os alertas do painel e dos relatórios. */
+export async function saveGoals(slug: string, input: Record<string, unknown>): Promise<ActionResult> {
+  const ctx = await adminFor(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const parsed = goalsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Metas inválidas." };
+  const g = parsed.data;
+  const { error } = await ctx.supabase.from("traffic_goals").upsert(
+    {
+      company_id: ctx.company.id,
+      cost_per_conversation_max: g.costPerConversationMax,
+      cpl_max: g.cplMax,
+      cost_per_sale_max: g.costPerSaleMax,
+      roas_min: g.roasMin,
+      frequency_max: g.frequencyMax,
+      ctr_min: g.ctrMin,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "company_id" },
+  );
+  if (error) return { ok: false, error: "Não foi possível salvar as metas. A migration 0018 já foi rodada?" };
+  refresh(slug);
+  return { ok: true, message: "Metas salvas. Os alertas já usam os novos limites." };
+}
+
+const kindSchema = z.enum(["diario", "semanal"]);
+
+/** Gera agora o rascunho de ontem (diário) ou da semana passada (semanal). */
+export async function generateReport(slug: string, kind: z.input<typeof kindSchema>): Promise<ActionResult & { id?: string }> {
+  const ctx = await adminFor(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const k = kindSchema.safeParse(kind);
+  if (!k.success) return { ok: false, error: "Tipo de relatório inválido." };
+  const r = await upsertDraft(ctx.supabase, ctx.company, k.data, reportRange(k.data));
+  if (!r.ok) return r;
+  refresh(slug);
+  return { ok: true, message: "Rascunho pronto para revisar.", id: r.id };
+}
+
+const reportEditSchema = z.object({
+  id: z.uuid(),
+  notesDone: z.string().max(2000),
+  notesNext: z.string().max(2000),
+  hiddenAlerts: z.array(z.string().max(80)).max(50),
+});
+
+async function reportOf(ctx: NonNullable<Awaited<ReturnType<typeof adminFor>>>, id: string) {
+  const { data } = await ctx.supabase.from("traffic_reports").select("id, status, kind, period_start, period_end").eq("id", id).eq("company_id", ctx.company.id).maybeSingle<{
+    id: string;
+    status: string;
+    kind: "diario" | "semanal";
+    period_start: string;
+    period_end: string;
+  }>();
+  return data;
+}
+
+/** Salva as observações e os alertas escondidos; com release = true, libera o link para o cliente. */
+export async function saveReport(slug: string, input: z.input<typeof reportEditSchema>, release = false): Promise<ActionResult> {
+  const ctx = await adminFor(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const parsed = reportEditSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  const rep = await reportOf(ctx, parsed.data.id);
+  if (!rep) return { ok: false, error: "Relatório não encontrado." };
+  const { error } = await ctx.supabase
+    .from("traffic_reports")
+    .update({
+      notes_done: parsed.data.notesDone.trim() || null,
+      notes_next: parsed.data.notesNext.trim() || null,
+      hidden_alerts: parsed.data.hiddenAlerts,
+      ...(release && rep.status !== "liberado" ? { status: "liberado", released_at: new Date().toISOString() } : {}),
+    })
+    .eq("id", rep.id);
+  if (error) return { ok: false, error: "Não foi possível salvar o relatório." };
+  refresh(slug);
+  return { ok: true, message: release ? "Relatório liberado. Copie o texto e envie ao cliente." : "Relatório salvo." };
+}
+
+/** Refaz os números de um rascunho (por exemplo, depois de uma venda marcada como ganha). */
+export async function refreshReport(slug: string, id: string): Promise<ActionResult> {
+  const ctx = await adminFor(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const rep = await reportOf(ctx, id);
+  if (!rep) return { ok: false, error: "Relatório não encontrado." };
+  if (rep.status === "liberado") return { ok: false, error: "Relatório já liberado: os números ficam como o cliente viu." };
+  const data = await buildReportData(ctx.supabase, ctx.company, rep.period_start, rep.period_end);
+  const { error } = await ctx.supabase.from("traffic_reports").update({ data }).eq("id", rep.id);
+  if (error) return { ok: false, error: "Não foi possível atualizar os números." };
+  refresh(slug);
+  return { ok: true, message: "Números atualizados." };
+}
+
+/** Apaga um relatório (rascunho ou liberado: o link deixa de abrir). */
+export async function deleteReport(slug: string, id: string): Promise<ActionResult> {
+  const ctx = await adminFor(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const { error } = await ctx.supabase.from("traffic_reports").delete().eq("id", id).eq("company_id", ctx.company.id);
+  if (error) return { ok: false, error: "Não foi possível apagar o relatório." };
+  refresh(slug);
+  return { ok: true, message: "Relatório apagado." };
 }

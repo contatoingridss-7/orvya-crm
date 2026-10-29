@@ -4,7 +4,10 @@ import { after } from "next/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Wordmark } from "@/components/brand";
 import { Notice } from "@/components/ui/notice";
+import { loadGoals, loadIndicators } from "@/lib/ads/indicators";
+import { DEFAULT_GOALS } from "@/lib/ads/insights";
 import { loadTraffic, resolveTrafficPeriod, TRAFFIC_PERIODS } from "@/lib/ads/report";
+import { reportPeriodText, type ReportRow } from "@/lib/ads/traffic-report";
 import { googleConfigured } from "@/lib/ads/google";
 import { loadGoogleChoice, type GoogleChoice } from "@/lib/ads/google-grants";
 import { syncAdAccount } from "@/lib/ads/sync";
@@ -12,6 +15,9 @@ import { requireRole } from "@/lib/auth/viewer";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { GoalsForm } from "./goals-form";
+import { IndicatorsPanel } from "./indicators-panel";
+import { ReportsPanel, type ReportListItem } from "./reports-panel";
 import { TrafficDashboard } from "./traffic-dashboard";
 import { AccountsPanel } from "./accounts-panel";
 import { PrintButton } from "./print-button";
@@ -51,6 +57,31 @@ export default async function TrafegoPage({
     companies.map((c) => c.id),
     period,
   );
+  // Metas são por cliente: na visão de todas as empresas, os alertas usam os limites padrão.
+  const goals = all ? { goals: DEFAULT_GOALS, saved: false } : await loadGoals(supabase, company.id);
+  const [indicators, reportsRes] = await Promise.all([
+    loadIndicators(
+      supabase,
+      companies.map((c) => c.id),
+      period,
+      { goals: goals.goals, goalsSaved: goals.saved, health: data.health },
+    ),
+    supabase
+      .from("traffic_reports")
+      .select("id, kind, period_start, period_end, status, data")
+      .eq("company_id", company.id)
+      .order("period_end", { ascending: false })
+      .order("kind")
+      .limit(12)
+      .returns<Pick<ReportRow, "id" | "kind" | "period_start" | "period_end" | "status" | "data">[]>(),
+  ]);
+  const reports: ReportListItem[] = (reportsRes.data ?? []).map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    period: reportPeriodText(r.period_start, r.period_end),
+    status: r.status,
+    alerts: r.data?.alerts?.length ?? 0,
+  }));
   const stale = data.health.filter((h) => !h.lastSyncedAt || Date.now() - new Date(h.lastSyncedAt).getTime() > STALE_MS);
   if (stale.length) {
     after(async () => {
@@ -104,7 +135,18 @@ export default async function TrafegoPage({
 
         {data.error && <Notice tone="bad">Parte dos dados não carregou. Se a migration 0011 ainda não foi rodada no Supabase, rode e recarregue.</Notice>}
 
+        {data.health.length > 0 && (
+          <IndicatorsPanel data={indicators} showDelta={period.key !== "hoje"} previousText={reportPeriodText(indicators.previous.since, indicators.previous.until)} />
+        )}
+
         <TrafficDashboard data={data} companyName={Object.fromEntries(companyName)} showCompany={all} />
+
+        {!all && data.health.length > 0 && (
+          <div className="no-print grid gap-4">
+            <ReportsPanel slug={company.slug} reports={reports} />
+            <GoalsForm slug={company.slug} companyName={company.name} goals={goals.goals} saved={goals.saved} />
+          </div>
+        )}
 
         <AccountsPanel
           refreshing={stale.length > 0}

@@ -14,26 +14,10 @@ const roasText = (v: number | null) => (v === null ? "—" : `${v.toLocaleString
 
 export function TrafficDashboard({ data, companyName, showCompany }: { data: TrafficData; companyName: Record<string, string>; showCompany: boolean }) {
   const t = data.totals;
-  const alerts = data.health.flatMap((h) => h.alerts.map((a) => ({ ...a, account: h })));
   const hasData = data.campaigns.length > 0 || t.leads > 0;
 
   return (
     <>
-      {alerts.length > 0 && (
-        <div className="grid gap-2">
-          {alerts.map((a, i) => (
-            <div key={i} className={`notice ${a.level === "bad" ? "bad" : "warn"}`}>
-              <PlatformLogo platform={a.account.platform} />
-              <div className="min-w-0 flex-1">
-                <b>{a.account.name}</b>
-                {showCompany && <span className="text-muted"> · {a.account.companyName}</span>}
-                <span className="block text-[13px]">{a.text}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {data.health.length === 0 ? (
         <Panel title="Nenhuma conta de anúncios conectada" subtitle="Conecte a conta da Meta ou do Google Ads desta empresa logo abaixo, em Contas de anúncio.">
           <p className="m-0 text-[13px] text-muted">
@@ -43,16 +27,9 @@ export function TrafficDashboard({ data, companyName, showCompany }: { data: Tra
       ) : (
         <>
           <div className="kpis">
-            <Kpi label="Investimento" value={brl(t.spend)} sub={`${int.format(t.impressions)} impressões`} highlight />
-            <Kpi label="Leads dos anúncios" value={int.format(t.leads)} sub={`Chegaram no Orvya · nas plataformas: ${int.format(t.conversations + t.metaLeads)}`} />
-            <Kpi label="Custo por lead (real)" value={brl(t.cpl)} sub="Investimento ÷ leads no Orvya" />
-            <Kpi label="Vendas" value={int.format(t.sales)} sub={`Custo por venda: ${brl(t.costPerSale)}`} />
-            <Kpi label="Retorno (ROAS)" value={roasText(t.roas)} sub={`Faturamento: ${brl(t.revenue)}`} />
-          </div>
-          <div className="kpis">
+            <Kpi label="Impressões" value={int.format(t.impressions)} sub={`Investimento ${brl(t.spend)}`} />
             <Kpi label="Cliques" value={int.format(t.clicks)} sub={`CPC ${brl(t.cpc)}`} />
-            <Kpi label="Taxa de cliques (CTR)" value={pct(t.ctr)} sub="Cliques ÷ impressões" />
-            <Kpi label="Conversas iniciadas" value={int.format(t.conversations)} sub="Contadas pela Meta" />
+            <Kpi label="Leads dos anúncios" value={int.format(t.leads)} sub={`Chegaram no Orvya · nas plataformas: ${int.format(t.conversations + t.metaLeads)}`} />
             <Kpi label="Formulários e conversões" value={int.format(t.metaLeads)} sub="Formulários da Meta e conversões do Google" />
             <Kpi label="Leads sem campanha" value={int.format(data.unattributed)} sub="Do anúncio, sem campanha identificada" />
           </div>
