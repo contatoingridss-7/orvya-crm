@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
-import { requireRole } from "@/lib/auth/viewer";
+import { requireSettings } from "@/lib/auth/viewer";
 import type { Pipeline, Stage } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
 import { IgMenuManager, type IgMenuNumber } from "./ig-menu-manager";
@@ -27,7 +27,7 @@ type RuleRow = {
 type StageRow = Stage & { pipeline_id: string };
 
 export default async function AutomacoesPage({ params }: { params: Promise<{ empresa: string }> }) {
-  const { company } = await requireRole((await params).empresa, ["admin", "gestor"]);
+  const { company } = await requireSettings((await params).empresa);
   const supabase = await createClient();
 
   const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes] = await Promise.all([

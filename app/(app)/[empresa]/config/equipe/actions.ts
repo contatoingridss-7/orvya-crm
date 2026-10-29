@@ -143,6 +143,27 @@ export async function setPipelineScope(input: z.input<typeof scopeSchema>): Prom
   return { ok: true, message: ids ? "Acesso limitado aos funis escolhidos." : "Acesso a todos os funis." };
 }
 
+const settingsSchema = z.object({ userId: z.uuid(), companyId: z.uuid(), enabled: z.boolean() });
+
+/** Libera (ou tira) do gestor as telas de Automações, Canais, Equipe e Agente de IA daquela empresa. */
+export async function setSettingsAccess(input: z.input<typeof settingsSchema>): Promise<ActionResult> {
+  if (!(await requireAdmin())) return NOT_ALLOWED;
+  const parsed = settingsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("memberships")
+    .update({ settings_access: parsed.data.enabled }, { count: "exact" })
+    .eq("user_id", parsed.data.userId)
+    .eq("company_id", parsed.data.companyId)
+    .eq("role", "gestor");
+  if (error || !count) return { ok: false, error: "Não foi possível alterar. Confira se a migration 0017 foi rodada." };
+
+  refresh();
+  return { ok: true, message: parsed.data.enabled ? "Configurações liberadas para o gestor." : "O gestor agora vê só a parte operacional." };
+}
+
 const activeSchema = z.object({ userId: z.uuid(), active: z.boolean() });
 
 /**

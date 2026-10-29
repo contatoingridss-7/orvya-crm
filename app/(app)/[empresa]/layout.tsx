@@ -50,6 +50,7 @@ export default async function CompanyLayout({
         current={toShell(company)}
         companies={viewer.companies.map(toShell)}
         role={company.role}
+        canConfigure={company.canConfigure}
         userName={viewer.fullName}
         counts={{ fila: filaCount }}
       />

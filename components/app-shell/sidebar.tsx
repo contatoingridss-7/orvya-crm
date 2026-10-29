@@ -13,6 +13,7 @@ type SidebarProps = {
   current: ShellCompany;
   companies: ShellCompany[];
   role: Role;
+  canConfigure: boolean;
   userName: string;
   /** Contadores ao lado do item do menu (ex.: { fila: 3 }). */
   counts?: Partial<Record<string, number>>;
@@ -24,7 +25,7 @@ export function useSection(slug: string): string {
   return pathname.replace(`/${slug}`, "").replace(/^\//, "");
 }
 
-export function Sidebar({ current, companies, role, userName, counts }: SidebarProps) {
+export function Sidebar({ current, companies, role, canConfigure, userName, counts }: SidebarProps) {
   const section = useSection(current.slug);
 
   return (
@@ -56,7 +57,7 @@ export function Sidebar({ current, companies, role, userName, counts }: SidebarP
       )}
 
       <nav className="nav" aria-label="Seções">
-        {navFor(role).map((item, i) =>
+        {navFor(role, canConfigure).map((item, i) =>
           "sep" in item ? (
             <div key={`sep-${i}`} className="sep" role="separator" />
           ) : (

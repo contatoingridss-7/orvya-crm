@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isManager } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,7 +12,8 @@ async function managerContext(slug: string) {
   const viewer = await getViewer();
   if (!viewer?.active) return null;
   const company = viewer.companies.find((c) => c.slug === slug);
-  if (!company || !isManager(company.role)) return null;
+  // Admin, ou gestor com acesso às configurações (o RLS confere de novo: can_configure).
+  if (!company || !company.canConfigure) return null;
   return { company, supabase: await createClient() };
 }
 

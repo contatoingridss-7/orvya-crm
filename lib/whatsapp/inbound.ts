@@ -37,6 +37,10 @@ export async function processWebhookEvent(admin: SupabaseClient, eventId: number
           await handleTemplateUpdate(admin, entry.id ?? null, change.field, value);
           continue;
         }
+        if (change.field === "account_update") {
+          await handleAccountUpdate(admin, entry.id ?? null, value);
+          continue;
+        }
         const ctx = await loadNumber(admin, value);
         if (!ctx) {
           errors.push(`Número não cadastrado no Orvya: ${value.metadata?.phone_number_id ?? "?"}`);
@@ -55,8 +59,11 @@ export async function processWebhookEvent(admin: SupabaseClient, eventId: number
               for (const thread of chunk.threads ?? [])
                 for (const m of thread.messages ?? []) await safe(errors, () => handleHistory(ctx, thread.id ?? "", m));
             break;
+          case "smb_app_state_sync":
+            for (const s of value.state_sync ?? []) await safe(errors, () => handleContactSync(ctx, s));
+            break;
           default:
-            // smb_app_state_sync e outros campos: guardados em webhook_events, sem ação por enquanto.
+            // Outros campos: guardados em webhook_events, sem ação.
             break;
         }
       } catch (e) {
@@ -314,6 +321,34 @@ async function handleStatus(ctx: Ctx, s: WaStatus) {
     .from("messages")
     .update({ status: s.status, ...(s.pricing ? { pricing: s.pricing } : {}) })
     .eq("id", msg.id);
+}
+
+/**
+ * Coexistência: contatos do app WhatsApp Business (sincronização inicial e mudanças depois).
+ * Só cria quem ainda não existe; não apaga nem renomeia contatos do Orvya.
+ */
+async function handleContactSync(ctx: Ctx, s: NonNullable<WaChangeValue["state_sync"]>[number]) {
+  const phone = s.contact?.phone_number?.replace(/\D/g, "");
+  if (s.type !== "contact" || s.action !== "add" || !phone) return;
+  await findOrCreateContact(ctx, phone, s.contact?.full_name || s.contact?.first_name);
+}
+
+/**
+ * Coexistência: a empresa desconectou o Orvya pelo app (ou a Meta desligou a conta).
+ * O número fica "Com erro" em Canais até ser conectado de novo; a reconexão volta a "Conectado".
+ */
+async function handleAccountUpdate(admin: SupabaseClient, wabaId: string | null, value: WaChangeValue): Promise<void> {
+  const off = value.event === "PARTNER_REMOVED" || value.event === "ACCOUNT_OFFBOARDED";
+  const back = value.event === "ACCOUNT_RECONNECTED";
+  if (!wabaId || (!off && !back)) return;
+  const { data } = await admin
+    .from("whatsapp_numbers")
+    .select("id, display_phone")
+    .eq("waba_id", wabaId)
+    .returns<{ id: string; display_phone: string | null }[]>();
+  const digits = value.phone_number?.replace(/\D/g, "");
+  const ids = (data ?? []).filter((n) => !digits || n.display_phone?.replace(/\D/g, "") === digits).map((n) => n.id);
+  if (ids.length) await admin.from("whatsapp_numbers").update({ status: off ? "error" : "connected" }).in("id", ids);
 }
 
 /**

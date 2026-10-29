@@ -137,8 +137,12 @@ const ADMIN_NAV: NavItem[] = MANAGER_NAV.flatMap((item) =>
   "section" in item && item.section === "relatorios" ? [item, { section: "trafego", label: "Tráfego", icon: I.trafego }] : [item],
 );
 
-export function navFor(role: Role): NavItem[] {
+// Gestor sem acesso às configurações: só a parte operacional.
+const OPERATIONS_NAV: NavItem[] = MANAGER_NAV.slice(0, MANAGER_NAV.findIndex((item) => "sep" in item));
+
+export function navFor(role: Role, canConfigure = false): NavItem[] {
   if (role === "vendedor") return SELLER_NAV;
   if (role === "logistica") return LOGISTICS_NAV;
-  return role === "admin" ? ADMIN_NAV : MANAGER_NAV;
+  if (role === "admin") return ADMIN_NAV;
+  return canConfigure ? MANAGER_NAV : OPERATIONS_NAV;
 }

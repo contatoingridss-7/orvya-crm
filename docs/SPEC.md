@@ -30,11 +30,13 @@ Um usuário pode pertencer às duas empresas. O seletor de empresa só aparece p
 | Reativação em lote | ✅ | ✅ | ❌ | ❌ |
 | Expedição: ver pedidos agendados e avançar status | ✅ | ✅ | ❌ | ✅ |
 | Catálogo | editar | editar | só consultar | consultar + **fotos** |
-| Automações por etapa | editar | editar | ❌ (não vê a tela) | ❌ |
+| Automações por etapa | editar | editar **só com acesso às configurações** | ❌ (não vê a tela) | ❌ |
 | Funis, etapas e campos | editar | editar | ❌ | ❌ |
-| Números de WhatsApp, modelos de mensagem, integrações, configuração da IA | editar | ver | ❌ | ❌ |
-| Equipe (convidar, desativar, mudar perfil, funis do vendedor) | ✅ | ver | ❌ | ❌ |
+| Números de WhatsApp, modelos de mensagem, integrações, configuração da IA | editar | ver **só com acesso às configurações** | ❌ | ❌ |
+| Equipe (convidar, desativar, mudar perfil, funis do vendedor) | ✅ | ver **só com acesso às configurações** | ❌ | ❌ |
 | Painel e Relatórios | ✅ | ✅ | ❌ (vê "Meu dia") | ❌ |
+
+**Acesso às configurações do gestor** (`memberships.settings_access`, migration 0017, desligado por padrão): sem ele, o gestor vê só a parte operacional (Painel, Funil, Conversas, Precisa de mim, Tarefas, Catálogo, Vendas, Expedição, Relatórios); Automações, Canais e integrações, Equipe e Agente de IA somem do menu e as telas redirecionam. No banco, `can_configure()` protege a escrita de regras de automação, tarefas prontas e respostas automáticas do Instagram. O administrador liga ou desliga por gestor na tela Equipe. Tráfego continua só do administrador.
 
 Tudo isso é garantido pelo RLS em `supabase/migrations/0001_init.sql` e `0009_logistica_cpap.sql`. A interface só esconde o que o banco já bloqueia.
 

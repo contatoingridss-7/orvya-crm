@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
 import type { MemberRole } from "@/lib/auth/roles";
-import { requireRole } from "@/lib/auth/viewer";
+import { requireSettings } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
 import { TeamManager, type TeamMember } from "./team-manager";
 
@@ -11,19 +11,20 @@ export const metadata: Metadata = { title: "Equipe" };
 type MembershipRow = {
   role: MemberRole;
   pipeline_ids: string[] | null;
+  settings_access: boolean;
   profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null;
 };
 type ProfileRow = { id: string; full_name: string | null; email: string | null; active: boolean };
 
 export default async function EquipePage({ params }: { params: Promise<{ empresa: string }> }) {
-  const { viewer, company } = await requireRole((await params).empresa, ["admin", "gestor"]);
+  const { viewer, company } = await requireSettings((await params).empresa);
   const canEdit = company.role === "admin";
   const supabase = await createClient();
 
   const [membersRes, adminsRes, pipelinesRes] = await Promise.all([
     supabase
       .from("memberships")
-      .select("role, pipeline_ids, profiles(id, full_name, email, active)")
+      .select("role, pipeline_ids, settings_access, profiles(id, full_name, email, active)")
       .eq("company_id", company.id)
       .returns<MembershipRow[]>(),
     canEdit
@@ -35,7 +36,7 @@ export default async function EquipePage({ params }: { params: Promise<{ empresa
   const members: TeamMember[] = (membersRes.data ?? [])
     .flatMap((m) =>
       m.profiles
-        ? [{ id: m.profiles.id, name: m.profiles.full_name || m.profiles.email || "Sem nome", email: m.profiles.email ?? "", role: m.role, active: m.profiles.active, pipelineIds: m.pipeline_ids }]
+        ? [{ id: m.profiles.id, name: m.profiles.full_name || m.profiles.email || "Sem nome", email: m.profiles.email ?? "", role: m.role, active: m.profiles.active, pipelineIds: m.pipeline_ids, settingsAccess: m.settings_access }]
         : [],
     )
     .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, "pt-BR"));

@@ -88,6 +88,12 @@ Passo a passo que funcionou (repetir para a IC):
 
 Limite atual: sem Acesso Avançado, só Testadores do Instagram chegam ao Orvya; mensagens de clientes continuam no app do Instagram. Para liberar: Análise do App (`instagram_manage_messages`, `instagram_manage_comments`, Human Agent) com texto de uso e vídeo de tela.
 
+## Coexistência e modelos (28/10)
+
+**Modelos de mensagem**: 4 por empresa enviados à Meta em 28/10 (retomada_orcamento, encerramento_atendimento, pos_venda: marketing; confirmacao_entrega: utilidade), em análise. Sem forma de pagamento na conta do WhatsApp, modelo aprovado não é entregue. Desde 01/10/2026 a Meta cobra respostas acima de 1.000 por mês por número; conversa vinda de anúncio de clique para o WhatsApp é grátis por até 7 dias.
+
+**Coexistência** (mesmo número no app WhatsApp Business e no Orvya, sem chip novo): migration **0016_coexistencia.sql**; botão "Conectar com a Meta" em Canais (Embedded Signup com `featureType: whatsapp_business_app_onboarding`), troca do código por token da empresa, inscrição na WABA, pedido de sincronização de contatos e histórico (`smb_app_data`, prazo de 24 h), webhooks `smb_message_echoes` (já tratados), `history` (já tratado), `smb_app_state_sync` (contatos) e `account_update` (desconexão pelo app). Falta o lado da Meta: VÉR7ICE verificada, app próprio da VÉR7ICE como Tech Provider (análise de `whatsapp_business_messaging` e `whatsapp_business_management`), configuração do Login do Facebook para Empresas (Embedded Signup) e, na Vercel, `META_ES_APP_ID`, `META_ES_CONFIG_ID`, `META_ES_APP_SECRET`.
+
 ## Falta
 1. **IC Supra / WhatsApp e Meta Ads**: aguardando verificação da empresa na Meta. Depois: publicar o app (ícone em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios), conectar em Canais (vaga 1) e Tráfego. Número inscrito e webhook já verificados.
 2. **Google Ads**: IC conectada ("IC Supra Hospitalar NOVA") e sincronizando. LocPress: falta dar acesso de leitura ao contatoingridss@gmail.com e conectar em Tráfego.

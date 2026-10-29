@@ -44,6 +44,10 @@ export type WaChangeValue = {
   // Coexistência (app WhatsApp Business + API)
   message_echoes?: WaMessage[];
   history?: { metadata?: Record<string, unknown>; threads?: WaHistoryThread[] }[];
+  state_sync?: { type?: string; action?: "add" | "remove"; contact?: { full_name?: string; first_name?: string; phone_number?: string } }[];
+  // account_update (sem metadata; entry.id = WABA): desconexão feita pelo app, reconexão
+  phone_number?: string;
+  disconnection_info?: { reason?: string; initiated_by?: string };
   // message_template_status_update e template_category_update (sem metadata; entry.id = WABA)
   event?: string;
   message_template_id?: number | string;

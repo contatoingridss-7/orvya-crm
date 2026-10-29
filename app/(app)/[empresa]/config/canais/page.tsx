@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
-import { requireRole } from "@/lib/auth/viewer";
+import { requireSettings } from "@/lib/auth/viewer";
 import { resolvePeriod } from "@/lib/crm/period";
 import type { Pipeline } from "@/lib/crm/types";
 import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { whatsappEnvStatus } from "@/lib/whatsapp/config";
+import { signupConfig } from "@/lib/whatsapp/signup";
 import { ChannelsManager, type NumberSlot } from "./channels-manager";
 import { InstagramPanel, type IgAccountItem } from "./instagram-panel";
 import type { TemplateItem } from "./templates-panel";
@@ -24,6 +25,7 @@ type NumberRow = {
   status: NumberSlot["status"];
   quality_rating: string | null;
   connected_at: string | null;
+  coexistence: boolean;
 };
 type TemplateRow = {
   id: string;
@@ -47,7 +49,7 @@ type IgRow = {
 };
 
 export default async function CanaisPage({ params }: { params: Promise<{ empresa: string }> }) {
-  const { company } = await requireRole((await params).empresa, ["admin", "gestor"]);
+  const { company } = await requireSettings((await params).empresa);
   const canEdit = company.role === "admin";
   const supabase = await createClient();
   const month = resolvePeriod("mes");
@@ -55,7 +57,7 @@ export default async function CanaisPage({ params }: { params: Promise<{ empresa
   const [numbersRes, pipelinesRes, convRes, templatesRes, igRes, igConvRes] = await Promise.all([
     supabase
       .from("whatsapp_numbers")
-      .select("id, slot, label, display_phone, phone_number_id, waba_id, default_pipeline_id, status, quality_rating, connected_at")
+      .select("id, slot, label, display_phone, phone_number_id, waba_id, default_pipeline_id, status, quality_rating, connected_at, coexistence")
       .eq("company_id", company.id)
       .order("slot")
       .returns<NumberRow[]>(),
@@ -97,6 +99,7 @@ export default async function CanaisPage({ params }: { params: Promise<{ empresa
       status: n.status,
       qualityRating: n.quality_rating,
       connectedAt: n.connected_at,
+      coexistence: n.coexistence,
       conversationsThisMonth: mine.filter((c) => c.last_inbound_at && new Date(c.last_inbound_at) >= month.start).length,
       openLeads: mine.filter((c) => c.leads && !c.leads.closed_at).length,
     };
@@ -127,6 +130,7 @@ export default async function CanaisPage({ params }: { params: Promise<{ empresa
             updatedAt: t.updated_at,
           }))}
           templatesError={!!templatesRes.error}
+          signup={canEdit ? signupConfig() : null}
         />
         <InstagramPanel
           slug={company.slug}

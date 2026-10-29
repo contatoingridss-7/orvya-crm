@@ -5,7 +5,8 @@ import { z } from "zod";
 import { getViewer } from "@/lib/auth/viewer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { fetchPhoneNumber, GraphError, registerNumber, subscribeApp } from "@/lib/whatsapp/graph";
+import { fetchPhoneNumber, GraphError, registerNumber, subscribeApp, type PhoneNumberInfo } from "@/lib/whatsapp/graph";
+import { exchangeSignupCode, findWabaPhone, requestAppSync } from "@/lib/whatsapp/signup";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -107,6 +108,29 @@ export async function connectNumber(slug: string, input: z.input<typeof connectS
     }
   }
 
+  const saved = await saveConnection(ctx, slot.id, { ...d, coexistence: false }, token, info);
+  if (!saved.ok) return saved;
+
+  refresh(slug);
+  const name = info.verified_name ? ` (${info.verified_name})` : "";
+  return {
+    ok: true,
+    message: saved.subscribed
+      ? `Número ${info.display_phone_number ?? ""}${name} ${d.pin ? "registrado e conectado" : "conectado"}.`
+      : `Número conectado, mas a inscrição do app na conta falhou. Confira a permissão do token (whatsapp_business_management).`,
+  };
+}
+
+type AdminCtx = NonNullable<Awaited<ReturnType<typeof adminContext>>>;
+
+/** Inscreve o app na conta (webhooks), grava o número na vaga e guarda o token só no servidor. */
+async function saveConnection(
+  ctx: AdminCtx,
+  slotId: string,
+  d: { label: string; defaultPipelineId: string; phoneNumberId: string; wabaId: string; coexistence: boolean },
+  token: string,
+  info: PhoneNumberInfo,
+): Promise<{ ok: true; subscribed: boolean } | { ok: false; error: string }> {
   let subscribed = true;
   try {
     await subscribeApp(d.wabaId, token);
@@ -125,27 +149,98 @@ export async function connectNumber(slug: string, input: z.input<typeof connectS
       quality_rating: info.quality_rating ?? null,
       status: "connected",
       connected_at: new Date().toISOString(),
+      coexistence: d.coexistence,
     })
-    .eq("id", slot.id);
+    .eq("id", slotId);
   if (error) {
     return {
       ok: false,
-      error: error.code === "23505" ? "Este número já está cadastrado em outra vaga ou empresa." : "Não foi possível salvar o número.",
+      error:
+        error.code === "23505"
+          ? "Este número já está cadastrado em outra vaga ou empresa."
+          : error.code === "42703"
+            ? "Rode a migration 0016 no Supabase e tente de novo."
+            : "Não foi possível salvar o número.",
     };
   }
 
-  const { error: credError } = await admin
+  const { error: credError } = await createAdminClient()
     .from("whatsapp_credentials")
-    .upsert({ number_id: slot.id, access_token: token, updated_at: new Date().toISOString() }, { onConflict: "number_id" });
+    .upsert({ number_id: slotId, access_token: token, updated_at: new Date().toISOString() }, { onConflict: "number_id" });
   if (credError) return { ok: false, error: "Número salvo, mas o token não foi guardado. Tente de novo." };
+  return { ok: true, subscribed };
+}
+
+const signupSchema = settingsSchema.extend({
+  code: z.string().trim().min(10).max(2000),
+  wabaId: z.string().trim().regex(/^\d{5,25}$/, "A Meta não devolveu a conta do WhatsApp."),
+  phoneNumberId: z.string().trim().regex(/^(\d{5,25})?$/).default(""),
+  // FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING = número que já está no app (coexistência)
+  coexistence: z.boolean(),
+  pin: z.string().trim().regex(/^(\d{6})?$/, "O PIN tem 6 números.").default(""),
+});
+
+/**
+ * Cadastro integrado da Meta: troca o código pelo token da empresa, conecta o número e,
+ * na coexistência, pede a sincronização de contatos e histórico do app (prazo da Meta: 24 h).
+ */
+export async function connectWithMeta(slug: string, input: z.input<typeof signupSchema>): Promise<ActionResult> {
+  const ctx = await adminContext(slug);
+  if (!ctx) return NOT_ALLOWED;
+  const parsed = signupSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const d = parsed.data;
+
+  const slot = await loadSlot(ctx.supabase, ctx.company.id, d.slot);
+  if (!slot) return { ok: false, error: "Vaga de número não encontrada." };
+
+  let token: string;
+  let phoneNumberId = d.phoneNumberId;
+  let info: PhoneNumberInfo;
+  try {
+    token = await exchangeSignupCode(d.code);
+    if (!phoneNumberId) phoneNumberId = (await findWabaPhone(d.wabaId, token)) ?? "";
+    if (!phoneNumberId) return { ok: false, error: "A Meta não informou o número escolhido. Tente conectar de novo." };
+    info = await fetchPhoneNumber(phoneNumberId, token);
+  } catch (e) {
+    return { ok: false, error: `A Meta recusou a conexão: ${e instanceof GraphError ? e.message : "sem resposta"}.` };
+  }
+
+  // Número novo (fora do app): precisa ser registrado na API com um PIN. Na coexistência, já está registrado.
+  let registerNote = "";
+  if (!d.coexistence) {
+    if (d.pin) {
+      try {
+        await registerNumber(phoneNumberId, token, d.pin);
+      } catch (e) {
+        registerNote = ` A Meta não registrou o número (${e instanceof GraphError ? e.message : "sem resposta"}): use “Reconectar” com o PIN.`;
+      }
+    } else {
+      registerNote = " Falta registrar o número: use “Reconectar”, deixe o token em branco e informe um PIN de 6 dígitos.";
+    }
+  }
+
+  const saved = await saveConnection(ctx, slot.id, { ...d, phoneNumberId, coexistence: d.coexistence }, token, info);
+  if (!saved.ok) return saved;
+
+  let syncNote = "";
+  if (d.coexistence) {
+    const failures = await requestAppSync(phoneNumberId, token);
+    await createAdminClient().from("whatsapp_numbers").update({ sync_requested_at: new Date().toISOString() }).eq("id", slot.id);
+    syncNote = failures.length
+      ? ` A sincronização não começou (${failures.join("; ")}).`
+      : " Contatos e histórico do celular estão chegando; deixe o WhatsApp Business aberto no celular por alguns minutos.";
+  }
 
   refresh(slug);
-  const name = info.verified_name ? ` (${info.verified_name})` : "";
+  const phone = info.display_phone_number ?? "";
   return {
     ok: true,
-    message: subscribed
-      ? `Número ${info.display_phone_number ?? ""}${name} ${d.pin ? "registrado e conectado" : "conectado"}.`
-      : `Número conectado, mas a inscrição do app na conta falhou. Confira a permissão do token (whatsapp_business_management).`,
+    message:
+      `${phone} conectado${d.coexistence ? " (continua funcionando no celular)" : ""}.` +
+      (saved.subscribed ? "" : " A inscrição do app na conta falhou: reconecte.") +
+      registerNote +
+      syncNote,
   };
 }
 

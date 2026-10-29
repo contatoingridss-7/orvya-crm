@@ -10,9 +10,18 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import { ROLE_LABEL, type MemberRole } from "@/lib/auth/roles";
 import { initials } from "@/lib/names";
-import { changeRole, inviteMember, setMemberActive, setPipelineScope, type ActionResult } from "./actions";
+import { changeRole, inviteMember, setMemberActive, setPipelineScope, setSettingsAccess, type ActionResult } from "./actions";
 
-export type TeamMember = { id: string; name: string; email: string; role: MemberRole; active: boolean; pipelineIds: string[] | null };
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: MemberRole;
+  active: boolean;
+  pipelineIds: string[] | null;
+  /** Gestor: vê Automações, Canais, Equipe e Agente de IA. */
+  settingsAccess: boolean;
+};
 type PipelineOption = { id: string; name: string };
 
 type TeamManagerProps = {
@@ -107,8 +116,26 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                       )}
                     </td>
                     <td className="text-[13px]">
-                      {m.role !== "vendedor" ? (
-                        <span className="text-muted">{m.role === "logistica" ? "Só entregas agendadas" : "Todos"}</span>
+                      {m.role === "gestor" ? (
+                        <span className="grid gap-1">
+                          <span className="text-muted">Todos</span>
+                          {canEdit ? (
+                            <label className="flex items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                className="accent-accent"
+                                checked={m.settingsAccess}
+                                disabled={pending}
+                                onChange={(e) => run(() => setSettingsAccess({ userId: m.id, companyId, enabled: e.target.checked }))}
+                              />
+                              Acesso às configurações
+                            </label>
+                          ) : (
+                            m.settingsAccess && <span className="text-xs text-muted">Com acesso às configurações</span>
+                          )}
+                        </span>
+                      ) : m.role !== "vendedor" ? (
+                        <span className="text-muted">Só entregas agendadas</span>
                       ) : (
                         <span className="flex flex-wrap items-center gap-1.5">
                           {m.pipelineIds ? m.pipelineIds.map((id) => <Pill key={id} tone="ind">{pipelineName.get(id) ?? "Funil removido"}</Pill>) : <span>Todos</span>}

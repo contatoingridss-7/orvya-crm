@@ -12,6 +12,8 @@ export type CompanyAccess = {
   shortName: string;
   segment: string | null;
   role: Role;
+  /** Automações, Canais, Equipe e Agente de IA: admin, ou gestor com o acesso liberado (memberships.settings_access). */
+  canConfigure: boolean;
 };
 
 export type Viewer = {
@@ -33,7 +35,7 @@ type ProfileRow = {
   theme: "light" | "dark" | null;
 };
 type CompanyRow = { id: string; slug: string; name: string; short_name: string; segment: string | null };
-type MembershipRow = { company_id: string; role: MemberRole };
+type MembershipRow = { company_id: string; role: MemberRole; settings_access?: boolean };
 
 /**
  * Usuário logado com perfil e empresas que ele acessa (uma consulta por requisição).
@@ -53,16 +55,18 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
       .eq("id", user.id)
       .maybeSingle<ProfileRow>(),
     supabase.from("companies").select("id, slug, name, short_name, segment").order("name").returns<CompanyRow[]>(),
-    supabase.from("memberships").select("company_id, role").eq("user_id", user.id).returns<MembershipRow[]>(),
+    supabase.from("memberships").select("company_id, role, settings_access").eq("user_id", user.id).returns<MembershipRow[]>(),
   ]);
 
   const profile = profileRes.data;
   const isAdmin = Boolean(profile?.is_platform_admin && profile.active);
   const roleByCompany = new Map((membershipsRes.data ?? []).map((m) => [m.company_id, m.role]));
+  const settingsByCompany = new Map((membershipsRes.data ?? []).map((m) => [m.company_id, m.settings_access === true]));
 
   const companies: CompanyAccess[] = (companiesRes.data ?? []).flatMap((c) => {
     const role: Role | undefined = isAdmin ? "admin" : roleByCompany.get(c.id);
-    return role ? [{ id: c.id, slug: c.slug, name: c.name, shortName: c.short_name, segment: c.segment, role }] : [];
+    const canConfigure = role === "admin" || (role === "gestor" && settingsByCompany.get(c.id) === true);
+    return role ? [{ id: c.id, slug: c.slug, name: c.name, shortName: c.short_name, segment: c.segment, role, canConfigure }] : [];
   });
 
   return {
@@ -93,6 +97,13 @@ export async function requireCompany(slug: string): Promise<CompanyContext> {
   const company = viewer.companies.find((c) => c.slug === slug);
   if (!company) redirect("/");
   return { viewer, company };
+}
+
+/** Telas de configuração: admin, ou gestor com o acesso liberado. Os outros voltam para a tela inicial. */
+export async function requireSettings(slug: string): Promise<CompanyContext> {
+  const ctx = await requireCompany(slug);
+  if (!ctx.company.canConfigure) redirect(`/${slug}/${homeSection(ctx.company.role)}`);
+  return ctx;
 }
 
 /** Exige um dos perfis. Quem não pode ver a tela vai para a tela inicial do seu perfil. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import { ComingSoon } from "@/components/app-shell/coming-soon";
 import { Button } from "@/components/ui/button";
 import { SelectField, TextField } from "@/components/ui/field";
@@ -11,7 +11,8 @@ import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/format";
-import { connectNumber, disconnectNumber, saveNumberSettings, type ActionResult } from "./actions";
+import { connectNumber, connectWithMeta, disconnectNumber, saveNumberSettings, type ActionResult } from "./actions";
+import { MetaSignupButton, type SignupResult } from "./meta-signup-button";
 import { TemplatesPanel, type TemplateItem } from "./templates-panel";
 
 export type NumberSlot = {
@@ -24,6 +25,8 @@ export type NumberSlot = {
   status: "off" | "pending" | "connected" | "error";
   qualityRating: string | null;
   connectedAt: string | null;
+  /** Número que continua no app WhatsApp Business do celular (coexistência). */
+  coexistence: boolean;
   conversationsThisMonth: number;
   openLeads: number;
 };
@@ -38,6 +41,8 @@ type Props = {
   env: { appSecret: boolean; appSecretCount: number; verifyToken: boolean; graphVersion: string } | null;
   templates: TemplateItem[];
   templatesError: boolean;
+  /** Cadastro integrado da Meta (app da VÉR7ICE); null = só a conexão manual. */
+  signup: { appId: string; configId: string } | null;
 };
 
 const STATUS: Record<NumberSlot["status"], { label: string; tone: "ok" | "warn" | "bad" | "neutral" }> = {
@@ -49,7 +54,7 @@ const STATUS: Record<NumberSlot["status"], { label: string; tone: "ok" | "warn" 
 
 const QUALITY: Record<string, string> = { GREEN: "Alta", YELLOW: "Média", RED: "Baixa" };
 
-export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, webhookUrl, env, templates, templatesError }: Props) {
+export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, webhookUrl, env, templates, templatesError, signup }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [connecting, setConnecting] = useState<NumberSlot | null>(null);
@@ -128,6 +133,7 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
                   Número {n.slot} da {companyName} · leads novos vão para o funil {pipelineName(n.defaultPipelineId)}
                 </p>
               </div>
+              {n.status === "connected" && n.coexistence && <Pill>Também no celular</Pill>}
               <Pill tone={STATUS[n.status].tone}>{STATUS[n.status].label}</Pill>
             </div>
 
@@ -185,8 +191,11 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
           slot={connecting}
           pipelines={pipelines}
           pending={pending}
+          signup={signup}
           onClose={() => setConnecting(null)}
           onSubmit={(input) => run(() => connectNumber(slug, input), () => setConnecting(null))}
+          onSignup={(input) => run(() => connectWithMeta(slug, input), () => setConnecting(null))}
+          onSignupError={(message) => toast(message, "bad")}
         />
       )}
 
@@ -263,15 +272,28 @@ function ConnectModal({
   slot,
   pipelines,
   pending,
+  signup,
   onClose,
   onSubmit,
+  onSignup,
+  onSignupError,
 }: {
   slot: NumberSlot;
   pipelines: Props["pipelines"];
   pending: boolean;
+  signup: Props["signup"];
   onClose: () => void;
   onSubmit: (i: SettingsInput & { phoneNumberId: string; wabaId: string; token: string; pin: string }) => void;
+  onSignup: (i: SettingsInput & SignupResult & { pin: string }) => void;
+  onSignupError: (message: string) => void;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  // Nome, funil e PIN vêm do formulário quando a janela da Meta termina.
+  function finishSignup(r: SignupResult) {
+    const f = new FormData(formRef.current ?? undefined);
+    const get = (k: string) => String(f.get(k) ?? "");
+    onSignup({ ...r, slot: slot.slot, label: get("label"), defaultPipelineId: get("defaultPipelineId"), pin: get("signupPin") });
+  }
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -290,40 +312,76 @@ function ConnectModal({
 
   return (
     <Modal open onClose={onClose} title={`Conectar “${slot.label}” pela API oficial`}>
-      <form onSubmit={submit} className="grid gap-3">
-        <Notice>
-          Os dados ficam no app da Meta, em <b>WhatsApp → Configuração da API</b>. O token é guardado só no servidor e nunca aparece de novo na tela.
-        </Notice>
+      <form ref={formRef} onSubmit={submit} className="grid gap-3">
         <SettingsFields slot={slot} pipelines={pipelines} />
-        <TextField label="Identificação do número de telefone" name="phoneNumberId" defaultValue={slot.phoneNumberId ?? ""} required inputMode="numeric" placeholder="Phone number ID" />
-        <TextField label="Identificação da conta do WhatsApp Business" name="wabaId" defaultValue={slot.wabaId ?? ""} required inputMode="numeric" placeholder="WhatsApp Business Account ID" />
-        <TextField
-          label="Token de acesso"
-          name="token"
-          type="password"
-          autoComplete="off"
-          required={!reconnecting}
-          placeholder={reconnecting ? "Deixe em branco para manter o atual" : "Token de usuário do sistema"}
-          hint="Use um token permanente (usuário do sistema). O token temporário da Meta expira em 24 horas."
-        />
-        <TextField
-          label="PIN de 6 dígitos (número real)"
-          name="pin"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          pattern="\d{6}"
-          maxLength={6}
-          placeholder="Deixe em branco no número de teste"
-          hint="Registra o número na API oficial e protege contra o roubo da linha. O Orvya usa só agora e não guarda: anote em lugar seguro."
-        />
+        {signup && (
+          <div className="grid gap-2.5 rounded-[10px] border border-line bg-surface-2 p-3">
+            <p className="m-0 text-[13.5px]">
+              <b>Recomendado:</b> entre com o Facebook da empresa e escolha o número. Se ele já está no <b>WhatsApp Business</b> do celular, continua
+              funcionando lá, sem chip novo; os contatos e o histórico recente vêm para o Orvya.
+            </p>
+            <TextField
+              label="PIN de 6 dígitos (só para número que não está no celular)"
+              name="signupPin"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              pattern="\d{6}"
+              maxLength={6}
+              placeholder="Deixe em branco se o número já usa o WhatsApp Business"
+            />
+            <div>
+              <MetaSignupButton appId={signup.appId} configId={signup.configId} disabled={pending} onResult={finishSignup} onError={onSignupError} />
+            </div>
+          </div>
+        )}
+        {signup ? (
+          <details className="grid gap-3">
+            <summary className="cursor-pointer text-[13px] text-muted">Conectar manualmente, com os IDs e o token</summary>
+            <ManualFields slot={slot} reconnecting={reconnecting} />
+          </details>
+        ) : (
+          <ManualFields slot={slot} reconnecting={reconnecting} />
+        )}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="primary" loading={pending}>
+          <Button type="submit" variant={signup ? "default" : "primary"} loading={pending}>
             Conferir e conectar
           </Button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+function ManualFields({ slot, reconnecting }: { slot: NumberSlot; reconnecting: boolean }) {
+  return (
+    <div className="grid gap-3">
+      <Notice>
+        Os dados ficam no app da Meta, em <b>WhatsApp → Configuração da API</b>. O token é guardado só no servidor e nunca aparece de novo na tela.
+      </Notice>
+      <TextField label="Identificação do número de telefone" name="phoneNumberId" defaultValue={slot.phoneNumberId ?? ""} required inputMode="numeric" placeholder="Phone number ID" />
+      <TextField label="Identificação da conta do WhatsApp Business" name="wabaId" defaultValue={slot.wabaId ?? ""} required inputMode="numeric" placeholder="WhatsApp Business Account ID" />
+      <TextField
+        label="Token de acesso"
+        name="token"
+        type="password"
+        autoComplete="off"
+        required={!reconnecting}
+        placeholder={reconnecting ? "Deixe em branco para manter o atual" : "Token de usuário do sistema"}
+        hint="Use um token permanente (usuário do sistema). O token temporário da Meta expira em 24 horas."
+      />
+      <TextField
+        label="PIN de 6 dígitos (número real)"
+        name="pin"
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        pattern="\d{6}"
+        maxLength={6}
+        placeholder="Deixe em branco no número de teste"
+        hint="Registra o número na API oficial e protege contra o roubo da linha. O Orvya usa só agora e não guarda: anote em lugar seguro."
+      />
+    </div>
   );
 }
