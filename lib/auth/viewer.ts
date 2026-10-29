@@ -23,6 +23,8 @@ export type Viewer = {
   isAdmin: boolean;
   active: boolean;
   theme: "light" | "dark" | null;
+  /** Entrou com senha provisória (criada ou redefinida pelo admin): precisa criar a própria antes de usar. */
+  mustChangePassword: boolean;
   companies: CompanyAccess[];
 };
 
@@ -77,6 +79,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     // Sem perfil = algo deu errado no cadastro; tratar como sem acesso.
     active: profile?.active ?? false,
     theme: profile?.theme ?? null,
+    mustChangePassword: user.user_metadata?.must_change_password === true,
     companies,
   };
 });
@@ -86,6 +89,7 @@ export async function requireViewer(): Promise<Viewer> {
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
   if (!viewer.active) redirect("/auth/sair?motivo=desativado");
+  if (viewer.mustChangePassword) redirect("/redefinir-senha?primeiro=1");
   return viewer;
 }
 

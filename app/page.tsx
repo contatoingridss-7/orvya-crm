@@ -55,6 +55,9 @@ export default async function Home() {
         <strong className="font-title text-[18px] font-semibold tracking-[-0.03em] text-title">Orvya</strong>
         <div className="flex-1" />
         <ThemeToggle persist />
+        <Link href="/redefinir-senha?trocar=1" className="btn ghost sm">
+          Trocar senha
+        </Link>
         <form action="/auth/sair" method="post">
           <button type="submit" className="btn ghost sm">
             Sair

@@ -85,7 +85,12 @@ export function Sidebar({ current, companies, role, canConfigure, userName, coun
           </span>
           <div className="min-w-0 flex-1">
             <b>{userName}</b>
-            <small>{ROLE_LABEL[role]}</small>
+            <small>
+              {ROLE_LABEL[role]} ·{" "}
+              <Link href="/redefinir-senha?trocar=1" className="hover:underline">
+                Trocar senha
+              </Link>
+            </small>
           </div>
           <form action="/auth/sair" method="post">
             <button type="submit" className="btn ghost sm">

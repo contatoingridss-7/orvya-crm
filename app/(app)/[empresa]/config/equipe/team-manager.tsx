@@ -10,7 +10,7 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import { ROLE_LABEL, type MemberRole } from "@/lib/auth/roles";
 import { initials } from "@/lib/names";
-import { changeRole, inviteMember, setMemberActive, setPipelineScope, setSettingsAccess, type ActionResult } from "./actions";
+import { changeRole, inviteMember, resetMemberPassword, setMemberActive, setPipelineScope, setSettingsAccess, type ActionResult } from "./actions";
 
 export type TeamMember = {
   id: string;
@@ -40,6 +40,7 @@ export function TeamManager({ members, admins, companyId, companyName, companies
   const [inviteOpen, setInviteOpen] = useState(false);
   const [toToggle, setToToggle] = useState<TeamMember | null>(null);
   const [scoping, setScoping] = useState<TeamMember | null>(null);
+  const [resetting, setResetting] = useState<TeamMember | null>(null);
   const pipelineName = new Map(pipelines.map((p) => [p.id, p.name]));
   const [pending, startTransition] = useTransition();
 
@@ -150,6 +151,11 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                     <td>{m.active ? <Pill tone="ok">Ativo</Pill> : <Pill tone="bad">Desativado</Pill>}</td>
                     {canEdit && (
                       <td className="text-right">
+                        {m.id !== viewerId && m.active && (
+                          <Button size="sm" variant="ghost" className="mr-1.5" disabled={pending} onClick={() => setResetting(m)}>
+                            Redefinir senha
+                          </Button>
+                        )}
                         {m.id !== viewerId && (
                           <Button
                             size="sm"
@@ -215,6 +221,15 @@ export function TeamManager({ members, admins, companyId, companyName, companies
         />
       )}
 
+      {resetting && (
+        <ResetPasswordModal
+          member={resetting}
+          pending={pending}
+          onClose={() => setResetting(null)}
+          onSave={(password) => run(() => resetMemberPassword({ userId: resetting.id, password }), () => setResetting(null))}
+        />
+      )}
+
       <Modal
         open={toToggle !== null}
         onClose={() => setToToggle(null)}
@@ -238,6 +253,40 @@ export function TeamManager({ members, admins, companyId, companyName, companies
         </p>
       </Modal>
     </>
+  );
+}
+
+function ResetPasswordModal({
+  member,
+  pending,
+  onClose,
+  onSave,
+}: {
+  member: TeamMember;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (password: string) => void;
+}) {
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    onSave(String(new FormData(e.currentTarget).get("password") ?? ""));
+  }
+  return (
+    <Modal open onClose={onClose} title={`Redefinir a senha de ${member.name}`}>
+      <form onSubmit={submit} className="grid gap-3">
+        <p className="m-0 text-[13.5px]">
+          Defina uma senha provisória e passe para a pessoa. No próximo acesso, o Orvya pede para ela criar a própria. A senha atual deixa de valer
+          na hora.
+        </p>
+        <TextField label="Senha provisória" name="password" type="text" autoComplete="off" required minLength={8} maxLength={72} />
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button type="submit" variant="primary" loading={pending}>
+            Redefinir senha
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

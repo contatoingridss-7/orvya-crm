@@ -70,7 +70,8 @@ export async function inviteMember(input: InviteInput): Promise<ActionResult> {
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName },
+      // Senha provisória: no primeiro login a pessoa cria a própria.
+      user_metadata: { full_name: fullName, must_change_password: true },
     });
     if (error || !data.user) return { ok: false, error: `Não foi possível criar o usuário: ${error?.message ?? "erro desconhecido"}` };
     userId = data.user.id;
@@ -162,6 +163,34 @@ export async function setSettingsAccess(input: z.input<typeof settingsSchema>): 
 
   refresh();
   return { ok: true, message: parsed.data.enabled ? "Configurações liberadas para o gestor." : "O gestor agora vê só a parte operacional." };
+}
+
+const passwordSchema = z.object({ userId: z.uuid(), password: z.string().min(8, "A senha provisória precisa ter pelo menos 8 caracteres.").max(72) });
+
+/**
+ * Nova senha provisória para quem esqueceu (os logins sem e-mail não recebem o link de recuperação).
+ * A pessoa entra com ela e o Orvya pede para criar a própria.
+ */
+export async function resetMemberPassword(input: z.input<typeof passwordSchema>): Promise<ActionResult> {
+  const viewer = await requireAdmin();
+  if (!viewer) return NOT_ALLOWED;
+  const parsed = passwordSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const { userId, password } = parsed.data;
+  if (userId === viewer.id) return { ok: false, error: "Para a sua própria senha, use “Trocar senha” no menu." };
+
+  const admin = createAdminClient();
+  const { data: target } = await admin.auth.admin.getUserById(userId);
+  if (!target.user) return { ok: false, error: "Pessoa não encontrada." };
+  const { data: profile } = await admin.from("profiles").select("is_platform_admin").eq("id", userId).maybeSingle<{ is_platform_admin: boolean }>();
+  if (profile?.is_platform_admin) return { ok: false, error: "A senha de outro administrador não é trocada por aqui." };
+
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    password,
+    user_metadata: { ...target.user.user_metadata, must_change_password: true },
+  });
+  if (error) return { ok: false, error: `Não foi possível redefinir: ${error.message}` };
+  return { ok: true, message: "Senha provisória definida. No próximo acesso a pessoa cria a própria." };
 }
 
 const activeSchema = z.object({ userId: z.uuid(), active: z.boolean() });

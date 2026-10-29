@@ -9,16 +9,18 @@ import { Notice } from "@/components/ui/notice";
 import { createClient } from "@/lib/supabase/client";
 
 type Status = "checking" | "ready" | "invalid";
+type Mode = "convite" | "primeiro" | "trocar" | "recuperar";
 
 /**
- * Serve para o convite (primeira senha) e para a recuperação.
+ * Serve para o convite (primeira senha), a recuperação e a troca de senha de quem já está logado.
  * - Recuperação: /auth/callback já criou a sessão antes de chegar aqui.
  * - Convite: o Supabase manda os tokens no fragmento da URL (#access_token=...), tratado aqui.
+ * - ?primeiro=1: entrou com senha provisória e precisa criar a própria. ?trocar=1: troca pelo menu.
  */
 export function NewPasswordForm() {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("checking");
-  const [isInvite, setIsInvite] = useState(false);
+  const [mode, setMode] = useState<Mode>("recuperar");
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
@@ -27,8 +29,10 @@ export function NewPasswordForm() {
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = hash.get("access_token");
     const refreshToken = hash.get("refresh_token");
-    const invite = hash.get("type") === "invite" || new URLSearchParams(window.location.search).has("convite");
-    setIsInvite(invite);
+    const query = new URLSearchParams(window.location.search);
+    setMode(
+      hash.get("type") === "invite" || query.has("convite") ? "convite" : query.has("primeiro") ? "primeiro" : query.has("trocar") ? "trocar" : "recuperar",
+    );
 
     // Tira os tokens da barra de endereço.
     if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -57,7 +61,8 @@ export function NewPasswordForm() {
 
     setSaving(true);
     setError(undefined);
-    const { error: updateError } = await createClient().auth.updateUser({ password });
+    // Senha própria criada: a senha provisória deixa de valer e o aviso de troca some.
+    const { error: updateError } = await createClient().auth.updateUser({ password, data: { must_change_password: false } });
     setSaving(false);
 
     if (updateError) {
@@ -74,7 +79,9 @@ export function NewPasswordForm() {
     router.refresh();
   }
 
-  const title = isInvite ? "Crie sua senha" : "Nova senha";
+  const title = mode === "convite" || mode === "primeiro" ? "Crie sua senha" : mode === "trocar" ? "Trocar senha" : "Nova senha";
+  const hint =
+    mode === "primeiro" ? "Você entrou com uma senha provisória. Crie a sua, com pelo menos 8 caracteres." : "Use pelo menos 8 caracteres.";
 
   if (status === "checking") {
     return (
@@ -100,7 +107,7 @@ export function NewPasswordForm() {
     <>
       <div>
         <h1 className="text-[22px] font-bold tracking-[-0.03em]">{title}</h1>
-        <p className="mt-1 text-[13px] text-muted">Use pelo menos 8 caracteres.</p>
+        <p className="mt-1 text-[13px] text-muted">{hint}</p>
       </div>
       <form onSubmit={onSubmit} className="grid gap-3">
         <TextField label="Nova senha" name="password" type="password" autoComplete="new-password" required minLength={8} autoFocus />
@@ -109,6 +116,11 @@ export function NewPasswordForm() {
         <Button type="submit" variant="primary" loading={saving} className="mt-1 w-full">
           Salvar senha e entrar
         </Button>
+        {mode === "trocar" && (
+          <Link href="/" className="text-center text-[13px] text-muted hover:underline">
+            Cancelar
+          </Link>
+        )}
       </form>
     </>
   );
