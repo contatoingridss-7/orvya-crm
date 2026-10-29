@@ -20,7 +20,8 @@ export const metadata: Metadata = {
   },
 };
 
-// Mensalidade combinada com a Ingrid em 25/10/2026. A taxa de implementação não aparece em valor.
+// Mensalidade por usuário, combinada com a Ingrid (25/10 e 29/10/2026). Sem fidelidade; aviso de 30 dias é pedido, não exigido.
+// A taxa de implementação não aparece em valor.
 const MONTHLY_PRICE = 129;
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 });
 
@@ -34,6 +35,9 @@ const WA = {
   proposal: whatsappLink("Olá! Quero uma proposta do Orvya para a minha empresa."),
 };
 
+// Selo "Provedor de Tecnologia da Meta": só ligar depois da aprovação da Meta (análise em andamento).
+const META_TECH_PROVIDER = false;
+
 // Página pública de apresentação (sem login). Não usa dados do banco: nada de cliente, número ou resultado.
 export default function ApresentacaoPage() {
   return (
@@ -42,10 +46,13 @@ export default function ApresentacaoPage() {
       <main>
         <Hero />
         <Solutions />
+        <Compare />
         <Features />
+        <Tracking />
         <Segment />
         <Steps />
         <Integrations />
+        {META_TECH_PROVIDER && <TechProvider />}
         <Plans />
         <Faq />
         <FinalCta />
@@ -64,6 +71,7 @@ function Header() {
         </a>
         <nav className="ml-6 hidden items-center gap-1 lg:flex" aria-label="Seções">
           <a className="lp-nav" href="#recursos">Recursos</a>
+          <a className="lp-nav" href="#rastreamento">Rastreamento</a>
           <a className="lp-nav" href="#como-funciona">Como funciona</a>
           <a className="lp-nav" href="#planos">Planos</a>
           <a className="lp-nav" href="#perguntas">Perguntas</a>
@@ -104,6 +112,20 @@ function Hero() {
             Ver como funciona
           </a>
         </div>
+        <ul className="lp-badges" aria-label="Destaques">
+          <li>
+            <Icon name="check" />
+            WhatsApp na API oficial da Meta
+          </li>
+          <li>
+            <Icon name="check" />
+            Sem fidelidade
+          </li>
+          <li>
+            <Icon name="check" />
+            Em reais, com suporte em português
+          </li>
+        </ul>
         <p className="m-0 max-w-[520px] text-[13px] leading-relaxed text-muted">
           Nasceu dentro da rotina comercial de empresas de produtos e equipamentos de saúde em Teresina (PI), e se adapta ao seu segmento.
         </p>
@@ -168,6 +190,145 @@ function Solutions() {
               </p>
             </div>
           </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const COMPARE: Array<[string, string]> = [
+  ["Ninguém sabe quem ficou sem resposta", "Cronômetro em cada conversa: amarelo em 5 minutos, vermelho em 15"],
+  ["Orçamento enviado e esquecido", "Tarefa de retorno criada sozinha, com dia e responsável"],
+  ["WhatsApp no celular de cada vendedor", "Equipe inteira no número oficial, com o histórico na empresa"],
+  ["Vendedor sai e leva os contatos", "Conversas, leads e anotações ficam no Orvya"],
+  ["“O anúncio não funciona”", "Cada venda ligada ao anúncio que trouxe o cliente"],
+  ["Relatório de cliques e alcance", "Custo por conversa, por lead e por venda"],
+  ["Lead parado sem ninguém perceber", "Lead parado vira tarefa, e tarefa atrasada sobe para o gestor"],
+  ["Criativo cansado rodando por semanas", "Alerta de criativo saturado pela frequência"],
+];
+
+function Compare() {
+  return (
+    <section id="comparativo" className="lp-section">
+      <div className="lp-wrap grid gap-10">
+        <SectionHead
+          eyebrow="Com e sem o Orvya"
+          title={
+            <>
+              O mesmo WhatsApp. <em>Outro resultado.</em>
+            </>
+          }
+          lead="O que muda quando o atendimento sai do celular de cada vendedor e passa a ter dono, prazo e origem."
+        />
+        <div className="lp-card lp-compare" role="table" aria-label="Comparativo: sem o Orvya e com o Orvya">
+          <div className="lp-compare-row lp-compare-head" role="row">
+            <span role="columnheader">No celular e na planilha</span>
+            <span role="columnheader">Com o Orvya</span>
+          </div>
+          {COMPARE.map(([without, withOrvya]) => (
+            <div key={without} className="lp-compare-row" role="row">
+              <span role="cell" className="lp-compare-no">
+                <Icon name="x" />
+                {without}
+              </span>
+              <span role="cell" className="lp-compare-yes">
+                <Icon name="check" />
+                {withOrvya}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const TRACK_STEPS = [
+  { title: "O anúncio traz a conversa", text: "Quem clica num anúncio de WhatsApp ou de Instagram chega no Orvya com a campanha e o criativo marcados. Do Google e do site, o link já leva um código de origem." },
+  { title: "A equipe atende com prazo", text: "O cronômetro mostra quem está esperando. O lead entra no funil certo, com dono e com a próxima tarefa." },
+  { title: "A venda fica ligada ao anúncio", text: "Ao marcar como ganho, o valor vendido soma na campanha e no criativo de origem." },
+  { title: "Você vê o que vendeu, não só o que clicou", text: "Investimento, custo por conversa, custo por venda e retorno por campanha e por criativo, com alerta quando um criativo cansa." },
+];
+
+const CAPI_EVENTS: Array<[string, string]> = [
+  ["Cliente chamou pelo anúncio", "Lead"],
+  ["Lead qualificado pela equipe", "Lead qualificado"],
+  ["Entrou numa etapa escolhida (ex.: agendado)", "Evento da etapa"],
+  ["Venda fechada", "Compra, com o valor"],
+];
+
+function Tracking() {
+  return (
+    <section id="rastreamento" className="lp-section">
+      <div className="lp-wrap grid gap-10">
+        <SectionHead
+          eyebrow="Rastreamento"
+          title={
+            <>
+              O gerenciador de anúncios para no clique. <em>O Orvya continua dali.</em>
+            </>
+          }
+          lead="Chega de discutir se o lead é bom ou ruim: cada conversa mostra de onde veio, quem atendeu, em que etapa parou e quanto vendeu."
+        />
+        <ol className="lp-steps">
+          {TRACK_STEPS.map((s, i) => (
+            <li key={s.title} className="lp-card">
+              <span className="lp-step-n">{String(i + 1).padStart(2, "0")}</span>
+              <h3>{s.title}</h3>
+              <p>{s.text}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="lp-card lp-capi grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-10">
+          <div className="grid content-start gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <PlatformLogo platform="meta" size={20} />
+              <b className="text-title">API de Conversões da Meta</b>
+              <span className="pill">Em breve</span>
+            </div>
+            <h3>A venda volta para a campanha.</h3>
+            <p>
+              Anúncio de WhatsApp, sozinho, aprende a trazer quem <b>chama</b>. Com a API de Conversões, o Orvya avisa a Meta quem foi
+              qualificado e quem <b>comprou</b>, e a campanha passa a procurar pessoas parecidas com quem fecha.
+            </p>
+            <p className="text-[12.5px]">
+              O envio sai do servidor, sem depender de cookie ou bloqueador. Vai só o evento e o valor: nada da conversa, do produto ou de dados
+              sensíveis.
+            </p>
+          </div>
+          <div className="lp-capi-table" role="table" aria-label="Eventos enviados à Meta">
+            <div className="lp-capi-row lp-capi-head" role="row">
+              <span role="columnheader">Quando acontece no Orvya</span>
+              <span role="columnheader">O que a Meta recebe</span>
+            </div>
+            {CAPI_EVENTS.map(([when, what]) => (
+              <div key={when} className="lp-capi-row" role="row">
+                <span role="cell">{when}</span>
+                <span role="cell">
+                  <b>{what}</b>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TechProvider() {
+  return (
+    <section className="lp-section">
+      <div className="lp-wrap">
+        <div className="lp-card flex flex-col items-start gap-4 p-7 sm:flex-row sm:items-center sm:gap-6">
+          <span className="lp-icon">
+            <PlatformLogo platform="meta" size={22} />
+          </span>
+          <div className="grid gap-1.5">
+            <span className="lp-eyebrow">Meta Tech Provider</span>
+            <h3>Somos Provedor de Tecnologia da Meta.</h3>
+            <p>O WhatsApp e o Instagram da sua empresa rodam nas integrações oficiais, aprovadas pela Meta e dentro das regras dela.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -396,7 +557,8 @@ function Integrations() {
 }
 
 const INCLUDED = [
-  "WhatsApp oficial, Instagram Direct, funil, tarefas, expedição, catálogo e relatórios",
+  "Até 2 números de WhatsApp oficial por empresa, mais o Instagram Direct",
+  "Funil, tarefas, automações, expedição, catálogo e relatórios",
   "Configuração dos funis, etapas, automações e catálogo",
   "Treinamento da equipe antes de começar, focado no dia a dia comercial",
   "Perfis de acesso para administrador, gestor, vendedor e expedição",
@@ -408,8 +570,8 @@ function Plans() {
       <div className="lp-wrap grid gap-10">
         <SectionHead
           eyebrow="Planos"
-          title="Implementação e mensalidade por empresa."
-          lead="Um plano só, com tudo o que a equipe usa no dia a dia. O que for específico do seu segmento entra na proposta."
+          title="Um plano só, por pessoa que usa."
+          lead="Tudo o que a equipe usa no dia a dia, sem fidelidade. O que for específico do seu segmento entra na proposta."
           center
         />
         <div className="mx-auto grid w-full max-w-[920px] gap-5 md:grid-cols-[1.15fr_1fr]">
@@ -417,7 +579,7 @@ function Plans() {
             <span className="lp-eyebrow">Orvya</span>
             <p className="lp-price-value">
               {brl.format(MONTHLY_PRICE)}
-              <small>/mês por empresa</small>
+              <small>/mês por usuário</small>
             </p>
             <p className="m-0 text-[13.5px] text-muted">+ taxa simbólica de implementação, com o treinamento incluído.</p>
             <ul className="lp-checks">
@@ -442,6 +604,9 @@ function Plans() {
               específico do seu segmento, combinado com você na proposta.
             </p>
             <p className="text-[12.5px]">
+              Sem fidelidade e sem multa. Para cancelar, pedimos, se possível, um aviso de 30 dias.
+            </p>
+            <p className="text-[12.5px]">
               As mensagens de modelo do WhatsApp (enviadas fora da janela de 24 horas) são cobradas pela Meta, conforme a tabela dela.
             </p>
           </div>
@@ -455,6 +620,26 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
   {
     q: "Preciso de um número novo de WhatsApp?",
     a: "Nem sempre. O Orvya usa o WhatsApp oficial da Meta e, em muitos casos, o número que a empresa já usa no WhatsApp Business pode ser conectado e continuar funcionando no celular. Na conversa de diagnóstico avaliamos o melhor caminho para o seu caso.",
+  },
+  {
+    q: "Como funciona a cobrança?",
+    a: "Por usuário: cada pessoa da equipe que usa o Orvya é uma mensalidade. Cada empresa pode ter até dois números de WhatsApp oficial, além do Instagram. Há uma taxa simbólica de implementação, com o treinamento incluído.",
+  },
+  {
+    q: "Tem fidelidade ou multa?",
+    a: "Não. Você pode cancelar quando quiser. Pedimos, se possível, um aviso de 30 dias para organizar a saída e a exportação dos seus dados.",
+  },
+  {
+    q: "O WhatsApp é oficial?",
+    a: "Sim. O Orvya usa a API oficial da Meta (WhatsApp Cloud API), sem aparelho conectado por QR Code e dentro das regras da Meta.",
+  },
+  {
+    q: "Consigo saber de qual anúncio veio cada venda?",
+    a: "Sim. Quem chega por anúncio de WhatsApp ou de Instagram entra com a campanha e o criativo marcados, e a venda fica ligada a eles. Do Google e do site, o link leva um código de origem. A devolução das vendas para a Meta (API de Conversões) está chegando.",
+  },
+  {
+    q: "Os dados de uma empresa aparecem para outra?",
+    a: "Não. Cada empresa fica separada no banco de dados, com acessos próprios. Quem trabalha em mais de uma empresa só vê as que foram liberadas para ela.",
   },
   {
     q: "A equipe consegue usar pelo celular?",
@@ -547,6 +732,7 @@ function Footer() {
           <Brand />
           <nav className="flex flex-wrap gap-x-5 gap-y-2 text-[13px]" aria-label="Rodapé">
             <a href="#recursos">Recursos</a>
+            <a href="#rastreamento">Rastreamento</a>
             <a href="#como-funciona">Como funciona</a>
             <a href="#planos">Planos</a>
             <a href="#perguntas">Perguntas</a>
@@ -655,7 +841,8 @@ type IconName =
   | "puzzle"
   | "plus"
   | "clock"
-  | "target";
+  | "target"
+  | "x";
 
 const ICONS: Record<IconName, string> = {
   chat: "M21 12a8.5 8.5 0 0 1-12.4 7.5L3.5 21l1.5-4.6A8.5 8.5 0 1 1 21 12Z",
@@ -675,6 +862,7 @@ const ICONS: Record<IconName, string> = {
   puzzle:
     "M10 4.5a2 2 0 1 1 4 0V6h4v4h-1.5a2 2 0 1 0 0 4H18v4h-4v-1.5a2 2 0 1 0-4 0V18H6v-4h1.5a2 2 0 1 0 0-4H6V6h4V4.5Z",
   plus: "M12 5v14M5 12h14",
+  x: "M6.5 6.5l11 11M17.5 6.5l-11 11",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 2",
   target: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9ZM12 12.01V12",
 };
