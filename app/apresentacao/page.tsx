@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AuthFilm } from "@/components/auth-film";
 import { Brand, Signature, SLOGAN } from "@/components/brand";
+import { DemoReel } from "@/components/demo-reel";
 import { LegalFooter } from "@/components/legal-footer";
 import { PlatformLogo } from "@/components/platform-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -109,25 +109,7 @@ function Hero() {
         </p>
       </div>
 
-      <div className="lp-film">
-        <AuthFilm className="lp-film-media" minWidth={768} />
-        <div className="lp-film-shade" />
-        <div className="lp-float lp-float-a" aria-hidden>
-          <span className="lp-dot" />
-          <div>
-            <b>Precisa de mim</b>
-            <small>Cliente sem resposta</small>
-          </div>
-          <span className="pill warn ml-auto tabular-nums">05:12</span>
-        </div>
-        <div className="lp-float lp-float-b" aria-hidden>
-          <Icon name="check" />
-          <div>
-            <b>Tarefa criada</b>
-            <small>Retornar orçamento amanhã</small>
-          </div>
-        </div>
-      </div>
+      <DemoReel />
     </section>
   );
 }
