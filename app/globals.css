@@ -2476,3 +2476,570 @@ h3,
     transform: rotate(360deg);
   }
 }
+
+/* =====================================================================
+   Página de apresentação (/apresentacao): mesma luz, grão e vidro do app
+   ===================================================================== */
+@layer components {
+  .lp {
+    min-height: 100dvh;
+    font-size: 15px;
+    overflow-x: clip;
+  }
+  .lp section[id] {
+    scroll-margin-top: 72px;
+  }
+  .lp-wrap {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+    padding-inline: 16px;
+  }
+  @media (min-width: 640px) {
+    .lp-wrap {
+      padding-inline: 28px;
+    }
+  }
+  .lp-head {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    border-bottom: 1px solid var(--panel-edge);
+  }
+  .lp-nav {
+    padding: 8px 12px;
+    border-radius: 10px;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 14px;
+    text-decoration: none;
+    transition: color 0.15s, background 0.15s;
+  }
+  .lp-nav:hover {
+    color: var(--ink);
+    background: var(--surface-2);
+  }
+  .lp-btn-lg {
+    height: 48px;
+    padding: 0 22px;
+    font-size: 14.5px;
+    border-radius: 14px;
+  }
+  .lp-svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .lp-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .lp-h1 {
+    font-size: clamp(36px, 6.2vw, 64px);
+    font-weight: 600;
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+    text-wrap: balance;
+  }
+  .lp-h2 {
+    font-size: clamp(27px, 3.8vw, 42px);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .lp-h1 em,
+  .lp-h2 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .lp-lead {
+    margin: 0;
+    max-width: 620px;
+    font-size: clamp(15px, 1.6vw, 17.5px);
+    line-height: 1.6;
+    color: var(--muted);
+    text-wrap: pretty;
+  }
+  .lp-section {
+    padding-block: clamp(56px, 9vw, 104px);
+  }
+  .lp-card {
+    position: relative;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-edge);
+    border-radius: 22px;
+    box-shadow: var(--panel-hl), var(--shadow);
+  }
+  .lp-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .lp-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .lp-card p b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .lp-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--tint);
+    color: var(--tint-ink);
+  }
+  .lp-icon .lp-svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Hero: filme da marca numa moldura, com dois cartões flutuantes da interface */
+  .lp-film {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    border-radius: 26px;
+    overflow: hidden;
+    background: #122a46;
+    border: 1px solid rgba(244, 242, 237, 0.08);
+    box-shadow: var(--shadow-lg);
+  }
+  .lp-film-media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .lp-film-shade {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(11, 13, 15, 0.45) 100%),
+      linear-gradient(180deg, transparent 60%, rgba(11, 13, 15, 0.35) 100%);
+  }
+  .lp-float {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(17, 22, 27, 0.72);
+    border: 1px solid rgba(244, 242, 237, 0.1);
+    box-shadow: inset 0 1px 0 rgba(244, 242, 237, 0.07), 0 18px 40px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: #f4f2ed;
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+  .lp-float b {
+    display: block;
+    font-weight: 600;
+  }
+  .lp-float small {
+    display: block;
+    color: #89929c;
+    font-size: 11.5px;
+  }
+  .lp-float-a {
+    left: 4%;
+    bottom: 7%;
+    width: min(260px, 62%);
+  }
+  .lp-float-b {
+    right: 4%;
+    top: 7%;
+    max-width: 58%;
+  }
+  .lp-float-b .lp-svg {
+    color: #72c5b5;
+  }
+  .lp-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--amber);
+  }
+
+  /* Ilustrações da interface (formas, sem dados) */
+  .lp-solution {
+    display: grid;
+    align-content: start;
+    gap: 22px;
+    padding: 18px 18px 24px;
+  }
+  .lp-mock {
+    display: grid;
+    gap: 10px;
+    height: 216px;
+    align-content: start;
+    padding: 14px;
+    border-radius: 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .lp-mock i,
+  .lp-kcard i,
+  .lp-kpi i {
+    display: block;
+    height: 7px;
+    border-radius: 99px;
+    background: var(--line-2);
+  }
+  .lp-mock-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .lp-avatar {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: var(--grad);
+    opacity: 0.85;
+  }
+  .lp-lines {
+    flex: 1;
+    display: grid;
+    gap: 6px;
+  }
+  .lp-bubble {
+    max-width: 82%;
+    padding: 8px 11px;
+    border-radius: 14px;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .lp-bubble.in {
+    justify-self: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 4px;
+  }
+  .lp-bubble.out {
+    justify-self: end;
+    background: var(--tint);
+    color: var(--tint-ink);
+    border-bottom-right-radius: 4px;
+  }
+  .lp-kanban {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .lp-col {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+  }
+  .lp-col small {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lp-kcard {
+    display: grid;
+    gap: 6px;
+    padding: 9px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .lp-kcard .pill {
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.25;
+    font-size: 9.5px;
+    padding: 1px 6px;
+  }
+  .lp-pill-tint {
+    background: var(--tint);
+    color: var(--tint-ink);
+  }
+  .lp-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .lp-bars span {
+    flex: 1;
+    border-radius: 5px 5px 2px 2px;
+    background: var(--chart-navy);
+    opacity: 0.85;
+  }
+  .lp-bars span:nth-child(n + 8) {
+    background: var(--accent);
+    opacity: 1;
+  }
+  .lp-kpi {
+    display: grid;
+    gap: 6px;
+    padding: 8px 9px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .lp-kpi small {
+    font-size: 10.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lp-kpi i {
+    width: 70%;
+    height: 9px;
+  }
+
+  /* Recursos */
+  .lp-feature {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    padding: 22px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .lp-feature:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--panel-edge));
+  }
+  .lp-feature h3 {
+    font-size: 16.5px;
+  }
+  .lp-soon {
+    border-style: dashed;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  /* Segmento */
+  .lp-segment {
+    padding: clamp(24px, 4vw, 48px);
+    overflow: hidden;
+  }
+  .lp-segment::after {
+    content: "";
+    position: absolute;
+    inset: auto -10% -40% auto;
+    width: 60%;
+    height: 80%;
+    background: radial-gradient(closest-side, rgba(114, 197, 181, 0.14), transparent);
+    pointer-events: none;
+  }
+  .lp-examples {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    align-content: center;
+  }
+  .lp-examples li {
+    display: flex;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .lp-examples b {
+    display: block;
+    margin-bottom: 3px;
+    font-family: var(--font-title);
+    font-weight: 600;
+    color: var(--title);
+  }
+
+  /* Como funciona */
+  .lp-steps {
+    display: grid;
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  @media (min-width: 640px) {
+    .lp-steps {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1024px) {
+    .lp-steps {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .lp-steps li {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 22px;
+  }
+  .lp-step-n {
+    font-family: var(--font-title);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  /* Integrações */
+  .lp-integration {
+    display: grid;
+    gap: 8px;
+    padding: 18px 20px;
+    border-radius: 18px;
+  }
+  .lp-integration b {
+    font-family: var(--font-title);
+    font-weight: 600;
+    color: var(--title);
+  }
+  .lp-integration p {
+    font-size: 13.5px;
+  }
+
+  /* Planos */
+  .lp-price {
+    display: grid;
+    gap: 14px;
+    padding: clamp(22px, 3vw, 32px);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--panel-edge));
+  }
+  .lp-price-value {
+    margin: 0;
+    font-family: var(--font-title);
+    font-size: clamp(40px, 6vw, 52px);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--title) !important;
+  }
+  .lp-price-value small {
+    margin-left: 6px;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+  .lp-checks {
+    display: grid;
+    gap: 10px;
+    margin: 4px 0 6px;
+    padding: 0;
+    list-style: none;
+  }
+  .lp-checks li {
+    display: flex;
+    gap: 10px;
+    line-height: 1.5;
+  }
+  .lp-checks .lp-svg {
+    margin-top: 2px;
+    color: var(--accent);
+  }
+  .lp-module {
+    padding: clamp(22px, 3vw, 32px);
+  }
+
+  /* Perguntas */
+  .lp-faq {
+    border-radius: 16px;
+    box-shadow: var(--panel-hl);
+  }
+  .lp-faq summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    font-family: var(--font-title);
+    font-weight: 600;
+    font-size: 15.5px;
+    color: var(--title);
+    cursor: pointer;
+    list-style: none;
+  }
+  .lp-faq summary::-webkit-details-marker {
+    display: none;
+  }
+  .lp-faq summary .lp-svg {
+    color: var(--muted);
+    transition: transform 0.2s ease;
+  }
+  .lp-faq[open] summary .lp-svg {
+    transform: rotate(45deg);
+    color: var(--accent);
+  }
+  .lp-faq p {
+    padding: 0 18px 18px;
+  }
+
+  /* Chamada final: sempre escura, com a luz da marca */
+  .lp-final {
+    display: grid;
+    gap: 24px;
+    align-items: center;
+    padding: clamp(28px, 5vw, 56px);
+    border-radius: 26px;
+    color: #f4f2ed;
+    background: radial-gradient(700px 400px at 0% 0%, rgba(39, 59, 143, 0.55), transparent 65%),
+      radial-gradient(600px 380px at 100% 100%, rgba(114, 197, 181, 0.2), transparent 65%), #0f1720;
+    border: 1px solid rgba(244, 242, 237, 0.08);
+    box-shadow: var(--shadow-lg);
+  }
+  @media (min-width: 1024px) {
+    .lp-final {
+      grid-template-columns: 1fr auto;
+    }
+  }
+  .lp-final .lp-h2 {
+    color: #f7f5f0;
+  }
+  .lp-final .lp-lead {
+    color: #89929c;
+  }
+
+  .lp-foot {
+    border-top: 1px solid var(--panel-edge);
+  }
+  .lp-foot nav a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .lp-foot nav a:hover {
+    color: var(--ink);
+  }
+}

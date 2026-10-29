@@ -5,4 +5,6 @@ export const LEGAL = {
   cnpj: "64.998.911/0001-32",
   email: "contatoingridss@gmail.com",
   city: "Teresina (PI)",
+  // Contato comercial da página de apresentação (wa.me usa o número com DDI, sem símbolos).
+  whatsapp: "5586999700906",
 } as const;
