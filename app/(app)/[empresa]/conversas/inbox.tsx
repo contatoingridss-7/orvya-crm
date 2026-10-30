@@ -550,11 +550,12 @@ const STATUS_TEXT: Record<Message["status"], string> = {
 };
 
 function MessageRow({ m, newDay, author }: { m: Message; newDay: boolean; author: string | null }) {
-  const kind = m.direction === "in" ? "lead" : m.sender === "ai" ? "ai" : m.source === "celular" ? "phone" : m.sender === "system" ? "lead" : "human";
+  const kind = m.direction === "in" ? "lead" : m.sender === "ai" ? "ai" : m.source === "celular" ? "phone" : "human";
   const media = m.media_path ? `/api/media/${m.id}` : null;
   // O corpo de mídia vem como "[Imagem] legenda": com o arquivo na tela, mostra só a legenda.
   const body = media ? (m.body ?? "").replace(/^\[[^\]]+\]\s*/, "") : m.body;
-  const who = m.direction === "in" ? null : m.sender === "ai" ? "IA" : m.source === "celular" ? "pelo celular" : m.source === "historico" ? "histórico" : author;
+  // Respostas automáticas (fora do horário, boas-vindas do Instagram) aparecem do lado da empresa.
+  const who = m.direction === "in" ? null : m.sender === "ai" ? "IA" : m.sender === "system" ? "resposta automática" : m.source === "celular" ? "pelo celular" : m.source === "historico" ? "histórico" : author;
 
   return (
     <>

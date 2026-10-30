@@ -102,6 +102,10 @@ Migration **0018_trafego_indicadores.sql** (rodar no Supabase). A atualização 
 - **Metas do cliente** (`traffic_goals`): custo por conversa, por lead, por venda, ROAS mínimo, frequência máxima (3) e CTR mínimo (0,8%).
 - **Relatórios para o cliente** (`traffic_reports`): todo dia às 6h o rascunho de ontem; às segundas, também o da semana passada. A gestora escreve "o que fizemos" e "próximos passos", desmarca leituras que não quer mostrar e libera. Depois de liberado: texto pronto para o WhatsApp (copiar ou abrir no WhatsApp) e link `/r/{token}` que o cliente abre sem login. Só métricas de anúncio e atendimento.
 
+## Construído, aguardando teste (29/10) — Resposta fora do horário (WhatsApp)
+
+Migration **0019_fora_do_horario.sql** (rodar no Supabase). Em Configurações → Automações, por empresa: horário de atendimento (padrão: segunda a sexta, 8h às 18h; sábado, 8h às 12h) e a mensagem, com `{retorno}` ("amanhã a partir das 8h", "na segunda a partir das 8h"). Quem escreve fora do horário recebe a resposta uma vez a cada 12 horas; não sai se alguém da equipe respondeu na última hora nem para mensagem com mais de 30 minutos. Vai dentro da janela de 24 h (sem custo, sem modelo) e não tira a conversa de "Precisa de mim". Na conversa aparece como "resposta automática". Feriados ainda não entram na regra.
+
 ## Falta
 1. **IC Supra / WhatsApp e Meta Ads**: aguardando verificação da empresa na Meta. Depois: publicar o app (ícone em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios), conectar em Canais (vaga 1) e Tráfego. Número inscrito e webhook já verificados.
 2. **Google Ads**: IC conectada ("IC Supra Hospitalar NOVA") e sincronizando. LocPress: falta dar acesso de leitura ao contatoingridss@gmail.com e conectar em Tráfego.

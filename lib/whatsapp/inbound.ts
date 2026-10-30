@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fillAfterHours, isOpen, parseHours } from "./after-hours";
+import { sendTextMessage } from "./graph";
 import { storeInboundMedia } from "./media";
 import { mapMetaStatus } from "./templates";
 import {
@@ -15,7 +17,7 @@ import {
   type WaWebhookPayload,
 } from "./payload";
 
-type NumberRow = { id: string; company_id: string; default_pipeline_id: string | null };
+type NumberRow = { id: string; company_id: string; default_pipeline_id: string | null; phone_number_id: string };
 type Ctx = { admin: SupabaseClient; number: NumberRow; token: string | null };
 
 const STATUS_RANK: Record<string, number> = { queued: 0, sent: 1, delivered: 2, read: 3 };
@@ -125,7 +127,7 @@ async function loadNumber(admin: SupabaseClient, value: WaChangeValue): Promise<
   if (!phoneNumberId) return null;
   const { data: number } = await admin
     .from("whatsapp_numbers")
-    .select("id, company_id, default_pipeline_id")
+    .select("id, company_id, default_pipeline_id, phone_number_id")
     .eq("phone_number_id", phoneNumberId)
     .maybeSingle<NumberRow>();
   if (!number) return null;
@@ -302,7 +304,62 @@ async function handleInbound(ctx: Ctx, value: WaChangeValue, m: WaMessage) {
   if (rpcError) await ctx.admin.rpc("conversation_inbound", { p_conversation: conversation.id, p_at: sentAt });
 
   await saveMedia(ctx, mediaId, conversation.id, messageId);
+  // Falha na resposta automática não pode impedir o registro da mensagem do cliente.
+  await afterHoursReply(ctx, conversation.id, m.from, sentAt).catch(() => undefined);
   // Fase 4: aqui o agente de IA é acionado, se estiver ligado para a empresa e para a conversa.
+}
+
+/**
+ * Fora do horário de atendimento: responde uma vez com o horário e quando a equipe volta.
+ * Vai dentro da janela de 24 h (sem custo, sem modelo). Não muda a última direção da conversa:
+ * ela continua em "Precisa de mim" para a equipe responder quando abrir.
+ */
+async function afterHoursReply(ctx: Ctx, conversationId: string, to: string, sentAt: string) {
+  if (!ctx.token) return;
+  const at = new Date(sentAt);
+  // Evento atrasado ou reenviado pela Meta: não responde mensagem antiga.
+  if (Date.now() - at.getTime() > 30 * 60_000) return;
+  const { data: cfg } = await ctx.admin
+    .from("whatsapp_after_hours")
+    .select("enabled, hours, message")
+    .eq("company_id", ctx.number.company_id)
+    .maybeSingle<{ enabled: boolean; hours: unknown; message: string }>();
+  if (!cfg?.enabled) return;
+  const hours = parseHours(cfg.hours);
+  if (isOpen(hours, at)) return;
+
+  // Uma vez a cada 12 horas por conversa, e nunca se alguém da equipe respondeu na última hora (está atendendo).
+  const [{ count: replied }, { count: teamActive }] = await Promise.all([
+    ctx.admin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", conversationId)
+      .eq("sender", "system")
+      .eq("msg_type", "after_hours")
+      .gte("sent_at", new Date(Date.now() - 12 * 3600_000).toISOString()),
+    ctx.admin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", conversationId)
+      .eq("direction", "out")
+      .eq("sender", "user")
+      .gte("sent_at", new Date(Date.now() - 3600_000).toISOString()),
+  ]);
+  if (replied || teamActive) return;
+
+  const body = fillAfterHours(cfg.message, hours, at);
+  const wamid = await sendTextMessage(ctx.number.phone_number_id, ctx.token, to, body);
+  await insertMessage(ctx, {
+    conversation_id: conversationId,
+    direction: "out",
+    sender: "system",
+    msg_type: "after_hours",
+    body,
+    wa_message_id: wamid,
+    status: "sent",
+    source: "orvya",
+    sent_at: new Date().toISOString(),
+  });
 }
 
 /** Status de entrega das mensagens enviadas. Nunca regride (lido não volta para entregue). */

@@ -4,6 +4,8 @@ import { Notice } from "@/components/ui/notice";
 import { requireSettings } from "@/lib/auth/viewer";
 import type { Pipeline, Stage } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
+import { parseHours } from "@/lib/whatsapp/after-hours";
+import { AfterHoursManager } from "./after-hours-manager";
 import { IgMenuManager, type IgMenuNumber } from "./ig-menu-manager";
 import { IgRepliesManager, type IgReply } from "./ig-replies-manager";
 import { RulesManager, type Rule } from "./rules-manager";
@@ -30,7 +32,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
   const { company } = await requireSettings((await params).empresa);
   const supabase = await createClient();
 
-  const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes] = await Promise.all([
+  const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes, afterHoursRes] = await Promise.all([
     supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
     supabase.from("stages").select("id, key, name, kind, position, logistics, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
     supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled, trigger_event, after_days, repeat_days").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
@@ -54,7 +56,13 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       .eq("company_id", company.id)
       .order("slot")
       .returns<{ id: string; label: string; display_phone: string | null; status: string }[]>(),
+    supabase
+      .from("whatsapp_after_hours")
+      .select("enabled, hours, message")
+      .eq("company_id", company.id)
+      .maybeSingle<{ enabled: boolean; hours: unknown; message: string }>(),
   ]);
+  const afterHours = afterHoursRes.data;
   const igMenu = igMenuRes.data;
   const menuNumbers: IgMenuNumber[] = (numbersRes.data ?? [])
     .filter((n) => n.status === "connected" && n.display_phone)
@@ -98,6 +106,12 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
           rules={rules}
           pipelines={pipelines}
           stages={stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, logistics: s.logistics, pipelineId: s.pipeline_id }))}
+        />
+        <AfterHoursManager
+          slug={company.slug}
+          companyName={company.name}
+          settings={afterHours ? { enabled: afterHours.enabled, hours: parseHours(afterHours.hours), message: afterHours.message } : null}
+          loadError={!!afterHoursRes.error}
         />
         <TemplatesManager slug={company.slug} pipelines={pipelines} templates={templatesRes.data ?? []} loadError={!!templatesRes.error} />
         <IgMenuManager
