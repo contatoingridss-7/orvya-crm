@@ -30,7 +30,7 @@ export function AfterHoursManager({ slug, companyName, settings, loadError }: { 
   const [rows, setRows] = useState<DayRow[]>(toRows(settings?.hours ?? DEFAULT_HOURS));
   const [message, setMessage] = useState(
     settings?.message ??
-      `Olá! Aqui é a ${companyName}. Recebemos sua mensagem! Nosso atendimento é de segunda a sexta, das 8h às 18h, e aos sábados, das 8h às 12h. Um consultor fala com você {retorno}.`,
+      `Olá! Aqui é a ${companyName}. Recebemos sua mensagem! Nosso atendimento é de segunda a sexta, das 8h às 18h, e aos sábados, das 8h às 11h. Um consultor fala com você {retorno}.`,
   );
   const [error, setError] = useState<string>();
 

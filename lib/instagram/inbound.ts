@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { routePipeline } from "@/lib/crm/routing";
 import { fetchIgProfile, sendDirectText, sendPrivateReply } from "./graph";
 import { fillLinkReply, menuChoice, menuQuickReplies, whatsappLink } from "./menu";
 
@@ -177,7 +178,7 @@ async function findOrCreateConversation(ctx: Ctx, contactId: string): Promise<{ 
   throw new Error("Não foi possível criar a conversa do Instagram.");
 }
 
-async function ensureOpenLead(ctx: Ctx, contactId: string, referral: IgReferral | undefined): Promise<string | null> {
+async function ensureOpenLead(ctx: Ctx, contactId: string, referral: IgReferral | undefined, firstText: string | null): Promise<string | null> {
   const { data: open } = await ctx.admin
     .from("leads")
     .select("id")
@@ -189,7 +190,8 @@ async function ensureOpenLead(ctx: Ctx, contactId: string, referral: IgReferral 
     .maybeSingle<{ id: string }>();
   if (open) return open.id;
 
-  let pipelineId = ctx.account.default_pipeline_id;
+  // Palavra-chave da primeira mensagem (ex.: "cpap") pode escolher o funil; senão, o padrão da conta.
+  let pipelineId = (await routePipeline(ctx.admin, ctx.account.company_id, firstText).catch(() => null)) ?? ctx.account.default_pipeline_id;
   if (!pipelineId) {
     const { data: p } = await ctx.admin.from("pipelines").select("id").eq("company_id", ctx.account.company_id).order("position").limit(1).maybeSingle<{ id: string }>();
     pipelineId = p?.id ?? null;
@@ -297,7 +299,7 @@ async function handleMessaging(ctx: Ctx, rules: Rule[], menu: Menu | null, ev: I
   });
   if (!messageId) return; // evento repetido
 
-  const leadId = await ensureOpenLead(ctx, contact.id, m.referral ?? ev.referral);
+  const leadId = await ensureOpenLead(ctx, contact.id, m.referral ?? ev.referral, body);
   if (leadId) {
     await ctx.admin.from("leads").update({ last_contact_at: at }).eq("id", leadId);
     if (conv.lead_id !== leadId) await ctx.admin.from("conversations").update({ lead_id: leadId }).eq("id", conv.id);

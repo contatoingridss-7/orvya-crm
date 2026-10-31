@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { routePipeline } from "@/lib/crm/routing";
 import { fillAfterHours, isOpen, parseHours } from "./after-hours";
 import { sendTextMessage } from "./graph";
 import { storeInboundMedia } from "./media";
@@ -192,6 +193,7 @@ async function ensureOpenLead(
   contactId: string,
   referral: Record<string, unknown> | undefined,
   tracking: TrackingCode | null,
+  firstText: string | null,
 ): Promise<string | null> {
   const { data: open } = await ctx.admin
     .from("leads")
@@ -204,7 +206,8 @@ async function ensureOpenLead(
     .maybeSingle<{ id: string }>();
   if (open) return open.id;
 
-  let pipelineId = ctx.number.default_pipeline_id;
+  // Palavra-chave da primeira mensagem (ex.: "cpap") pode escolher o funil; senão, o padrão do número.
+  let pipelineId = (await routePipeline(ctx.admin, ctx.number.company_id, firstText).catch(() => null)) ?? ctx.number.default_pipeline_id;
   if (!pipelineId) {
     const { data: p } = await ctx.admin.from("pipelines").select("id").eq("company_id", ctx.number.company_id).order("position").limit(1).maybeSingle<{ id: string }>();
     pipelineId = p?.id ?? null;
@@ -294,7 +297,7 @@ async function handleInbound(ctx: Ctx, value: WaChangeValue, m: WaMessage) {
   });
   if (!messageId) return; // evento repetido
 
-  const leadId = await ensureOpenLead(ctx, contactId, m.referral, tracking);
+  const leadId = await ensureOpenLead(ctx, contactId, m.referral, tracking, m.type === "text" ? body : null);
   if (leadId) {
     await ctx.admin.from("leads").update({ last_contact_at: sentAt }).eq("id", leadId);
     if (conversation.lead_id !== leadId) await ctx.admin.from("conversations").update({ lead_id: leadId }).eq("id", conversation.id);

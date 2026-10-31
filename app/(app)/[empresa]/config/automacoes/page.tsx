@@ -6,6 +6,7 @@ import type { Pipeline, Stage } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
 import { parseHours } from "@/lib/whatsapp/after-hours";
 import { AfterHoursManager } from "./after-hours-manager";
+import { DistributionManager, type DistSeller } from "./distribution-manager";
 import { IgMenuManager, type IgMenuNumber } from "./ig-menu-manager";
 import { IgRepliesManager, type IgReply } from "./ig-replies-manager";
 import { RulesManager, type Rule } from "./rules-manager";
@@ -32,7 +33,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
   const { company } = await requireSettings((await params).empresa);
   const supabase = await createClient();
 
-  const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes, afterHoursRes] = await Promise.all([
+  const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes, afterHoursRes, distRes, sellersRes] = await Promise.all([
     supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
     supabase.from("stages").select("id, key, name, kind, position, logistics, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
     supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled, trigger_event, after_days, repeat_days").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
@@ -61,7 +62,24 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       .select("enabled, hours, message")
       .eq("company_id", company.id)
       .maybeSingle<{ enabled: boolean; hours: unknown; message: string }>(),
+    supabase
+      .from("lead_distribution")
+      .select("enabled, routes, work_days")
+      .eq("company_id", company.id)
+      .maybeSingle<{ enabled: boolean; routes: { pipeline_id: string; keywords: string[] }[]; work_days: Record<string, number[]> }>(),
+    supabase
+      .from("memberships")
+      .select("user_id, pipeline_ids, profiles(full_name, email, active)")
+      .eq("company_id", company.id)
+      .eq("role", "vendedor")
+      .returns<{ user_id: string; pipeline_ids: string[] | null; profiles: { full_name: string | null; email: string | null; active: boolean } | null }[]>(),
   ]);
+  const dist = distRes.data;
+  // Mesma ordem do rodízio no banco (nome, sem diferenciar maiúsculas).
+  const sellers: DistSeller[] = (sellersRes.data ?? [])
+    .filter((m) => m.profiles?.active !== false)
+    .map((m) => ({ id: m.user_id, name: m.profiles?.full_name || m.profiles?.email || "Vendedor", pipelineIds: m.pipeline_ids }))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id.localeCompare(b.id));
   const afterHours = afterHoursRes.data;
   const igMenu = igMenuRes.data;
   const menuNumbers: IgMenuNumber[] = (numbersRes.data ?? [])
@@ -106,6 +124,13 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
           rules={rules}
           pipelines={pipelines}
           stages={stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, logistics: s.logistics, pipelineId: s.pipeline_id }))}
+        />
+        <DistributionManager
+          slug={company.slug}
+          pipelines={(pipelinesRes.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
+          sellers={sellers}
+          settings={dist ? { enabled: dist.enabled, routes: (dist.routes ?? []).map((r) => ({ pipelineId: r.pipeline_id, keywords: r.keywords })), workDays: dist.work_days ?? {} } : null}
+          loadError={!!distRes.error}
         />
         <AfterHoursManager
           slug={company.slug}
