@@ -106,6 +106,13 @@ Migration **0018_trafego_indicadores.sql** (rodar no Supabase). A atualização 
 
 Migration **0019_fora_do_horario.sql** (rodar no Supabase). Em Configurações → Automações, por empresa: horário de atendimento (padrão: segunda a sexta, 8h às 18h; sábado, 8h às 12h) e a mensagem, com `{retorno}` ("amanhã a partir das 8h", "na segunda a partir das 8h"). Quem escreve fora do horário recebe a resposta uma vez a cada 12 horas; não sai se alguém da equipe respondeu na última hora nem para mensagem com mais de 30 minutos. Vai dentro da janela de 24 h (sem custo, sem modelo) e não tira a conversa de "Precisa de mim". Na conversa aparece como "resposta automática". Feriados ainda não entram na regra.
 
+## Construído, aguardando teste (31/10) — Pedidos do treinamento da IC
+
+- **Rodízio de leads** (migration **0020**), em Automações → Distribuição de leads: lead novo sem dono vai para o próximo vendedor do funil, um de cada vez, só no horário e nos dias de cada vendedor (Renato e Gabriel: seg a sex; Thays: seg a sáb). O que chega fora do horário é distribuído às 8h05 (cron `/api/jobs/rodizio`). Palavra-chave na primeira mensagem abre o lead no funil certo (IC: "cpap", "bipap"… → CPAP). Lead movido para funil em que o dono não trabalha volta ao rodízio. Sábado passou a ser das 8h às 11h.
+- **Conversas finalizadas**: lead ganho ou perdido sai da lista; filtro "Finalizadas". Se o cliente escrever de novo, abre lead novo e a conversa volta.
+- **Respostas rápidas** (migration **0021**): "/" na caixa de mensagem lista os atalhos (mais usados primeiro), com {nome} e {vendedor}. Cadastro em Conversas → Respostas e materiais (gestor e admin).
+- **Catálogos e materiais**: PDFs e imagens (até 16 MB, bucket privado `sales-materials`) enviados pelo botão Anexar como documento do WhatsApp; **produto do catálogo** vai como foto com nome, código e preço (só dentro da janela de 24 h).
+
 ## Falta
 1. **IC Supra / WhatsApp e Meta Ads**: aguardando verificação da empresa na Meta. Depois: publicar o app (ícone em `docs/marca/orvya-icone-1024.png`), atribuir ativos ao usuário do sistema da IC, gerar os tokens (WhatsApp e anúncios), conectar em Canais (vaga 1) e Tráfego. Número inscrito e webhook já verificados.
 2. **Google Ads**: IC conectada ("IC Supra Hospitalar NOVA") e sincronizando. LocPress: falta dar acesso de leitura ao contatoingridss@gmail.com e conectar em Tráfego.

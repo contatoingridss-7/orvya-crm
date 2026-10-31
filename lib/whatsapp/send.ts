@@ -105,7 +105,7 @@ export async function deliverTemplate(d: Destination, tpl: ApprovedTemplate, val
  */
 export async function recordOutboundMessage(
   conv: SendConversation,
-  msg: { wamid: string; body: string; msgType: "text" | "template"; templateName?: string },
+  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image"; templateName?: string },
   userId: string | null,
   opts: { preferLeadOwner?: boolean } = {},
 ): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {

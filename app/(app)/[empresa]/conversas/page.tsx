@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
 import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
@@ -37,7 +38,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes] = await Promise.all([
+  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes, quickRes, materialsRes] = await Promise.all([
     // O RLS já filtra: vendedor vê as dele e as da fila; gestor/admin, todas.
     supabase
       .from("conversations")
@@ -62,6 +63,18 @@ export default async function ConversasPage({ params, searchParams }: { params: 
       .order("name")
       .returns<TemplateRow[]>(),
     supabase.from("instagram_accounts").select("id, username, status").eq("company_id", company.id).returns<IgAccountRow[]>(),
+    // Respostas rápidas ("/") e materiais para enviar (migration 0021; sem ela, listas vazias).
+    supabase
+      .from("quick_replies")
+      .select("id, shortcut, body, uses")
+      .eq("company_id", company.id)
+      .returns<{ id: string; shortcut: string; body: string; uses: number }[]>(),
+    supabase
+      .from("sales_materials")
+      .select("id, title, file_name, mime")
+      .eq("company_id", company.id)
+      .order("title")
+      .returns<{ id: string; title: string; file_name: string; mime: string }[]>(),
   ]);
   const igAccounts = (igRes.data ?? []).map((a) => ({ id: a.id, username: a.username, connected: a.status === "connected" }));
 
@@ -95,7 +108,17 @@ export default async function ConversasPage({ params, searchParams }: { params: 
 
   return (
     <>
-      <PageHeader title="Conversas" subtitle={`${company.name}: ${igAccounts.length ? "WhatsApp e Instagram" : "WhatsApp"} em tempo real`} />
+      <PageHeader
+        title="Conversas"
+        subtitle={`${company.name}: ${igAccounts.length ? "WhatsApp e Instagram" : "WhatsApp"} em tempo real`}
+        actions={
+          isManager(company.role) ? (
+            <Link href={`/${company.slug}/conversas/respostas`} className="btn">
+              Respostas e materiais
+            </Link>
+          ) : undefined
+        }
+      />
       <div className="content grid gap-3">
         {convRes.error && <Notice tone="bad">Não foi possível carregar as conversas. Recarregue a página.</Notice>}
         <Inbox
@@ -111,6 +134,8 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           manager={isManager(company.role)}
           companyAi={aiRes.data?.enabled ?? false}
           initialId={sp.c ?? null}
+          quickReplies={quickRes.data ?? []}
+          materials={(materialsRes.data ?? []).map((m) => ({ id: m.id, title: m.title, fileName: m.file_name, kind: m.mime === "application/pdf" ? "pdf" : "imagem" }))}
         />
       </div>
     </>

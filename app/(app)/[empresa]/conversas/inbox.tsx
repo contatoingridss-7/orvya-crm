@@ -18,6 +18,7 @@ import { templateCost, type TemplateCategory } from "@/lib/whatsapp/pricing";
 import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNames } from "@/lib/whatsapp/templates";
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
+import { AttachButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
 import { assumeConversation, markRead, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
@@ -64,6 +65,8 @@ type Props = {
   manager: boolean;
   companyAi: boolean;
   initialId: string | null;
+  quickReplies: QuickReply[];
+  materials: Material[];
 };
 
 type Message = {
@@ -115,7 +118,7 @@ function dayLabel(iso: string): string {
 }
 
 export function Inbox(props: Props) {
-  const { slug, companyId, conversations, numbers, igAccounts, people, viewerId, viewerName, templates, manager, companyAi } = props;
+  const { slug, companyId, conversations, numbers, igAccounts, people, viewerId, viewerName, templates, manager, companyAi, quickReplies, materials } = props;
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(props.initialId);
   const [filter, setFilter] = useState<Filter>("todas");
@@ -252,6 +255,8 @@ export function Inbox(props: Props) {
           viewerName={viewerName}
           templates={templates}
           manager={manager}
+          quickReplies={quickReplies}
+          materials={materials}
           onBack={() => {
             setSelectedId(null);
             window.history.replaceState(null, "", window.location.pathname);
@@ -274,6 +279,8 @@ function Thread({
   viewerName,
   templates,
   manager,
+  quickReplies,
+  materials,
   onBack,
 }: {
   slug: string;
@@ -285,6 +292,8 @@ function Thread({
   viewerName: string;
   templates: InboxTemplate[];
   manager: boolean;
+  quickReplies: QuickReply[];
+  materials: Material[];
   onBack: () => void;
 }) {
   const router = useRouter();
@@ -369,7 +378,11 @@ function Thread({
     });
   }, [text, slug, c.id, router, toast]);
 
+  // "/" na caixa de texto abre as respostas rápidas.
+  const qr = useQuickReplies({ slug, text, setText, replies: quickReplies, contactName: c.contactName, viewerName });
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (qr.onKeyDown(e)) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -464,7 +477,9 @@ function Thread({
                 : `Passou de 24 horas: a resposta vai como atendimento da equipe, permitido até ${igEnd ? formatInTimeZone(igEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}.`}
             </div>
             <div className="composer">
-              <textarea
+              <div className="qr-wrap">
+                {qr.menu}
+                <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={onKeyDown}
@@ -474,6 +489,7 @@ function Thread({
                 maxLength={1000}
                 disabled={sending}
               />
+              </div>
               <Button variant="primary" loading={sending} disabled={!text.trim()} onClick={send}>
                 Enviar
               </Button>
@@ -525,16 +541,20 @@ function Thread({
             )}
           </div>
           <div className="composer">
-            <textarea
+            <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} />
+            <div className="qr-wrap">
+              {qr.menu}
+              <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={`Responder ${firstName(c.contactName)}… (Enter envia, Shift+Enter quebra linha)`}
+              placeholder={`Responder ${firstName(c.contactName)}… (/ para respostas rápidas, Enter envia)`}
               aria-label="Mensagem"
               rows={1}
               maxLength={4096}
               disabled={sending}
             />
+            </div>
             <Button variant="primary" loading={sending} disabled={!text.trim()} onClick={send}>
               Enviar
             </Button>

@@ -6,7 +6,9 @@ import { isManager } from "@/lib/auth/roles";
 import { getViewer } from "@/lib/auth/viewer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { markAsRead, sendTextMessage } from "@/lib/whatsapp/graph";
+import { photoUrl } from "@/lib/catalog/photos";
+import { formatBRL } from "@/lib/format";
+import { markAsRead, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
 import {
   deliverTemplate,
   recordOutboundMessage,
@@ -69,7 +71,7 @@ async function prepareSend(ctx: Ctx, conversationId: string): Promise<{ ok: true
 async function recordOutbound(
   ctx: Ctx,
   conv: ConvRow,
-  msg: { wamid: string; body: string; msgType: "text" | "template"; templateName?: string },
+  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image"; templateName?: string },
 ): Promise<ActionResult> {
   const r = await recordOutboundMessage(conv, msg, ctx.viewer.id);
   return r.ok ? { ok: true } : r;
@@ -214,4 +216,130 @@ export async function markRead(slug: string, conversationId: string): Promise<vo
     // Se a Meta recusar (token expirado, mensagem antiga), não atrapalha a tela.
     await markAsRead(number.phone_number_id, cred.access_token, last.wa_message_id).catch(() => undefined);
   }
+}
+
+const mediaSchema = z.object({ conversationId: z.uuid(), id: z.uuid() });
+
+/** Confere permissão, número e janela de 24 h (documento e foto são mensagens livres). */
+async function prepareMediaSend(ctx: Ctx, conversationId: string) {
+  const prep = await prepareSend(ctx, conversationId);
+  if (!prep.ok) return prep;
+  if (!isWindowOpen(prep.p.conv.last_inbound_at)) {
+    return { ok: false as const, error: "A janela de 24 horas está fechada. Fora dela, só modelos de mensagem aprovados." };
+  }
+  return prep;
+}
+
+/** Envia um material (catálogo em PDF, tabela, folheto) como documento do WhatsApp. */
+export async function sendMaterial(slug: string, input: z.input<typeof mediaSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = mediaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  const { data: material } = await ctx.supabase
+    .from("sales_materials")
+    .select("id, title, file_path, file_name, mime")
+    .eq("id", parsed.data.id)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<{ id: string; title: string; file_path: string; file_name: string; mime: string }>();
+  if (!material) return { ok: false, error: "Material não encontrado." };
+
+  const prep = await prepareMediaSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+
+  // Link assinado curto: a Meta baixa o arquivo na hora do envio.
+  const admin = createAdminClient();
+  const { data: signed } = await admin.storage.from("sales-materials").createSignedUrl(material.file_path, 600);
+  if (!signed) return { ok: false, error: "Arquivo indisponível. Envie de novo em Automações → Materiais." };
+  const kind = material.mime.startsWith("image/") ? "image" : "document";
+
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) =>
+      sendMediaMessage(phoneNumberId, token, dest, { kind, link: signed.signedUrl, filename: material.file_name, caption: kind === "image" ? material.title : undefined }),
+    );
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const { data: count } = await admin.from("sales_materials").select("uses").eq("id", material.id).maybeSingle<{ uses: number }>();
+  await admin.from("sales_materials").update({ uses: (count?.uses ?? 0) + 1 }).eq("id", material.id);
+  const r = await recordOutbound(ctx, conv, { wamid, body: `[${kind === "image" ? "Imagem" : "Documento"}] ${material.title}`, msgType: kind });
+  revalidatePath(`/${slug}/conversas`);
+  return r;
+}
+
+type ProductPick = { id: string; code: string | null; name: string; sale_price: number | string | null; rent_price_month: number | string | null; photo_path: string | null };
+
+/** Busca no catálogo da empresa para enviar na conversa (nome ou código). */
+export async function searchProducts(slug: string, term: string): Promise<{ id: string; label: string; price: string | null; hasPhoto: boolean }[]> {
+  const ctx = await context(slug);
+  const q = term.trim().replace(/[%_,()]/g, " ").slice(0, 60);
+  if (!ctx || q.length < 2) return [];
+  const { data } = await ctx.supabase
+    .from("products")
+    .select("id, code, name, sale_price, rent_price_month, photo_path")
+    .eq("company_id", ctx.company.id)
+    .eq("active", true)
+    .or(`name.ilike.%${q}%,code.ilike.%${q}%`)
+    .order("name")
+    .limit(12)
+    .returns<ProductPick[]>();
+  return (data ?? []).map((p) => ({
+    id: p.id,
+    label: `${p.code ? `${p.code} · ` : ""}${p.name}`,
+    price: productPrice(p),
+    hasPhoto: !!p.photo_path,
+  }));
+}
+
+function productPrice(p: ProductPick): string | null {
+  const parts: string[] = [];
+  if (p.sale_price !== null) parts.push(formatBRL(Number(p.sale_price)));
+  if (p.rent_price_month !== null) parts.push(`aluguel ${formatBRL(Number(p.rent_price_month))}/mês`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * Envia um produto do catálogo: foto com nome e preço na legenda (ou só o texto, se não houver foto).
+ * Preço sempre do catálogo; produto sem preço vai sem valor (o vendedor completa).
+ */
+export async function sendProduct(slug: string, input: z.input<typeof mediaSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = mediaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  const { data: product } = await ctx.supabase
+    .from("products")
+    .select("id, code, name, sale_price, rent_price_month, photo_path")
+    .eq("id", parsed.data.id)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<ProductPick>();
+  if (!product) return { ok: false, error: "Produto não encontrado." };
+
+  const prep = await prepareMediaSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+
+  const price = productPrice(product);
+  const caption = [`*${product.name}*`, product.code ? `Código ${product.code}` : null, price].filter(Boolean).join("\n");
+  const link = photoUrl(product.photo_path);
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) =>
+      link ? sendMediaMessage(phoneNumberId, token, dest, { kind: "image", link, caption }) : sendTextMessage(phoneNumberId, token, dest, caption),
+    );
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const r = await recordOutbound(ctx, conv, { wamid, body: link ? `[Imagem] ${caption}` : caption, msgType: link ? "image" : "text" });
+  revalidatePath(`/${slug}/conversas`);
+  return r;
+}
+
+/** Soma um uso na resposta rápida (as mais usadas sobem na lista do "/"). */
+export async function quickReplyUsed(slug: string, id: string): Promise<void> {
+  const ctx = await context(slug);
+  if (!ctx || !z.uuid().safeParse(id).success) return;
+  await ctx.supabase.rpc("quick_reply_used", { p_id: id });
 }

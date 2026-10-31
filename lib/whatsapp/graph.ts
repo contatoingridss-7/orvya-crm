@@ -63,6 +63,29 @@ export async function sendTextMessage(phoneNumberId: string, token: string, to: 
   return id;
 }
 
+/**
+ * Documento ou imagem por link (só dentro da janela de 24 h). A Meta baixa o arquivo do link na hora;
+ * para arquivo privado, passar um link assinado de curta duração. Devolve o wamid.
+ */
+export async function sendMediaMessage(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  media: { kind: "document" | "image"; link: string; caption?: string; filename?: string },
+): Promise<string> {
+  const payload =
+    media.kind === "document"
+      ? { link: media.link, ...(media.filename ? { filename: media.filename } : {}), ...(media.caption ? { caption: media.caption } : {}) }
+      : { link: media.link, ...(media.caption ? { caption: media.caption } : {}) };
+  const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
+    method: "POST",
+    body: { messaging_product: "whatsapp", recipient_type: "individual", to, type: media.kind, [media.kind]: payload },
+  });
+  const id = res.messages?.[0]?.id;
+  if (!id) throw new GraphError("A Meta não confirmou o envio.", 502);
+  return id;
+}
+
 /** Marca a mensagem do cliente como lida (os dois tiques azuis no celular dele). */
 export function markAsRead(phoneNumberId: string, token: string, wamid: string) {
   return graph<{ success?: boolean }>(`${phoneNumberId}/messages`, token, {
