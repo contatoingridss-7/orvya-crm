@@ -83,14 +83,18 @@ type Message = {
 
 const MESSAGE_COLUMNS = "id, direction, sender, user_id, msg_type, template_name, body, media_path, media_mime, status, source, sent_at";
 
-type Filter = "todas" | "nao-lidas" | "precisa" | "minhas" | "fila";
+type Filter = "todas" | "nao-lidas" | "precisa" | "minhas" | "fila" | "finalizadas";
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "todas", label: "Todas" },
   { id: "nao-lidas", label: "Não lidas" },
   { id: "precisa", label: "Precisa de você" },
   { id: "minhas", label: "Minhas" },
   { id: "fila", label: "Fila" },
+  { id: "finalizadas", label: "Finalizadas (venda ou perda)" },
 ];
+
+/** Lead ganho ou perdido: a conversa sai da lista e fica em "Finalizadas" até o cliente escrever de novo (abre lead novo). */
+const finished = (c: { lead: { open: boolean } | null }) => !!c.lead && !c.lead.open;
 
 const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const hhmm = (iso: string) => formatInTimeZone(iso, TIMEZONE, "HH:mm");
@@ -143,6 +147,7 @@ export function Inbox(props: Props) {
     const digits = query.replace(/\D/g, "");
     return conversations.filter((c) => {
       if (numberFilter === IG_FILTER ? c.channel !== "instagram" : numberFilter && c.numberId !== numberFilter) return false;
+      if (filter === "finalizadas" ? !finished(c) : finished(c)) return false;
       if (filter === "nao-lidas" && c.unread === 0) return false;
       if (filter === "precisa" && !c.needsHuman) return false;
       if (filter === "minhas" && c.assignedTo !== viewerId) return false;
