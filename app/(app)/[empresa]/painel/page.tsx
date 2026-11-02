@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ComingSoon } from "@/components/app-shell/coming-soon";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
@@ -14,6 +13,7 @@ import { daysSince, formatBRL, formatBRLShort, timeAgo } from "@/lib/format";
 import { initials } from "@/lib/names";
 import { createClient } from "@/lib/supabase/server";
 import { PainelFilters } from "./filters";
+import { WhatsappPanel } from "./whatsapp-panel";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -293,9 +293,7 @@ export default async function PainelPage({
               </Panel>
             )}
 
-            <Panel title="WhatsApp" subtitle="Conversas iniciadas pelo cliente neste mês. Respostas em até 24 h depois da mensagem do cliente são gratuitas; só modelos enviados fora dessa janela são cobrados.">
-              <ComingSoon phase="Fase 3">Status dos números e contador de conversas aparecem quando o WhatsApp for conectado.</ComingSoon>
-            </Panel>
+            <WhatsappPanel supabase={supabase} companyId={company.id} slug={company.slug} monthStart={resolvePeriod("mes").start} />
           </div>
         </div>
       </div>

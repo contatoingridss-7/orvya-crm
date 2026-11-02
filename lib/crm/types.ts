@@ -49,6 +49,8 @@ export type BoardLead = {
   createdAt: string;
   contact: { id: string; name: string; phone: string | null; org: string | null; email: string | null; type: CustomerType };
   aiEnabled: boolean | null; // null = ainda sem conversa
+  /** Conversa do contato (WhatsApp ou Instagram) para abrir direto da ficha. */
+  conversationId: string | null;
   needsHuman: boolean;
   overdueTask: boolean;
   /** Tarefa vencendo hoje (ex.: follow-up do CPAP). */
@@ -60,7 +62,7 @@ export type BoardLead = {
 };
 
 export const LEAD_SELECT =
-  "id, stage_id, pipeline_id, owner_id, source_id, value, temperature, score, custom, lost_reason, closed_at, last_contact_at, created_at, scheduled_at, logistics_address, logistics_notes, logistics_status, delivered_at, contacts(id, name, phone_e164, org_name, email, customer_type), conversations(ai_enabled, needs_human)";
+  "id, stage_id, pipeline_id, owner_id, source_id, value, temperature, score, custom, lost_reason, closed_at, last_contact_at, created_at, scheduled_at, logistics_address, logistics_notes, logistics_status, delivered_at, contacts(id, name, phone_e164, org_name, email, customer_type), conversations(id, ai_enabled, needs_human)";
 
 export type LeadRow = {
   id: string;
@@ -82,7 +84,7 @@ export type LeadRow = {
   logistics_status: LogisticsStatus | null;
   delivered_at: string | null;
   contacts: { id: string; name: string; phone_e164: string | null; org_name: string | null; email: string | null; customer_type: CustomerType } | null;
-  conversations: { ai_enabled: boolean; needs_human: boolean }[] | null;
+  conversations: { id: string; ai_enabled: boolean; needs_human: boolean }[] | null;
 };
 
 export function toBoardLead(r: LeadRow, overdue: Set<string>, rentalDays?: Map<string, number>, dueToday?: Set<string>): BoardLead {
@@ -110,6 +112,7 @@ export function toBoardLead(r: LeadRow, overdue: Set<string>, rentalDays?: Map<s
       type: r.contacts?.customer_type ?? "B2C",
     },
     aiEnabled: conv ? conv.ai_enabled : null,
+    conversationId: conv?.id ?? null,
     needsHuman: conv?.needs_human ?? false,
     overdueTask: overdue.has(r.id),
     dueTodayTask: !overdue.has(r.id) && (dueToday?.has(r.id) ?? false),

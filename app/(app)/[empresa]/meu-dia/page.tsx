@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
-import { ComingSoon } from "@/components/app-shell/coming-soon";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
@@ -47,7 +46,7 @@ export default async function MeuDiaPage({ params }: { params: Promise<{ empresa
   const month = resolvePeriod("mes", now);
   const staleBefore = now.getTime() - STALE_DAYS * 86_400_000;
 
-  const [queueRes, tasksRes, mineRes] = await Promise.all([
+  const [queueRes, tasksRes, mineRes, waitingRes] = await Promise.all([
     // Fila: sem responsável e em aberto (o RLS mostra a fila para todo vendedor da empresa)
     supabase
       .from("leads")
@@ -75,7 +74,19 @@ export default async function MeuDiaPage({ params }: { params: Promise<{ empresa
       .eq("owner_id", viewer.id)
       .or(`closed_at.is.null,closed_at.gte."${month.start.toISOString()}"`)
       .returns<LeadRow[]>(),
+    // Minhas conversas cuja última mensagem é do cliente (esperando a minha resposta), mais antigas primeiro.
+    supabase
+      .from("conversations")
+      .select("id, channel, last_inbound_at, last_preview, contacts(name)")
+      .eq("company_id", company.id)
+      .eq("assigned_to", viewer.id)
+      .eq("last_direction", "in")
+      .not("last_inbound_at", "is", null)
+      .order("last_inbound_at", { ascending: true })
+      .limit(10)
+      .returns<{ id: string; channel: string; last_inbound_at: string; last_preview: string | null; contacts: { name: string } | null }[]>(),
   ]);
+  const waiting = waitingRes.data ?? [];
 
   const mine = mineRes.data ?? [];
   const open = mine.filter((l) => !l.closed_at);
@@ -149,7 +160,33 @@ export default async function MeuDiaPage({ params }: { params: Promise<{ empresa
           </Panel>
 
           <Panel title="Conversas esperando resposta" subtitle="As suas, ordenadas por tempo de espera.">
-            <ComingSoon phase="Fase 3">As conversas do WhatsApp aparecem aqui quando o número for conectado.</ComingSoon>
+            {waiting.length === 0 ? (
+              <div className="empty">Nenhuma conversa sua esperando resposta.</div>
+            ) : (
+              <div className="row-list">
+                {waiting.map((c) => {
+                  const minutes = (now.getTime() - new Date(c.last_inbound_at).getTime()) / 60_000;
+                  return (
+                    <div key={c.id} className="flex items-center gap-3 py-2.5">
+                      <span className="av" aria-hidden>
+                        {initials(c.contacts?.name ?? "?")}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <b className="block truncate font-semibold text-title">{c.contacts?.name ?? "Sem nome"}</b>
+                        <small className="block truncate text-xs text-muted">
+                          {c.channel === "instagram" ? "Instagram" : "WhatsApp"}
+                          {c.last_preview ? ` · ${c.last_preview}` : ""}
+                        </small>
+                      </div>
+                      <Pill tone={minutes >= 15 ? "bad" : minutes >= 5 ? "warn" : "neutral"}>{timeAgo(c.last_inbound_at)}</Pill>
+                      <Link className="btn sm" href={`/${company.slug}/conversas?c=${c.id}`}>
+                        Responder
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Panel>
 
           <Panel title="Leads parados" subtitle={`Seus leads sem contato há ${STALE_DAYS} dias ou mais.`}>

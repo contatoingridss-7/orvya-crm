@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -119,9 +120,15 @@ export function LeadDrawer(props: Props) {
         }
         footer={
           <>
-            <Button variant="primary" disabled title="Disponível com o WhatsApp (Fase 3)">
-              Abrir conversa
-            </Button>
+            {lead.conversationId ? (
+              <Link className="btn primary" href={`/${slug}/conversas?c=${lead.conversationId}`}>
+                Abrir conversa
+              </Link>
+            ) : (
+              <Button variant="primary" disabled title="Este contato ainda não mandou mensagem">
+                Abrir conversa
+              </Button>
+            )}
             {canEdit && wonStage && stage?.kind !== "won" && (
               <Button onClick={() => onMove(wonStage.id)} disabled={busy}>
                 Marcar ganho
@@ -209,7 +216,7 @@ export function LeadDrawer(props: Props) {
         <section className="dr-sec">
           <h3>Agente de IA</h3>
           {lead.aiEnabled === null ? (
-            <p className="m-0 text-[13px] text-muted">Ainda não há conversa no WhatsApp com este contato. Resumo, score e estado da IA aparecem aqui a partir da Fase 3.</p>
+            <p className="m-0 text-[13px] text-muted">Ainda não há conversa com este contato. Quando ele mandar mensagem no WhatsApp ou no Instagram, o estado do atendimento aparece aqui.</p>
           ) : (
             <div className="flex flex-wrap items-center gap-2 text-[13px]">
               {lead.needsHuman ? <Pill tone="bad">Precisa de você</Pill> : lead.aiEnabled ? <Pill tone="ind">IA respondendo</Pill> : <Pill>Equipe respondendo</Pill>}
