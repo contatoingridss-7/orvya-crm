@@ -124,6 +124,9 @@ type LocalRow = { id: string; name: string; language: string; status: TemplateSt
  * Atualiza status, categoria e motivo de rejeição a partir da Meta e importa os modelos
  * criados direto no Gerenciador do WhatsApp. Gestor ou administrador.
  */
+/** Modelos de exemplo que a Meta cria em toda conta nova (em inglês): não entram no Orvya. */
+const META_SAMPLES = /^(hello_world|jaspers_market_)/;
+
 export async function syncTemplates(slug: string): Promise<ActionResult> {
   const viewer = await getViewer();
   if (!viewer?.active) return { ok: false, error: "Sem acesso a esta empresa." };
@@ -178,7 +181,7 @@ export async function syncTemplates(slug: string): Promise<ActionResult> {
         })
         .eq("id", row.id);
       if (!error) updated++;
-    } else if (/^[a-z0-9_]+$/.test(t.name)) {
+    } else if (/^[a-z0-9_]+$/.test(t.name) && (t.language ?? LANGUAGE).startsWith("pt") && !META_SAMPLES.test(t.name)) {
       const body = t.components?.find((c) => c.type?.toUpperCase() === "BODY")?.text ?? "";
       const n = countParams(body);
       const { error } = await admin.from("message_templates").insert({
