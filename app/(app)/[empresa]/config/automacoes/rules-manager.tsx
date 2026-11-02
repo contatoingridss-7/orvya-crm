@@ -20,6 +20,8 @@ export type Rule = {
   stageName: string;
   taskTitle: string;
   dueInDays: number;
+  /** Prazo em horas (vale sobre dueInDays): retorno de orçamento e proposta. */
+  dueInHours: number | null;
   enabled: boolean;
   /** stage = ao entrar na etapa; stale = parado na etapa; delivered = quando a expedição confirma a entrega. */
   trigger: "stage" | "delivered" | "stale";
@@ -47,7 +49,8 @@ const LOC_FIXED: [string, string][] = [
   ["Contrato de locação a 30 dias do fim aparece no Painel", "Janela para oferecer a renovação."],
 ];
 
-const dueText = (d: number) => (d === 0 ? "Prazo para o mesmo dia" : `Prazo de ${d} ${d === 1 ? "dia" : "dias"}`);
+const hoursText = (h: number) => `${h} ${h === 1 ? "hora" : "horas"}`;
+const dueText = (d: number, h: number | null) => (h ? `Prazo de ${hoursText(h)}` : d === 0 ? "Prazo para o mesmo dia" : `Prazo de ${d} ${d === 1 ? "dia" : "dias"}`);
 const deliveredDueText = (d: number) => (d === 0 ? "Vence no dia da entrega" : d === 1 ? "Vence 24 horas após a entrega" : `Vence ${d} dias após a entrega`);
 
 export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: string; isLoc: boolean; rules: Rule[]; pipelines: Pipeline[]; stages: StageOption[] }) {
@@ -83,7 +86,8 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
         pipelineId,
         stageId: selectedStage?.id ?? "",
         taskTitle: String(f.get("taskTitle") ?? ""),
-        dueInDays: String(f.get("dueInDays") ?? "1"),
+        dueValue: String(f.get("dueValue") ?? "1"),
+        dueUnit: f.get("dueUnit") === "horas" ? "horas" : "dias",
         trigger: trigger === "delivered" && !selectedStage?.logistics ? "stage" : trigger,
         afterDays: trigger === "stale" ? String(f.get("afterDays") ?? "") : undefined,
         repeatDays: repeat && trigger !== "stale" ? String(f.get("repeatDays") ?? "") : undefined,
@@ -117,7 +121,7 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
                     {r.trigger === "delivered" && <Pill tone="ind">Ao entregar</Pill>}
                     {r.trigger === "stale" && <Pill tone="warn">Parado na etapa</Pill>}
                     {r.repeatDays && <Pill tone="ok">Repete a cada {r.repeatDays} dias</Pill>}
-                    {r.trigger === "delivered" ? deliveredDueText(r.dueInDays) : dueText(r.dueInDays)}
+                    {r.trigger === "delivered" && !r.dueInHours ? deliveredDueText(r.dueInDays) : dueText(r.dueInDays, r.dueInHours)}
                   </small>
                 </div>
                 <Switch label={`${r.enabled ? "Desligar" : "Ligar"} regra`} checked={r.enabled} disabled={pending} onChange={(e) => run(() => toggleRule(slug, r.id, e.target.checked))} />
@@ -131,7 +135,7 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
 
         <h3 className="mt-5 mb-2.5 text-[13px] font-[650]">Nova regra</h3>
         <form onSubmit={onCreate} className="grid gap-2.5">
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)_110px_auto] lg:items-end">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)_180px_auto] lg:items-end">
             <SelectField
               label="Funil"
               value={pipelineId}
@@ -163,7 +167,13 @@ export function RulesManager({ slug, isLoc, rules, pipelines, stages }: { slug: 
               ))}
             </SelectField>
             <TextField label="Tarefa a criar" name="taskTitle" required minLength={3} placeholder="Ex.: enviar vídeo de uso do equipamento" className="sm:col-span-2 lg:col-span-1" />
-            <TextField label="Prazo em dias" name="dueInDays" type="number" min={0} max={365} defaultValue={1} required />
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-1.5">
+              <TextField label="Prazo" name="dueValue" type="number" min={0} max={365} defaultValue={2} required />
+              <SelectField label="em" name="dueUnit" defaultValue="horas">
+                <option value="horas">horas</option>
+                <option value="dias">dias</option>
+              </SelectField>
+            </div>
             <Button type="submit" variant="primary" loading={pending}>
               Criar regra
             </Button>

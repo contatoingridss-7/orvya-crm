@@ -22,6 +22,7 @@ type RuleRow = {
   stage_id: string;
   task_title: string;
   due_in_days: number;
+  due_in_hours: number | null;
   enabled: boolean;
   trigger_event: Rule["trigger"];
   after_days: number | null;
@@ -36,7 +37,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
   const [pipelinesRes, stagesRes, rulesRes, templatesRes, igRepliesRes, igAccountRes, igMenuRes, numbersRes, afterHoursRes, distRes, sellersRes] = await Promise.all([
     supabase.from("pipelines").select("id, key, name, hint").eq("company_id", company.id).order("position").returns<Pipeline[]>(),
     supabase.from("stages").select("id, key, name, kind, position, logistics, pipeline_id").eq("company_id", company.id).order("position").returns<StageRow[]>(),
-    supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, enabled, trigger_event, after_days, repeat_days").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
+    supabase.from("automation_rules").select("id, pipeline_id, stage_id, task_title, due_in_days, due_in_hours, enabled, trigger_event, after_days, repeat_days").eq("company_id", company.id).order("created_at").returns<RuleRow[]>(),
     supabase
       .from("task_templates")
       .select("id, pipeline_id, title, active")
@@ -100,6 +101,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       stageName: stages.find((s) => s.id === r.stage_id)?.name ?? "Etapa",
       taskTitle: r.task_title,
       dueInDays: r.due_in_days,
+      dueInHours: r.due_in_hours ?? null,
       enabled: r.enabled,
       trigger: r.trigger_event,
       afterDays: r.after_days,
@@ -110,7 +112,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
         (pipelineOrder.get(a.pipelineId) ?? 0) - (pipelineOrder.get(b.pipelineId) ?? 0) ||
         (stageOrder.get(a.stageId) ?? 0) - (stageOrder.get(b.stageId) ?? 0) ||
         TRIGGER_ORDER[a.trigger] - TRIGGER_ORDER[b.trigger] ||
-        a.dueInDays - b.dueInDays,
+        a.dueInDays - b.dueInDays || (a.dueInHours ?? 0) - (b.dueInHours ?? 0),
     );
 
   return (

@@ -23,7 +23,8 @@ const ruleSchema = z.object({
   pipelineId: z.uuid(),
   stageId: z.uuid("Escolha a etapa."),
   taskTitle: z.string().trim().min(3, "Descreva a tarefa.").max(200),
-  dueInDays: z.coerce.number().int().min(0, "Prazo inválido.").max(365, "Prazo de no máximo 365 dias."),
+  dueValue: z.coerce.number().int().min(0, "Prazo inválido.").max(365, "Prazo de no máximo 365 dias."),
+  dueUnit: z.enum(["horas", "dias"]).default("dias"),
   trigger: z.enum(["stage", "delivered", "stale"]).default("stage"),
   afterDays: z.coerce.number().int().min(1, "Informe há quantos dias parado.").max(365).optional(),
   repeatDays: z.coerce.number().int().min(1, "Repetição inválida.").max(365).optional(),
@@ -48,13 +49,15 @@ export async function createRule(slug: string, input: z.input<typeof ruleSchema>
   if (d.trigger === "delivered" && !stage.logistics) return { ok: false, error: "A opção ao entregar só vale para etapas de entrega ou adaptação." };
   if (d.trigger === "stale" && !d.afterDays) return { ok: false, error: "Informe há quantos dias o lead está parado." };
   if (d.trigger === "stale" && stage.kind !== "open") return { ok: false, error: "Parado na etapa só vale para etapas em aberto." };
+  if (d.dueUnit === "horas" && (d.dueValue < 1 || d.dueValue > 72)) return { ok: false, error: "Prazo em horas: de 1 a 72." };
 
   const { error } = await ctx.supabase.from("automation_rules").insert({
     company_id: ctx.company.id,
     pipeline_id: d.pipelineId,
     stage_id: d.stageId,
     task_title: d.taskTitle,
-    due_in_days: d.dueInDays,
+    due_in_days: d.dueUnit === "horas" ? 0 : d.dueValue,
+    due_in_hours: d.dueUnit === "horas" ? d.dueValue : null,
     enabled: true,
     trigger_event: d.trigger,
     after_days: d.trigger === "stale" ? d.afterDays : null,
