@@ -7,7 +7,6 @@
 <meta name="description" content="Transformo conversa de anúncio em paciente agendado. Tráfego pago, atendimento no WhatsApp e o Orvya CRM trabalhando juntos, do anúncio à consulta.">
 <meta property="og:title" content="Ingrid Soares · VÉR7ICE">
 <meta property="og:description" content="Transformo conversa de anúncio em paciente agendado.">
-<meta property="og:image" content="https://ver7ice.com.br/site/ingrid.jpg">
 <meta property="og:locale" content="pt_BR">
 <meta name="theme-color" content="#0B0D0F">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -54,13 +53,18 @@ main {
 }
 header { display: grid; justify-items: center; gap: 14px; text-align: center; }
 .foto {
+  display: grid;
+  place-items: center;
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  object-fit: cover;
+  background: radial-gradient(circle at 30% 20%, #1A2B42, var(--noite) 70%);
   border: 1px solid var(--linha);
   box-shadow: 0 0 0 5px rgba(114, 197, 181, 0.08);
 }
+.foto svg { width: 46px; height: 48px; }
+.foto path { fill: none; stroke: var(--papel); stroke-width: 5.2; stroke-linecap: round; stroke-linejoin: round; }
+.foto path.v { stroke: var(--verde); }
 .marca {
   display: block;
   width: 112px;
@@ -128,7 +132,9 @@ footer a { color: var(--cinza); }
 <body>
 <main>
   <header>
-    <img class="foto" src="/site/ingrid.jpg" alt="Ingrid Soares" width="96" height="96">
+    <span class="foto" role="img" aria-label="VÉR7ICE">
+      <svg viewBox="0 0 100 104" aria-hidden="true"><path d="M6 7 L50 97 L94 7"/><path d="M23 7 L50 60 L77 7"/><path class="v" d="M40.5 7 L50 27 L59.5 7"/></svg>
+    </span>
     <span class="marca" role="img" aria-label="VÉR7ICE"></span>
     <p class="nome">Ingrid Soares · aquisição, conversão e tecnologia para clínicas</p>
     <h1>Transformo conversa de anúncio em <em>paciente agendado</em>.</h1>
