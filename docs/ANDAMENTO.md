@@ -1,13 +1,15 @@
-# Orvya — andamento (atualizado em 16/10/2026)
+# Orvya — andamento (atualizado em 02/11/2026)
 
 Leia junto com `CLAUDE.md`, `KICKOFF.md` e `docs/SPEC.md`. Este arquivo registra o que já foi feito,
 decisões tomadas e o que falta, para retomar o trabalho numa conversa nova.
 
 ## No ar
-- Site: https://orvya-crm.vercel.app (Vercel, plano Hobby — passar para Pro antes do uso pelos clientes)
+- Sistema: **https://orvyacrm.app** (Vercel Pro desde 02/11/2026; domínio registrado na Vercel). Sem login, a raiz mostra a apresentação; `/login` é o acesso das equipes. `www.orvyacrm.app` redireciona (308) para `orvyacrm.app` — a Meta não aceita redirecionamento no webhook. O antigo `orvya-crm.vercel.app` continua respondendo.
+- **https://ver7ice.com.br**: página de Serviços da VÉR7ICE (`public/site/ver7ice.html`, servida pelo middleware conforme o endereço). Telas do sistema abertas por esse endereço redirecionam para `NEXT_PUBLIC_APP_URL`; `/privacidade` e `/r/` continuam abrindo nele.
+- Endereços externos já trocados para orvyacrm.app (02/11): `NEXT_PUBLIC_APP_URL`, Supabase (Site URL e Redirect URLs), Google Cloud (retorno do Google Ads), webhooks do WhatsApp (IC e LocPress) e do Instagram (LocPress), domínios dos três apps da Meta e Login do Facebook para Empresas (app da VÉR7ICE). Token do webhook: `META_WEBHOOK_VERIFY_TOKEN` (trocado em 02/11).
 - Banco: Supabase `psewjkrpwnmrmiwwmcgw` (São Paulo, plano gratuito — passar para Pro antes do uso real; pausa após 7 dias sem uso)
 - Repositório: github.com/contatoingridss-7/orvya-crm (commits com "Ingrid Soares <contatoingridss@gmail.com>")
-- Migrations aplicadas no Supabase: 0001 a 0007 (0008, 0009 e 0010 pendentes de confirmação). Dados de exemplo ativos (`supabase/exemplos/*`; remover antes do uso real com `remover_exemplos.sql`).
+- Migrations aplicadas no Supabase: 0001 a 0023 (conferidas no banco). Dados de exemplo ativos (`supabase/exemplos/*`; remover antes do uso real com `remover_exemplos.sql`).
 
 ## Pronto e testado
 | Fase | Conteúdo |
