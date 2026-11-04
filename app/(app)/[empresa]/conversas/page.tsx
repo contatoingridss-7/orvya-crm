@@ -6,6 +6,7 @@ import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
 import { requireRole } from "@/lib/auth/viewer";
 import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
+import { NewConversationButton } from "./new-conversation";
 import { Inbox, type InboxConversation, type InboxTemplate } from "./inbox";
 
 export const metadata: Metadata = { title: "Conversas" };
@@ -38,7 +39,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes, quickRes, materialsRes] = await Promise.all([
+  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes, quickRes, materialsRes, pipelinesRes, myScopeRes] = await Promise.all([
     // O RLS já filtra: vendedor vê as dele e as da fila; gestor/admin, todas.
     supabase
       .from("conversations")
@@ -75,7 +76,12 @@ export default async function ConversasPage({ params, searchParams }: { params: 
       .eq("company_id", company.id)
       .order("title")
       .returns<{ id: string; title: string; file_name: string; mime: string }[]>(),
+    // Funis para a nova conversa (o vendedor só os liberados para ele em Equipe).
+    supabase.from("pipelines").select("id, name").eq("company_id", company.id).order("position").returns<{ id: string; name: string }[]>(),
+    supabase.from("memberships").select("pipeline_ids").eq("company_id", company.id).eq("user_id", viewer.id).maybeSingle<{ pipeline_ids: string[] | null }>(),
   ]);
+  const myPipelines = myScopeRes.data?.pipeline_ids?.length && !isManager(company.role) ? new Set(myScopeRes.data.pipeline_ids) : null;
+  const startPipelines = (pipelinesRes.data ?? []).filter((p) => !myPipelines || myPipelines.has(p.id)).map((p) => ({ id: p.id, label: p.name }));
   const igAccounts = (igRes.data ?? []).map((a) => ({ id: a.id, username: a.username, connected: a.status === "connected" }));
 
   const people: Person[] = (membersRes.data ?? [])
@@ -112,11 +118,20 @@ export default async function ConversasPage({ params, searchParams }: { params: 
         title="Conversas"
         subtitle={`${company.name}: ${igAccounts.length ? "WhatsApp e Instagram" : "WhatsApp"} em tempo real`}
         actions={
-          isManager(company.role) ? (
-            <Link href={`/${company.slug}/conversas/respostas`} className="btn">
-              Respostas e materiais
-            </Link>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            {isManager(company.role) && (
+              <Link href={`/${company.slug}/conversas/respostas`} className="btn">
+                Respostas e materiais
+              </Link>
+            )}
+            <NewConversationButton
+              slug={company.slug}
+              viewerName={viewer.fullName}
+              numbers={(numbersRes.data ?? []).filter((n) => n.status === "connected").map((n) => ({ id: n.id, label: n.display_phone ? `${n.label} · ${n.display_phone}` : n.label }))}
+              pipelines={startPipelines}
+              templates={(templatesRes.data ?? []).map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body, variables: t.variables ?? [] }))}
+            />
+          </div>
         }
       />
       <div className="content grid gap-3">

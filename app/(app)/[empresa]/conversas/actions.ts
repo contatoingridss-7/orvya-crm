@@ -8,6 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { photoUrl } from "@/lib/catalog/photos";
 import { formatBRL } from "@/lib/format";
+import { formatPhone, toE164 } from "@/lib/phone";
+import { phoneCandidates } from "@/lib/whatsapp/payload";
 import { markAsRead, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
 import {
   deliverTemplate,
@@ -342,4 +344,145 @@ export async function quickReplyUsed(slug: string, id: string): Promise<void> {
   const ctx = await context(slug);
   if (!ctx || !z.uuid().safeParse(id).success) return;
   await ctx.supabase.rpc("quick_reply_used", { p_id: id });
+}
+
+const startSchema = z.object({
+  name: z.string().trim().max(120),
+  phone: z.string().trim().min(8, "Informe o telefone com DDD."),
+  numberId: z.uuid("Escolha o número de envio."),
+  pipelineId: z.uuid("Escolha o funil."),
+  templateId: z.uuid("Escolha o modelo."),
+  values: z.array(z.string().max(1024, "Campo longo demais.")).max(20),
+});
+
+/**
+ * Nova conversa iniciada pela equipe. Pela regra da Meta, a primeira mensagem para quem ainda não
+ * escreveu é um modelo aprovado; a conversa abre para texto livre quando o cliente responder.
+ * Cria (ou reaproveita) o contato, o lead (no funil escolhido, com quem iniciou como responsável)
+ * e a conversa, e envia o modelo.
+ */
+export async function startConversation(slug: string, input: z.input<typeof startSchema>): Promise<ActionResult & { conversationId?: string }> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = startSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const d = parsed.data;
+
+  const e164 = toE164(d.phone);
+  if (!e164) return { ok: false, error: "Telefone inválido. Use DDD + número, ex.: (86) 99999-0000." };
+
+  // Modelo aprovado da empresa, com todos os campos preenchidos.
+  const { data: tpl } = await ctx.supabase
+    .from("message_templates")
+    .select("id, name, language, body, status, variables")
+    .eq("id", d.templateId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<TemplateRow>();
+  if (!tpl || tpl.status !== "approved") return { ok: false, error: "Escolha um modelo aprovado pela Meta." };
+  const values = d.values.map(cleanParam);
+  if (values.length !== countParams(tpl.body) || values.some((v) => !v)) return { ok: false, error: "Preencha todos os campos do modelo." };
+
+  // Funil da empresa, e liberado para o vendedor (Equipe → funis).
+  const { data: pipeline } = await ctx.supabase.from("pipelines").select("id").eq("id", d.pipelineId).eq("company_id", ctx.company.id).maybeSingle<{ id: string }>();
+  if (!pipeline) return { ok: false, error: "Funil não encontrado." };
+  if (!ctx.manager) {
+    const { data: me } = await ctx.supabase
+      .from("memberships")
+      .select("pipeline_ids")
+      .eq("company_id", ctx.company.id)
+      .eq("user_id", ctx.viewer.id)
+      .maybeSingle<{ pipeline_ids: string[] | null }>();
+    if (me?.pipeline_ids?.length && !me.pipeline_ids.includes(pipeline.id)) return { ok: false, error: "Você não trabalha neste funil." };
+  }
+
+  const admin = createAdminClient();
+  const { data: number } = await admin
+    .from("whatsapp_numbers")
+    .select("id, status")
+    .eq("id", d.numberId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<{ id: string; status: string }>();
+  if (!number || number.status !== "connected") return { ok: false, error: "Este número não está conectado." };
+
+  // Contato: o mesmo telefone com ou sem o nono dígito é a mesma pessoa.
+  const candidates = phoneCandidates(e164);
+  let { data: contact } = await admin
+    .from("contacts")
+    .select("id, name")
+    .eq("company_id", ctx.company.id)
+    .in("phone_e164", candidates)
+    .limit(1)
+    .maybeSingle<{ id: string; name: string }>();
+  if (!contact) {
+    const { data: created, error } = await admin
+      .from("contacts")
+      .insert({ company_id: ctx.company.id, name: d.name || formatPhone(e164), phone_e164: e164 })
+      .select("id, name")
+      .single<{ id: string; name: string }>();
+    if (error || !created) return { ok: false, error: "Não foi possível criar o contato." };
+    contact = created;
+  }
+
+  // Conversa existente deste contato neste número: vendedor só segue se for dele ou da fila.
+  const { data: existing } = await admin
+    .from("conversations")
+    .select("id, assigned_to, lead_id")
+    .eq("company_id", ctx.company.id)
+    .eq("contact_id", contact.id)
+    .eq("channel", "whatsapp")
+    .eq("whatsapp_number_id", number.id)
+    .maybeSingle<{ id: string; assigned_to: string | null; lead_id: string | null }>();
+  if (existing?.assigned_to && existing.assigned_to !== ctx.viewer.id && !ctx.manager) {
+    return { ok: false, error: "Este contato já está com outro vendedor. Peça ao gestor para transferir." };
+  }
+
+  // Lead aberto do contato; se não houver, nasce no funil escolhido com quem iniciou como responsável.
+  let { data: lead } = await admin
+    .from("leads")
+    .select("id")
+    .eq("company_id", ctx.company.id)
+    .eq("contact_id", contact.id)
+    .is("closed_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (!lead) {
+    const { data: stage } = await admin.from("stages").select("id").eq("pipeline_id", pipeline.id).eq("kind", "open").order("position").limit(1).maybeSingle<{ id: string }>();
+    if (!stage) return { ok: false, error: "O funil não tem etapa aberta." };
+    const { data: created, error } = await admin
+      .from("leads")
+      .insert({ company_id: ctx.company.id, contact_id: contact.id, pipeline_id: pipeline.id, stage_id: stage.id, owner_id: ctx.viewer.id, last_contact_at: new Date().toISOString() })
+      .select("id")
+      .single<{ id: string }>();
+    if (error || !created) return { ok: false, error: "Não foi possível criar o lead." };
+    lead = created;
+  }
+
+  let conversationId = existing?.id;
+  if (!conversationId) {
+    const { data: created, error } = await admin
+      .from("conversations")
+      .insert({ company_id: ctx.company.id, contact_id: contact.id, channel: "whatsapp", whatsapp_number_id: number.id, lead_id: lead.id, assigned_to: ctx.viewer.id, ai_enabled: false })
+      .select("id")
+      .single<{ id: string }>();
+    if (error || !created) return { ok: false, error: "Não foi possível abrir a conversa." };
+    conversationId = created.id;
+  } else if (!existing?.lead_id) {
+    await admin.from("conversations").update({ lead_id: lead.id }).eq("id", conversationId);
+  }
+
+  const { data: conv } = await admin.from("conversations").select(SEND_CONVERSATION_SELECT).eq("id", conversationId).single<ConvRow>();
+  if (!conv) return { ok: false, error: "Conversa não encontrada." };
+  const dest = await resolveDestination(conv);
+  if (!dest.ok) return dest;
+
+  let sent: { wamid: string; body: string };
+  try {
+    sent = await deliverTemplate(dest.d, tpl, values);
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const r = await recordOutbound(ctx, conv, { wamid: sent.wamid, body: sent.body, msgType: "template", templateName: tpl.name });
+  revalidatePath(`/${slug}/conversas`);
+  return r.ok ? { ok: true, message: "Conversa iniciada. Quando o cliente responder, a conversa abre para texto livre.", conversationId } : r;
 }
