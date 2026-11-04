@@ -14,8 +14,8 @@ export const metadata: Metadata = { title: "Catálogo" };
 export default async function CatalogoPage({ params }: { params: Promise<{ empresa: string }> }) {
   const { company } = await requireCompany((await params).empresa);
   const canEdit = isManager(company.role);
-  // Foto: gestor, admin e expedição (a expedição não altera preço nem estoque).
-  const canPhoto = canEdit || company.role === "logistica";
+  // Foto: toda a equipe da empresa (vendedor incluído, migration 0025); preço e dados só gestão.
+  const canPhoto = true;
   const isLoc = company.slug === "locpress";
 
   const supabase = await createClient();
