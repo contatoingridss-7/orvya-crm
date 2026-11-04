@@ -141,9 +141,9 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                         <span className="flex flex-wrap items-center gap-1.5">
                           {m.pipelineIds ? m.pipelineIds.map((id) => <Pill key={id} tone="ind">{pipelineName.get(id) ?? "Funil removido"}</Pill>) : <span>Todos</span>}
                           {canEdit && (
-                            <button type="button" className="text-xs font-semibold text-tint-ink hover:underline" disabled={pending} onClick={() => setScoping(m)}>
-                              Alterar
-                            </button>
+                            <Button size="sm" disabled={pending} onClick={() => setScoping(m)}>
+                              Escolher funis
+                            </Button>
                           )}
                         </span>
                       )}
