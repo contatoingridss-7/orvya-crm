@@ -8,10 +8,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 const schema = z.object({
   enabled: z.boolean(),
   routes: z.array(z.object({ pipelineId: z.uuid(), keywords: z.string().max(500) })).max(20),
   workDays: z.record(z.uuid(), z.array(z.number().int().min(1).max(7)).max(7)),
+  breaks: z.record(z.uuid(), z.array(z.tuple([z.string().regex(HHMM), z.string().regex(HHMM)])).max(3)),
+  rotationPipelines: z.record(z.uuid(), z.array(z.uuid()).max(20).nullable()),
 });
 
 /** Rodízio e direcionamento por palavra-chave: admin, ou gestor com acesso às configurações (o RLS confere de novo). */
@@ -27,12 +31,21 @@ export async function saveDistribution(slug: string, input: z.input<typeof schem
     .map((r) => ({ pipeline_id: r.pipelineId, keywords: [...new Set(r.keywords.split(",").map(normalizeKeyword).filter((k) => k.length >= 3))].slice(0, 20) }))
     .filter((r) => r.keywords.length > 0);
   const workDays = Object.fromEntries(Object.entries(d.workDays).map(([id, days]) => [id, [...new Set(days)].sort()]));
+  const bad = Object.values(d.breaks).flat().find(([a, b]) => a >= b);
+  if (bad) return { ok: false, error: "No intervalo de almoço, o fim precisa ser depois do início." };
+  const breaks = Object.fromEntries(Object.entries(d.breaks).filter(([, list]) => list.length > 0));
+  // null = recebe dos funis que enxerga (não grava); lista vazia não é permitida.
+  const rotation = Object.fromEntries(Object.entries(d.rotationPipelines).filter(([, ids]) => ids && ids.length > 0));
+  if (Object.values(d.rotationPipelines).some((ids) => ids && ids.length === 0)) return { ok: false, error: "Escolha pelo menos um funil para cada vendedor no rodízio." };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("lead_distribution")
-    .upsert({ company_id: company.id, enabled: d.enabled, routes, work_days: workDays, updated_at: new Date().toISOString() }, { onConflict: "company_id" });
-  if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0020 foi rodada." };
+    .upsert(
+      { company_id: company.id, enabled: d.enabled, routes, work_days: workDays, breaks, rotation_pipelines: rotation, updated_at: new Date().toISOString() },
+      { onConflict: "company_id" },
+    );
+  if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0024 foi rodada." };
   revalidatePath(`/${slug}/config/automacoes`);
   return { ok: true, message: d.enabled ? "Distribuição salva. O rodízio está ligado." : "Distribuição salva. O rodízio está desligado." };
 }

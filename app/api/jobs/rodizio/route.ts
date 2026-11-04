@@ -2,8 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Abertura do expediente (cron da Vercel, 8h05 de Teresina, segunda a sábado): distribui pelo
-// rodízio os leads que chegaram fora do horário e ficaram sem dono.
+// A cada 15 minutos no horário de atendimento (cron da Vercel, 8h às 18h de Teresina, segunda a sábado):
+// distribui pelo rodízio os leads que ficaram sem dono (chegaram fora do horário ou com todos no almoço).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

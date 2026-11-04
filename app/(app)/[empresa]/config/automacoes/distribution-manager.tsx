@@ -11,7 +11,15 @@ import { saveDistribution } from "./distribution-actions";
 
 export type DistPipeline = { id: string; name: string };
 export type DistSeller = { id: string; name: string; pipelineIds: string[] | null };
-export type Distribution = { enabled: boolean; routes: { pipelineId: string; keywords: string[] }[]; workDays: Record<string, number[]> };
+export type Distribution = {
+  enabled: boolean;
+  routes: { pipelineId: string; keywords: string[] }[];
+  workDays: Record<string, number[]>;
+  /** Intervalo de almoço por vendedor: [início, fim] "HH:mm". */
+  breaks: Record<string, [string, string][]>;
+  /** Funis em que o vendedor recebe leads pelo rodízio (ausente = os que ele enxerga). */
+  rotationPipelines: Record<string, string[]>;
+};
 
 const DAYS = [
   { n: 1, label: "Seg" },
@@ -50,9 +58,28 @@ export function DistributionManager({
   const [workDays, setWorkDays] = useState<Record<string, number[]>>(() =>
     Object.fromEntries(sellers.map((s) => [s.id, settings?.workDays[s.id] ?? [1, 2, 3, 4, 5, 6]])),
   );
+  const [breaks, setBreaks] = useState<Record<string, [string, string] | null>>(() =>
+    Object.fromEntries(sellers.map((s) => [s.id, settings?.breaks?.[s.id]?.[0] ?? null])),
+  );
+  const [rotation, setRotation] = useState<Record<string, string[] | null>>(() =>
+    Object.fromEntries(sellers.map((s) => [s.id, settings?.rotationPipelines?.[s.id] ?? null])),
+  );
   const [error, setError] = useState<string>();
 
-  const inPipeline = (pipelineId: string) => sellers.filter((s) => !s.pipelineIds?.length || s.pipelineIds.includes(pipelineId));
+  /** Funis que o vendedor enxerga (restrição de Equipe). */
+  const visible = (s: DistSeller) => pipelines.filter((p) => !s.pipelineIds?.length || s.pipelineIds.includes(p.id));
+  /** Quem recebe leads do funil pelo rodízio. */
+  const inPipeline = (pipelineId: string) =>
+    sellers.filter((s) => (!s.pipelineIds?.length || s.pipelineIds.includes(pipelineId)) && (!rotation[s.id] || rotation[s.id]!.includes(pipelineId)));
+
+  function toggleRotation(seller: DistSeller, pipelineId: string) {
+    setRotation((r) => {
+      const cur = r[seller.id] ?? visible(seller).map((p) => p.id);
+      const next = cur.includes(pipelineId) ? cur.filter((x) => x !== pipelineId) : [...cur, pipelineId];
+      // Todos os que enxerga = sem restrição (null).
+      return { ...r, [seller.id]: next.length === visible(seller).length ? null : next };
+    });
+  }
 
   function toggleDay(sellerId: string, n: number) {
     setWorkDays((w) => {
@@ -68,6 +95,8 @@ export function DistributionManager({
         enabled,
         routes: pipelines.map((p) => ({ pipelineId: p.id, keywords: keywords[p.id] ?? "" })),
         workDays,
+        breaks: Object.fromEntries(Object.entries(breaks).map(([id, b]) => [id, b ? [b] : []])),
+        rotationPipelines: rotation,
       });
       if (r.ok) {
         toast(r.message, "ok");
@@ -115,20 +144,53 @@ export function DistributionManager({
         </div>
 
         {sellers.length > 0 && (
-          <div className="grid gap-2">
-            <h3 className="m-0 text-[14px] font-[650]">Dias de cada vendedor</h3>
-            <p className="m-0 text-[12.5px] text-muted">Quem não trabalha no dia fica fora do rodízio. Se ninguém do funil trabalha, o lead espera o próximo dia útil.</p>
-            {sellers.map((s) => (
-              <div key={s.id} className="flex flex-wrap items-center gap-2 text-[13.5px]">
-                <span className="w-[140px] truncate font-semibold">{s.name}</span>
-                {DAYS.map((d) => (
-                  <label key={d.n} className="flex items-center gap-1">
-                    <input type="checkbox" checked={(workDays[s.id] ?? []).includes(d.n)} onChange={() => toggleDay(s.id, d.n)} />
-                    {d.label}
-                  </label>
-                ))}
-              </div>
-            ))}
+          <div className="grid gap-2.5">
+            <h3 className="m-0 text-[14px] font-[650]">Vendedores no rodízio</h3>
+            <p className="m-0 text-[12.5px] text-muted">
+              Fora dos dias marcados e no horário de almoço, o vendedor sai do rodízio e o lead vai para quem está disponível. Se ninguém do funil estiver
+              disponível, o lead é distribuído assim que alguém voltar (a rotina confere a cada 15 minutos).
+            </p>
+            {sellers.map((s) => {
+              const b = breaks[s.id];
+              const rot = rotation[s.id] ?? null;
+              return (
+                <div key={s.id} className="grid gap-2.5 rounded-xl border border-line p-3 text-[13.5px]">
+                  <b className="font-semibold text-title">{s.name}</b>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <span className="w-[86px] text-xs font-semibold text-muted">Dias</span>
+                    {DAYS.map((d) => (
+                      <label key={d.n} className="flex items-center gap-1">
+                        <input type="checkbox" checked={(workDays[s.id] ?? []).includes(d.n)} onChange={() => toggleDay(s.id, d.n)} />
+                        {d.label}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-[86px] text-xs font-semibold text-muted">Almoço</span>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!b} onChange={(e) => setBreaks((x) => ({ ...x, [s.id]: e.target.checked ? ["12:00", "13:00"] : null }))} />
+                      {b ? "das" : "Sem intervalo"}
+                    </label>
+                    {b && (
+                      <>
+                        <input type="time" className="inp !w-[110px]" value={b[0]} aria-label={`Início do almoço de ${s.name}`} onChange={(e) => setBreaks((x) => ({ ...x, [s.id]: [e.target.value, b[1]] }))} />
+                        <span className="text-muted">às</span>
+                        <input type="time" className="inp !w-[110px]" value={b[1]} aria-label={`Fim do almoço de ${s.name}`} onChange={(e) => setBreaks((x) => ({ ...x, [s.id]: [b[0], e.target.value] }))} />
+                      </>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <span className="w-[86px] text-xs font-semibold text-muted">Recebe leads</span>
+                    {visible(s).map((p) => (
+                      <label key={p.id} className="flex items-center gap-1">
+                        <input type="checkbox" checked={rot === null || rot.includes(p.id)} onChange={() => toggleRotation(s, p.id)} />
+                        {p.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
