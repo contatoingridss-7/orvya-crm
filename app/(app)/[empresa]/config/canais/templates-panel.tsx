@@ -40,6 +40,7 @@ export type TemplateItem = {
 
 type Props = {
   slug: string;
+  companyName: string;
   templates: TemplateItem[];
   canEdit: boolean;
   hasConnectedNumber: boolean;
@@ -50,7 +51,12 @@ type Draft = { name: string; category: "MARKETING" | "UTILITY"; bodyFriendly: st
 
 const EXAMPLE_DEFAULT: Record<string, string> = { nome: "Maria", vendedor: "Ana", produto: "cadeira de rodas" };
 
-export function TemplatesPanel({ slug, templates, canEdit, hasConnectedNumber, loadError }: Props) {
+/** Sugestão econômica: acompanhamento de um orçamento que o cliente pediu (utilidade, ~9x mais barato que marketing). */
+const FOLLOW_UP_NAME = "acompanhamento_orcamento";
+const followUpBody = (companyName: string) =>
+  `Olá, {{nome}}! Aqui é {{vendedor}}, da ${companyName}, sobre o orçamento de {{produto}} que você solicitou. Ele continua disponível. Ficou alguma dúvida?`;
+
+export function TemplatesPanel({ slug, companyName, templates, canEdit, hasConnectedNumber, loadError }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
@@ -100,6 +106,24 @@ export function TemplatesPanel({ slug, templates, canEdit, hasConnectedNumber, l
         </div>
       }
     >
+      {canEdit && !loadError && !templates.some((t) => t.name === FOLLOW_UP_NAME) && (
+        <div className="mb-3 grid gap-2 rounded-xl border border-line p-3">
+          <b className="text-[13.5px] font-semibold text-title">
+            Sugestão para economizar: acompanhamento de orçamento como utilidade ({formatBRL(templateCost("UTILITY"))} por envio, em vez de{" "}
+            {formatBRL(templateCost("MARKETING"))})
+          </b>
+          <div className="tpl-prev">{followUpBody(companyName).replace(/\{\{(\w+)\}\}/g, (_, v: string) => EXAMPLE_DEFAULT[v] ?? v)}</div>
+          <small className="text-xs text-muted">
+            Para cliente que já pediu orçamento. Sem oferta nem desconto no texto, para a Meta aprovar como utilidade; se ela reclassificar como marketing, o
+            custo aparece aqui depois de “Atualizar status”.
+          </small>
+          <div>
+            <Button size="sm" variant="soft" onClick={() => setEditing({ name: FOLLOW_UP_NAME, category: "UTILITY", bodyFriendly: followUpBody(companyName) })}>
+              Usar esta sugestão
+            </Button>
+          </div>
+        </div>
+      )}
       {loadError ? (
         <Notice tone="bad">Não foi possível carregar os modelos. Recarregue a página.</Notice>
       ) : templates.length === 0 ? (

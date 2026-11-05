@@ -176,6 +176,7 @@ export function ChannelsManager({ slug, companyName, slots, pipelines, canEdit, 
 
       <TemplatesPanel
         slug={slug}
+        companyName={companyName}
         templates={templates}
         canEdit={canEdit}
         hasConnectedNumber={slots.some((n) => n.status === "connected")}

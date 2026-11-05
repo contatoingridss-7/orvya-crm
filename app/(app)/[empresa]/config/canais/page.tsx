@@ -7,7 +7,9 @@ import type { Pipeline } from "@/lib/crm/types";
 import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { whatsappEnvStatus } from "@/lib/whatsapp/config";
+import { loadPaidBudget } from "@/lib/whatsapp/budget";
 import { signupConfig } from "@/lib/whatsapp/signup";
+import { BudgetPanel } from "./budget-panel";
 import { ChannelsManager, type NumberSlot } from "./channels-manager";
 import { InstagramPanel, type IgAccountItem } from "./instagram-panel";
 import type { TemplateItem } from "./templates-panel";
@@ -85,6 +87,7 @@ export default async function CanaisPage({ params }: { params: Promise<{ empresa
       .gte("last_inbound_at", month.start.toISOString()),
   ]);
   const ig = igRes.data?.[0] ?? null;
+  const budget = await loadPaidBudget(supabase, company.id);
 
   const convs = convRes.data ?? [];
   const slots: NumberSlot[] = (numbersRes.data ?? []).map((n) => {
@@ -132,6 +135,7 @@ export default async function CanaisPage({ params }: { params: Promise<{ empresa
           templatesError={!!templatesRes.error}
           signup={canEdit ? signupConfig() : null}
         />
+        <BudgetPanel slug={company.slug} used={budget.used} limit={budget.limit} loadError={!!budget.missing} />
         <InstagramPanel
           slug={company.slug}
           companyName={company.name}

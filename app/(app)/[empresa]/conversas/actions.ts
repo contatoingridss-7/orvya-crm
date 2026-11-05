@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { photoUrl } from "@/lib/catalog/photos";
 import { formatBRL } from "@/lib/format";
 import { formatPhone, toE164 } from "@/lib/phone";
+import { budgetBlock, loadPaidBudget } from "@/lib/whatsapp/budget";
 import { phoneCandidates } from "@/lib/whatsapp/payload";
 import { markAsRead, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
 import {
@@ -159,6 +160,8 @@ export async function sendTemplate(slug: string, input: z.input<typeof templateS
   if (values.length !== countParams(tpl.body) || values.some((v) => !v)) {
     return { ok: false, error: "Preencha todos os campos do modelo." };
   }
+  const block = budgetBlock(await loadPaidBudget(ctx.supabase, ctx.company.id), ctx.manager);
+  if (block) return { ok: false, error: block.replace("Use o link grátis ou peça", "Peça") };
 
   const prep = await prepareSend(ctx, parsed.data.conversationId);
   if (!prep.ok) return prep;
@@ -346,41 +349,28 @@ export async function quickReplyUsed(slug: string, id: string): Promise<void> {
   await ctx.supabase.rpc("quick_reply_used", { p_id: id });
 }
 
-const startSchema = z.object({
+const threadSchema = z.object({
   name: z.string().trim().max(120),
   phone: z.string().trim().min(8, "Informe o telefone com DDD."),
   numberId: z.uuid("Escolha o número de envio."),
   pipelineId: z.uuid("Escolha o funil."),
+});
+const startSchema = threadSchema.extend({
   templateId: z.uuid("Escolha o modelo."),
   values: z.array(z.string().max(1024, "Campo longo demais.")).max(20),
 });
 
-/**
- * Nova conversa iniciada pela equipe. Pela regra da Meta, a primeira mensagem para quem ainda não
- * escreveu é um modelo aprovado; a conversa abre para texto livre quando o cliente responder.
- * Cria (ou reaproveita) o contato, o lead (no funil escolhido, com quem iniciou como responsável)
- * e a conversa, e envia o modelo.
- */
-export async function startConversation(slug: string, input: z.input<typeof startSchema>): Promise<ActionResult & { conversationId?: string }> {
-  const ctx = await context(slug);
-  if (!ctx) return NO_ACCESS;
-  const parsed = startSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  const d = parsed.data;
+type Thread = { conversationId: string; created: boolean; displayPhone: string | null };
 
+/**
+ * Contato, lead e conversa de uma nova conversa iniciada pela equipe. Reaproveita o que já existe
+ * (o mesmo telefone com ou sem o nono dígito é a mesma pessoa); o lead novo nasce no funil escolhido
+ * com quem iniciou como responsável, e a conversa fica com ele, sem IA. Quando o cliente escrever,
+ * o webhook encontra esse contato e essa conversa, e a mensagem cai direto com o vendedor.
+ */
+async function openThread(ctx: Ctx, d: z.output<typeof threadSchema>): Promise<{ ok: true; t: Thread } | { ok: false; error: string }> {
   const e164 = toE164(d.phone);
   if (!e164) return { ok: false, error: "Telefone inválido. Use DDD + número, ex.: (86) 99999-0000." };
-
-  // Modelo aprovado da empresa, com todos os campos preenchidos.
-  const { data: tpl } = await ctx.supabase
-    .from("message_templates")
-    .select("id, name, language, body, status, variables")
-    .eq("id", d.templateId)
-    .eq("company_id", ctx.company.id)
-    .maybeSingle<TemplateRow>();
-  if (!tpl || tpl.status !== "approved") return { ok: false, error: "Escolha um modelo aprovado pela Meta." };
-  const values = d.values.map(cleanParam);
-  if (values.length !== countParams(tpl.body) || values.some((v) => !v)) return { ok: false, error: "Preencha todos os campos do modelo." };
 
   // Funil da empresa, e liberado para o vendedor (Equipe → funis).
   const { data: pipeline } = await ctx.supabase.from("pipelines").select("id").eq("id", d.pipelineId).eq("company_id", ctx.company.id).maybeSingle<{ id: string }>();
@@ -398,13 +388,12 @@ export async function startConversation(slug: string, input: z.input<typeof star
   const admin = createAdminClient();
   const { data: number } = await admin
     .from("whatsapp_numbers")
-    .select("id, status")
+    .select("id, status, display_phone")
     .eq("id", d.numberId)
     .eq("company_id", ctx.company.id)
-    .maybeSingle<{ id: string; status: string }>();
+    .maybeSingle<{ id: string; status: string; display_phone: string | null }>();
   if (!number || number.status !== "connected") return { ok: false, error: "Este número não está conectado." };
 
-  // Contato: o mesmo telefone com ou sem o nono dígito é a mesma pessoa.
   const candidates = phoneCandidates(e164);
   let { data: contact } = await admin
     .from("contacts")
@@ -436,7 +425,6 @@ export async function startConversation(slug: string, input: z.input<typeof star
     return { ok: false, error: "Este contato já está com outro vendedor. Peça ao gestor para transferir." };
   }
 
-  // Lead aberto do contato; se não houver, nasce no funil escolhido com quem iniciou como responsável.
   let { data: lead } = await admin
     .from("leads")
     .select("id")
@@ -458,20 +446,89 @@ export async function startConversation(slug: string, input: z.input<typeof star
     lead = created;
   }
 
-  let conversationId = existing?.id;
-  if (!conversationId) {
-    const { data: created, error } = await admin
+  if (existing) {
+    if (!existing.lead_id) await admin.from("conversations").update({ lead_id: lead.id }).eq("id", existing.id);
+    return { ok: true, t: { conversationId: existing.id, created: false, displayPhone: number.display_phone } };
+  }
+  const { data: created, error } = await admin
+    .from("conversations")
+    .insert({ company_id: ctx.company.id, contact_id: contact.id, channel: "whatsapp", whatsapp_number_id: number.id, lead_id: lead.id, assigned_to: ctx.viewer.id, ai_enabled: false })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !created) return { ok: false, error: "Não foi possível abrir a conversa." };
+  return { ok: true, t: { conversationId: created.id, created: true, displayPhone: number.display_phone } };
+}
+
+const firstName = (full: string) => full.trim().split(/\s+/)[0] ?? "";
+
+/**
+ * Nova conversa SEM custo: o Orvya prepara contato, lead e conversa e devolve um link do WhatsApp
+ * da empresa com a mensagem do cliente já escrita. O vendedor manda o link por SMS, Instagram ou
+ * na ligação; quando o cliente toca e envia, a conversa começa por ele (grátis pela Meta) e cai
+ * direto com o vendedor.
+ */
+export async function startByLink(
+  slug: string,
+  input: z.input<typeof threadSchema>,
+): Promise<ActionResult & { conversationId?: string; link?: string; text?: string }> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = threadSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const d = parsed.data;
+
+  const r = await openThread(ctx, d);
+  if (!r.ok) return r;
+  const companyPhone = r.t.displayPhone ? toE164(r.t.displayPhone) : null;
+  if (!companyPhone) return { ok: false, error: "O número da empresa está sem telefone cadastrado. Peça ao administrador para conferir em Canais." };
+
+  if (r.t.created) {
+    await createAdminClient()
       .from("conversations")
-      .insert({ company_id: ctx.company.id, contact_id: contact.id, channel: "whatsapp", whatsapp_number_id: number.id, lead_id: lead.id, assigned_to: ctx.viewer.id, ai_enabled: false })
-      .select("id")
-      .single<{ id: string }>();
-    if (error || !created) return { ok: false, error: "Não foi possível abrir a conversa." };
-    conversationId = created.id;
-  } else if (!existing?.lead_id) {
-    await admin.from("conversations").update({ lead_id: lead.id }).eq("id", conversationId);
+      .update({ last_preview: "Link enviado. Aguardando o cliente chamar.", last_message_at: new Date().toISOString() })
+      .eq("id", r.t.conversationId);
   }
 
-  const { data: conv } = await admin.from("conversations").select(SEND_CONVERSATION_SELECT).eq("id", conversationId).single<ConvRow>();
+  const seller = ctx.viewer.fullName.trim();
+  const client = firstName(d.name);
+  const clientText = `Olá, ${firstName(seller) || ctx.company.name}! Quero atendimento.`;
+  const link = `https://wa.me/${companyPhone.slice(1)}?text=${encodeURIComponent(clientText)}`;
+  const text = `Olá${client ? `, ${client}` : ""}! Aqui é ${seller || "a equipe"}, da ${ctx.company.name}. Tudo bem? Para falar comigo pelo nosso WhatsApp, é só tocar no link: ${link}`;
+
+  revalidatePath(`/${slug}/conversas`);
+  return { ok: true, conversationId: r.t.conversationId, link, text };
+}
+
+/**
+ * Nova conversa por modelo aprovado (pago): pela regra da Meta, a primeira mensagem para quem ainda
+ * não escreveu é um modelo; a conversa abre para texto livre quando o cliente responder.
+ * Respeita o limite mensal de mensagens pagas da empresa (vendedor; gestor/admin seguem).
+ */
+export async function startConversation(slug: string, input: z.input<typeof startSchema>): Promise<ActionResult & { conversationId?: string }> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = startSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const d = parsed.data;
+
+  // Modelo aprovado da empresa, com todos os campos preenchidos.
+  const { data: tpl } = await ctx.supabase
+    .from("message_templates")
+    .select("id, name, language, body, status, variables")
+    .eq("id", d.templateId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<TemplateRow>();
+  if (!tpl || tpl.status !== "approved") return { ok: false, error: "Escolha um modelo aprovado pela Meta." };
+  const values = d.values.map(cleanParam);
+  if (values.length !== countParams(tpl.body) || values.some((v) => !v)) return { ok: false, error: "Preencha todos os campos do modelo." };
+  const block = budgetBlock(await loadPaidBudget(ctx.supabase, ctx.company.id), ctx.manager);
+  if (block) return { ok: false, error: block };
+
+  const r = await openThread(ctx, d);
+  if (!r.ok) return r;
+  const conversationId = r.t.conversationId;
+
+  const { data: conv } = await createAdminClient().from("conversations").select(SEND_CONVERSATION_SELECT).eq("id", conversationId).single<ConvRow>();
   if (!conv) return { ok: false, error: "Conversa não encontrada." };
   const dest = await resolveDestination(conv);
   if (!dest.ok) return dest;
@@ -482,7 +539,7 @@ export async function startConversation(slug: string, input: z.input<typeof star
   } catch (e) {
     return { ok: false, error: sendErrorMessage(e) };
   }
-  const r = await recordOutbound(ctx, conv, { wamid: sent.wamid, body: sent.body, msgType: "template", templateName: tpl.name });
+  const rec = await recordOutbound(ctx, conv, { wamid: sent.wamid, body: sent.body, msgType: "template", templateName: tpl.name });
   revalidatePath(`/${slug}/conversas`);
-  return r.ok ? { ok: true, message: "Conversa iniciada. Quando o cliente responder, a conversa abre para texto livre.", conversationId } : r;
+  return rec.ok ? { ok: true, message: "Conversa iniciada. Quando o cliente responder, a conversa abre para texto livre.", conversationId } : rec;
 }

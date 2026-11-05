@@ -6,6 +6,7 @@ import { isManager, type MemberRole, SALES_ROLES } from "@/lib/auth/roles";
 import { requireRole } from "@/lib/auth/viewer";
 import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
+import { loadPaidBudget } from "@/lib/whatsapp/budget";
 import { NewConversationButton } from "./new-conversation";
 import { Inbox, type InboxConversation, type InboxTemplate } from "./inbox";
 
@@ -82,6 +83,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
   ]);
   const myPipelines = myScopeRes.data?.pipeline_ids?.length && !isManager(company.role) ? new Set(myScopeRes.data.pipeline_ids) : null;
   const startPipelines = (pipelinesRes.data ?? []).filter((p) => !myPipelines || myPipelines.has(p.id)).map((p) => ({ id: p.id, label: p.name }));
+  const budget = await loadPaidBudget(supabase, company.id);
   const igAccounts = (igRes.data ?? []).map((a) => ({ id: a.id, username: a.username, connected: a.status === "connected" }));
 
   const people: Person[] = (membersRes.data ?? [])
@@ -127,6 +129,9 @@ export default async function ConversasPage({ params, searchParams }: { params: 
             <NewConversationButton
               slug={company.slug}
               viewerName={viewer.fullName}
+              companyName={company.name}
+              manager={isManager(company.role)}
+              budget={{ used: budget.used, limit: budget.limit }}
               numbers={(numbersRes.data ?? []).filter((n) => n.status === "connected").map((n) => ({ id: n.id, label: n.display_phone ? `${n.label} · ${n.display_phone}` : n.label }))}
               pipelines={startPipelines}
               templates={(templatesRes.data ?? []).map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body, variables: t.variables ?? [] }))}

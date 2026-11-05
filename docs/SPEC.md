@@ -98,6 +98,10 @@ Em etapa da expedição: bloco **Entrega/Adaptação com a expedição** com dat
   - Janela aberta: texto livre + anexo; aviso "Janela aberta até HH:MM".
   - Janela fechada: seletor de modelo aprovado, prévia preenchida, custo estimado, botão Enviar modelo.
   - Número não conectado: compositor bloqueado com aviso.
+- **Nova conversa** (botão redondo "+" no topo, dica "Nova conversa"): nome, WhatsApp, funil e número. Cria (ou reaproveita) contato, lead com quem iniciou como responsável e conversa sem IA. Dois caminhos:
+  - **Link grátis** (padrão): gera a saudação do vendedor ("Olá, Maria! Aqui é Renato, da IC Supra Hospitalar. Tudo bem?…") com link `wa.me` do número da empresa e a mensagem do cliente pronta. O vendedor manda por SMS, compartilhar ou copiar; quando o cliente envia, a conversa começa por ele (sem custo) e cai com o vendedor.
+  - **Modelo pago**: modelo aprovado (utilidade primeiro, por ser mais barato), com custo estimado e o contador do mês.
+- **Limite de mensagens pagas** (`whatsapp_paid_budget`, migration 0026): teto mensal de modelos por empresa (padrão 30). Todos da empresa leem o limite e a contagem (`paid_messages_this_month`, empresa toda); gestor com acesso às configurações ou admin altera. Passou do limite, o vendedor não envia modelo (nem na conversa, nem em nova conversa) e usa o link grátis; gestor e admin seguem. Validado no servidor.
 - **Instagram Direct** (`conversations.channel = 'instagram'`): etiqueta "Instagram" na lista, @ do cliente no cabeçalho, filtro "Instagram" no seletor de canal. Prazo da Meta: resposta livre até 24 h depois da última mensagem do cliente; de 24 h a 7 dias, só resposta da equipe (vai com a etiqueta HUMAN_AGENT); depois de 7 dias, compositor bloqueado até o cliente escrever. Sem modelos; até 1.000 caracteres. Validado no servidor (`lib/instagram/send.ts`).
 - Atualização ao vivo via Supabase Realtime (mensagens, status, novas conversas).
 
@@ -139,7 +143,8 @@ Regras por etapa (entrou na etapa X do funil Y → criar tarefa Z com prazo N di
 
 ### 4.10 Canais e integrações (admin edita, gestor vê)
 - 2 cartões de número por empresa (slot 1 e 2): nome interno, telefone, status, qualidade, conversas iniciadas pelo cliente no mês, leads abertos, conectado há. Ações: conectar (Embedded Signup da Meta — fase 2; no MVP o admin cadastra `phone_number_id`, `waba_id` e token manualmente), renomear, desconectar.
-- Modelos de mensagem: lista com categoria, status (sincronizado da Meta), custo estimado; criar modelo (envia para aprovação via Graph API).
+- Modelos de mensagem: lista com categoria, status (sincronizado da Meta), custo estimado; criar modelo (envia para aprovação via Graph API). Sugestão pronta de "acompanhamento_orcamento" como utilidade, para economizar.
+- Limite de mensagens pagas: uso do mês, barra de progresso e teto editável (gestor com acesso às configurações ou admin).
 - **Instagram Direct**: o admin cola o token do usuário do sistema, escolhe a conta (Página com Instagram profissional) e o funil dos leads. A conta (`instagram_accounts`) é visível para a equipe da empresa; só o admin da plataforma conecta e desconecta. O token da Página fica em `instagram_credentials`, sem acesso de usuário. Leads do Direct entram com origem "Instagram Direct" (ou "Meta Ads", quando vêm de anúncio).
 - Integrações (fase 2): Meta Lead Ads, API de Conversões, formulário do site, Messenger. Anúncios da Meta e do Google: tela Tráfego.
 

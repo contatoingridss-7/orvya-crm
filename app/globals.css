@@ -246,6 +246,40 @@
   .btn.primary:hover {
     filter: brightness(1.07);
   }
+  /* Botão redondo de ícone com balão de dica (hover e foco pelo teclado). */
+  .btn.round {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 999px;
+    justify-content: center;
+  }
+  .btn.round[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 20;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: var(--toast);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateY(-3px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .btn.round[data-tip]:hover::after,
+  .btn.round[data-tip]:focus-visible::after {
+    opacity: 1;
+    transform: none;
+  }
   .btn.soft {
     background: var(--tint);
     border-color: transparent;
