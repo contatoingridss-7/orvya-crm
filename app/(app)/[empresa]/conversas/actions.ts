@@ -235,11 +235,32 @@ async function prepareMediaSend(ctx: Ctx, conversationId: string) {
   return prep;
 }
 
+/**
+ * Guarda uma cópia do arquivo enviado (material ou foto do catálogo) junto da conversa, para a
+ * equipe ver a imagem/o documento no Orvya, como nas fotos enviadas pelo Anexar. A Meta baixa do
+ * arquivo original, que não muda; se a cópia falhar, a mensagem só fica sem a prévia.
+ */
+async function keepCopy(fromBucket: string, fromPath: string, companyId: string, conversationId: string, messageId: string, mime: string) {
+  try {
+    const admin = createAdminClient();
+    const { data: file } = await admin.storage.from(fromBucket).download(fromPath);
+    if (!file) return;
+    const ext = fromPath.split(".").pop()?.toLowerCase() || "bin";
+    const path = `${companyId}/${conversationId}/${messageId}.${ext}`;
+    const { error } = await admin.storage.from("whatsapp-media").upload(path, await file.arrayBuffer(), { contentType: mime, upsert: true });
+    if (!error) await admin.from("messages").update({ media_path: path, media_mime: mime }).eq("id", messageId);
+  } catch {
+    // Sem prévia; o envio ao cliente já aconteceu.
+  }
+}
+
 /** Envia um material (catálogo em PDF, tabela, folheto) como documento do WhatsApp. */
-export async function sendMaterial(slug: string, input: z.input<typeof mediaSchema>): Promise<ActionResult> {
+const materialSendSchema = mediaSchema.extend({ caption: z.string().trim().max(1024, "Legenda de no máximo 1.024 caracteres.").optional() });
+
+export async function sendMaterial(slug: string, input: z.input<typeof materialSendSchema>): Promise<ActionResult> {
   const ctx = await context(slug);
   if (!ctx) return NO_ACCESS;
-  const parsed = mediaSchema.safeParse(input);
+  const parsed = materialSendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Dados inválidos." };
   const { data: material } = await ctx.supabase
     .from("sales_materials")
@@ -262,16 +283,27 @@ export async function sendMaterial(slug: string, input: z.input<typeof mediaSche
   let wamid: string;
   try {
     wamid = await sendWithNinthDigitRetry(to, (dest) =>
-      sendMediaMessage(phoneNumberId, token, dest, { kind, link: signed.signedUrl, filename: material.file_name, caption: kind === "image" ? material.title : undefined }),
+      sendMediaMessage(phoneNumberId, token, dest, {
+        kind,
+        link: signed.signedUrl,
+        filename: material.file_name,
+        // Resposta rápida com uma imagem: o texto da resposta vai como legenda.
+        caption: kind === "audio" ? undefined : parsed.data.caption || (kind === "image" ? material.title : undefined),
+      }),
     );
   } catch (e) {
     return { ok: false, error: sendErrorMessage(e) };
   }
   const { data: count } = await admin.from("sales_materials").select("uses").eq("id", material.id).maybeSingle<{ uses: number }>();
   await admin.from("sales_materials").update({ uses: (count?.uses ?? 0) + 1 }).eq("id", material.id);
-  const r = await recordOutbound(ctx, conv, { wamid, body: `[${kind === "image" ? "Imagem" : kind === "audio" ? "Áudio" : "Documento"}] ${material.title}`, msgType: kind });
+  const rec = await recordOutboundMessage(
+    conv,
+    { wamid, body: `[${kind === "image" ? "Imagem" : kind === "audio" ? "Áudio" : "Documento"}] ${parsed.data.caption || material.title}`, msgType: kind },
+    ctx.viewer.id,
+  );
+  if (rec.ok) await keepCopy("sales-materials", material.file_path, ctx.company.id, conv.id, rec.messageId, material.mime);
   revalidatePath(`/${slug}/conversas`);
-  return r;
+  return rec.ok ? { ok: true } : rec;
 }
 
 type ProductPick = { id: string; code: string | null; name: string; sale_price: number | string | null; rent_price_month: number | string | null; photo_path: string | null };
@@ -337,9 +369,13 @@ export async function sendProduct(slug: string, input: z.input<typeof mediaSchem
   } catch (e) {
     return { ok: false, error: sendErrorMessage(e) };
   }
-  const r = await recordOutbound(ctx, conv, { wamid, body: link ? `[Imagem] ${caption}` : caption, msgType: link ? "image" : "text" });
+  const rec = await recordOutboundMessage(conv, { wamid, body: link ? `[Imagem] ${caption}` : caption, msgType: link ? "image" : "text" }, ctx.viewer.id);
+  if (rec.ok && link && product.photo_path) {
+    const ext = product.photo_path.split(".").pop()?.toLowerCase();
+    await keepCopy("product-photos", product.photo_path, ctx.company.id, conv.id, rec.messageId, ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg");
+  }
   revalidatePath(`/${slug}/conversas`);
-  return r;
+  return rec.ok ? { ok: true } : rec;
 }
 
 /** Soma um uso na resposta rápida (as mais usadas sobem na lista do "/"). */

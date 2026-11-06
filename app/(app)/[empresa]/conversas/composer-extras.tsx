@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { prepareVideoUpload, quickReplyUsed, searchProducts, sendAudio, sendMaterial, sendPhoto, sendProduct, sendUploadedVideo } from "./actions";
 
-export type QuickReply = { id: string; shortcut: string; body: string; uses: number };
+export type QuickReply = { id: string; shortcut: string; body: string; uses: number; materialIds?: string[] };
 export type Material = { id: string; title: string; fileName: string; kind: "pdf" | "imagem" | "audio" };
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -29,8 +29,10 @@ export function useQuickReplies(opts: {
   replies: QuickReply[];
   contactName: string;
   viewerName: string;
+  /** Imagens da resposta escolhida (vão junto no envio). */
+  onAttach?: (materialIds: string[]) => void;
 }) {
-  const { slug, text, setText, replies, contactName, viewerName } = opts;
+  const { slug, text, setText, replies, contactName, viewerName, onAttach } = opts;
   const [index, setIndex] = useState(0);
   const [closedFor, setClosedFor] = useState<string | null>(null);
   const query = text.startsWith("/") && !text.includes("\n") ? norm(text.slice(1).trim()) : null;
@@ -48,6 +50,7 @@ export function useQuickReplies(opts: {
 
   function pick(r: QuickReply) {
     setText(fillQuickReply(r.body, contactName, viewerName));
+    onAttach?.(r.materialIds ?? []);
     void quickReplyUsed(slug, r.id);
   }
 

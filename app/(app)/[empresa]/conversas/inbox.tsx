@@ -20,7 +20,7 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, AudioRecorder, EmojiButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
-import { assumeConversation, transferLead, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
+import { assumeConversation, sendMaterial, transferLead, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -377,17 +377,31 @@ function Thread({
   const igEnd = isIg && c.lastInboundAt ? instagramWindowEndsAt(c.lastInboundAt) : null;
   const igFreeEnd = isIg && c.lastInboundAt ? new Date(new Date(c.lastInboundAt).getTime() + IG_WINDOW_MS) : null;
 
+  // Imagens da resposta rápida escolhida: vão junto ao enviar.
+  const [attachIds, setAttachIds] = useState<string[]>([]);
+  const attached = attachIds.map((id) => materials.find((m) => m.id === id)).filter((m): m is Material => !!m);
+
   const send = useCallback(() => {
     const body = text.trim();
     if (!body) return;
     startSending(async () => {
-      const r = await sendText(slug, { conversationId: c.id, text: body });
-      if (r.ok) {
-        setText("");
-        router.refresh();
-      } else toast(r.error, "bad");
+      // Uma imagem: vai a imagem com o texto como legenda (uma mensagem só).
+      if (attached.length === 1 && attached[0]!.kind === "imagem" && body.length <= 1024) {
+        const r = await sendMaterial(slug, { conversationId: c.id, id: attached[0]!.id, caption: body });
+        if (!r.ok) return toast(r.error, "bad");
+      } else {
+        const r = await sendText(slug, { conversationId: c.id, text: body });
+        if (!r.ok) return toast(r.error, "bad");
+        for (const m of attached) {
+          const rm = await sendMaterial(slug, { conversationId: c.id, id: m.id });
+          if (!rm.ok) toast(`${m.title}: ${rm.error}`, "bad");
+        }
+      }
+      setText("");
+      setAttachIds([]);
+      router.refresh();
     });
-  }, [text, slug, c.id, router, toast]);
+  }, [text, slug, c.id, router, toast, attached]);
 
   // Emoji entra onde está o cursor da caixa de mensagem.
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -408,7 +422,7 @@ function Thread({
   const clearPasted = useCallback(() => setPasted(null), []);
 
   // "/" na caixa de texto abre as respostas rápidas.
-  const qr = useQuickReplies({ slug, text, setText, replies: quickReplies, contactName: c.contactName, viewerName });
+  const qr = useQuickReplies({ slug, text, setText, replies: quickReplies, contactName: c.contactName, viewerName, onAttach: setAttachIds });
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (qr.onKeyDown(e)) return;
@@ -680,6 +694,17 @@ function Thread({
               </button>
             )}
           </div>
+          {attached.length > 0 && (
+            <div className="win flex flex-wrap items-center gap-2">
+              <span>
+                Vai junto: {attached.map((m) => m.title).join(" · ")}
+                {attached.length === 1 ? " (com o texto como legenda)" : ""}
+              </span>
+              <button type="button" className="ml-auto underline" onClick={() => setAttachIds([])}>
+                Não enviar {attached.length === 1 ? "a imagem" : "as imagens"}
+              </button>
+            </div>
+          )}
           <div className="composer">
             <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
             <AudioRecorder slug={slug} conversationId={c.id} onSent={() => router.refresh()} />

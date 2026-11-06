@@ -37,6 +37,7 @@ const replySchema = z.object({
     )
     .pipe(z.string().regex(/^[a-z0-9-]{2,30}$/, "Atalho de 2 a 30 letras, números ou hífen (ex.: horario).")),
   body: z.string().trim().min(1, "Escreva o texto.").max(2000, "Texto de no máximo 2.000 caracteres."),
+  materialIds: z.array(z.uuid()).max(10, "No máximo 10 materiais por resposta.").default([]),
 });
 
 export async function saveQuickReply(slug: string, input: z.input<typeof replySchema>): Promise<ActionResult> {
@@ -44,11 +45,11 @@ export async function saveQuickReply(slug: string, input: z.input<typeof replySc
   if (!ctx) return NOT_ALLOWED;
   const parsed = replySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  const { id, shortcut, body } = parsed.data;
+  const { id, shortcut, body, materialIds } = parsed.data;
   const { error } = id
-    ? await ctx.supabase.from("quick_replies").update({ shortcut, body }).eq("id", id).eq("company_id", ctx.company.id)
-    : await ctx.supabase.from("quick_replies").insert({ company_id: ctx.company.id, shortcut, body });
-  if (error) return { ok: false, error: error.code === "23505" ? `Já existe a resposta /${shortcut}.` : "Não foi possível salvar. A migration 0021 já foi rodada?" };
+    ? await ctx.supabase.from("quick_replies").update({ shortcut, body, material_ids: materialIds }).eq("id", id).eq("company_id", ctx.company.id)
+    : await ctx.supabase.from("quick_replies").insert({ company_id: ctx.company.id, shortcut, body, material_ids: materialIds });
+  if (error) return { ok: false, error: error.code === "23505" ? `Já existe a resposta /${shortcut}.` : "Não foi possível salvar. As migrations 0021 e 0035 já foram rodadas?" };
   refresh(slug);
   return { ok: true, message: id ? "Resposta atualizada." : `Resposta /${shortcut} criada.` };
 }

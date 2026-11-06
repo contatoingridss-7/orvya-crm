@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { convertToVoice } from "../composer-extras";
 import { addMaterial, deleteMaterial, deleteQuickReply, saveQuickReply, type ActionResult } from "./actions";
 
-export type ReplyRow = { id: string; shortcut: string; body: string; uses: number };
+export type ReplyRow = { id: string; shortcut: string; body: string; uses: number; materialIds: string[] };
 export type MaterialRow = { id: string; title: string; fileName: string; mime: string; size: number; uses: number };
 
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -35,16 +35,30 @@ function useRun() {
 }
 
 /** Respostas rápidas: a equipe digita "/" na conversa e escolhe; as mais usadas aparecem primeiro. */
-export function QuickRepliesManager({ slug, replies, loadError }: { slug: string; replies: ReplyRow[]; loadError: boolean }) {
+export function QuickRepliesManager({
+  slug,
+  replies,
+  materials,
+  loadError,
+}: {
+  slug: string;
+  replies: ReplyRow[];
+  /** Imagens que podem ir junto com a resposta. */
+  materials: { id: string; title: string }[];
+  loadError: boolean;
+}) {
   const { pending, run } = useRun();
   const [editing, setEditing] = useState<ReplyRow | null>(null);
   const [shortcut, setShortcut] = useState("");
   const [body, setBody] = useState("");
+  const [attach, setAttach] = useState<string[]>([]);
+  const titleOf = (id: string) => materials.find((m) => m.id === id)?.title;
 
   function edit(r: ReplyRow | null) {
     setEditing(r);
     setShortcut(r?.shortcut ?? "");
     setBody(r?.body ?? "");
+    setAttach(r?.materialIds ?? []);
   }
 
   return (
@@ -58,6 +72,11 @@ export function QuickRepliesManager({ slug, replies, loadError }: { slug: string
               <span className="min-w-0 flex-1">
                 <b className="font-semibold text-accent">/{r.shortcut}</b>
                 <span className="block text-[13px] whitespace-pre-line">{r.body}</span>
+                {r.materialIds.length > 0 && (
+                  <small className="block text-xs text-accent">
+                    Vai com {r.materialIds.length === 1 ? "a imagem" : `${r.materialIds.length} imagens`}: {r.materialIds.map(titleOf).filter(Boolean).join(" · ")}
+                  </small>
+                )}
                 <small className="text-xs text-muted">{r.uses === 1 ? "usada 1 vez" : `usada ${r.uses} vezes`}</small>
               </span>
               <Button size="sm" variant="ghost" onClick={() => edit(r)}>
@@ -73,8 +92,24 @@ export function QuickRepliesManager({ slug, replies, loadError }: { slug: string
           <b className="text-[14px] font-[650]">{editing ? `Editar /${editing.shortcut}` : "Nova resposta"}</b>
           <TextField label="Atalho" value={shortcut} onChange={(e) => setShortcut(e.target.value)} placeholder="Ex.: horario" maxLength={31} hint="Sem espaço; vira /atalho na conversa." />
           <TextAreaField label="Texto" value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={2000} placeholder="Ex.: Oi, {nome}! Nosso atendimento é de segunda a sexta, das 8h às 18h." />
+          {materials.length > 0 && (
+            <fieldset className="m-0 grid max-h-[220px] gap-1.5 overflow-auto rounded-xl border border-line p-3 text-[13px]">
+              <legend className="px-1 text-xs text-muted">Imagens que vão junto (opcional)</legend>
+              {materials.map((m) => (
+                <label key={m.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={attach.includes(m.id)}
+                    onChange={(e) => setAttach((a) => (e.target.checked ? [...a, m.id] : a.filter((x) => x !== m.id)))}
+                  />
+                  {m.title}
+                </label>
+              ))}
+              <small className="text-xs text-muted">Uma imagem: vai com o texto como legenda. Várias: vai o texto e depois as imagens.</small>
+            </fieldset>
+          )}
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" loading={pending} onClick={() => run(() => saveQuickReply(slug, { id: editing?.id, shortcut, body }), () => edit(null))}>
+            <Button variant="primary" loading={pending} onClick={() => run(() => saveQuickReply(slug, { id: editing?.id, shortcut, body, materialIds: attach }), () => edit(null))}>
               {editing ? "Salvar alteração" : "Incluir resposta"}
             </Button>
             {editing && (
