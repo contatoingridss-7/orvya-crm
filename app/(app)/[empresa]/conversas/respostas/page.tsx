@@ -18,7 +18,7 @@ export default async function RespostasPage({ params }: { params: Promise<{ empr
       .eq("company_id", company.id)
       .order("uses", { ascending: false })
       .order("shortcut")
-      .returns<{ id: string; shortcut: string; body: string; uses: number; material_ids?: string[] }[]>(),
+      .returns<{ id: string; shortcut: string; body: string; uses: number; material_ids?: string[]; with_menu?: boolean }[]>(),
     supabase
       .from("sales_materials")
       .select("id, title, file_name, mime, size_bytes, uses")
@@ -41,7 +41,7 @@ export default async function RespostasPage({ params }: { params: Promise<{ empr
       <div className="content grid gap-4">
         <QuickRepliesManager
           slug={company.slug}
-          replies={(repliesRes.data ?? []).map((r) => ({ id: r.id, shortcut: r.shortcut, body: r.body, uses: r.uses, materialIds: r.material_ids ?? [] }))}
+          replies={(repliesRes.data ?? []).map((r) => ({ id: r.id, shortcut: r.shortcut, body: r.body, uses: r.uses, materialIds: r.material_ids ?? [], withMenu: r.with_menu ?? false }))}
           materials={(materialsRes.data ?? []).filter((m) => m.mime.startsWith("image/")).map((m) => ({ id: m.id, title: m.title }))}
           loadError={!!repliesRes.error}
         />

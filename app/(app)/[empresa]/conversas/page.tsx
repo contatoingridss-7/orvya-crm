@@ -71,7 +71,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
       .from("quick_replies")
       .select("*")
       .eq("company_id", company.id)
-      .returns<{ id: string; shortcut: string; body: string; uses: number; material_ids?: string[] }[]>(),
+      .returns<{ id: string; shortcut: string; body: string; uses: number; material_ids?: string[]; with_menu?: boolean }[]>(),
     supabase
       .from("sales_materials")
       .select("id, title, file_name, mime")
@@ -157,7 +157,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           manager={isManager(company.role)}
           companyAi={aiRes.data?.enabled ?? false}
           initialId={sp.c ?? null}
-          quickReplies={(quickRes.data ?? []).map((r) => ({ id: r.id, shortcut: r.shortcut, body: r.body, uses: r.uses, materialIds: r.material_ids ?? [] }))}
+          quickReplies={(quickRes.data ?? []).map((r) => ({ id: r.id, shortcut: r.shortcut, body: r.body, uses: r.uses, materialIds: r.material_ids ?? [], withMenu: r.with_menu ?? false }))}
           materials={(materialsRes.data ?? []).map((m) => ({ id: m.id, title: m.title, fileName: m.file_name, kind: m.mime === "application/pdf" ? "pdf" : m.mime.startsWith("audio/") ? "audio" : "imagem" }))}
         />
       </div>

@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { convertToVoice } from "../composer-extras";
 import { addMaterial, deleteMaterial, deleteQuickReply, saveQuickReply, type ActionResult } from "./actions";
 
-export type ReplyRow = { id: string; shortcut: string; body: string; uses: number; materialIds: string[] };
+export type ReplyRow = { id: string; shortcut: string; body: string; uses: number; materialIds: string[]; withMenu: boolean };
 export type MaterialRow = { id: string; title: string; fileName: string; mime: string; size: number; uses: number };
 
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -52,6 +52,7 @@ export function QuickRepliesManager({
   const [shortcut, setShortcut] = useState("");
   const [body, setBody] = useState("");
   const [attach, setAttach] = useState<string[]>([]);
+  const [withMenu, setWithMenu] = useState(false);
   const titleOf = (id: string) => materials.find((m) => m.id === id)?.title;
 
   function edit(r: ReplyRow | null) {
@@ -59,6 +60,7 @@ export function QuickRepliesManager({
     setShortcut(r?.shortcut ?? "");
     setBody(r?.body ?? "");
     setAttach(r?.materialIds ?? []);
+    setWithMenu(r?.withMenu ?? false);
   }
 
   return (
@@ -72,6 +74,7 @@ export function QuickRepliesManager({
               <span className="min-w-0 flex-1">
                 <b className="font-semibold text-accent">/{r.shortcut}</b>
                 <span className="block text-[13px] whitespace-pre-line">{r.body}</span>
+                {r.withMenu && <small className="block text-xs text-accent">Vai com os botões de assunto da triagem</small>}
                 {r.materialIds.length > 0 && (
                   <small className="block text-xs text-accent">
                     Vai com {r.materialIds.length === 1 ? "a imagem" : `${r.materialIds.length} imagens`}: {r.materialIds.map(titleOf).filter(Boolean).join(" · ")}
@@ -92,6 +95,12 @@ export function QuickRepliesManager({
           <b className="text-[14px] font-[650]">{editing ? `Editar /${editing.shortcut}` : "Nova resposta"}</b>
           <TextField label="Atalho" value={shortcut} onChange={(e) => setShortcut(e.target.value)} placeholder="Ex.: horario" maxLength={31} hint="Sem espaço; vira /atalho na conversa." />
           <TextAreaField label="Texto" value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={2000} placeholder="Ex.: Oi, {nome}! Nosso atendimento é de segunda a sexta, das 8h às 18h." />
+          <label className="flex items-start gap-2 text-[13px]">
+            <input type="checkbox" className="mt-1" checked={withMenu} onChange={(e) => setWithMenu(e.target.checked)} />
+            <span>
+              Enviar com os <b>botões de assunto</b> (os da Triagem no WhatsApp). O botão tocado leva o lead ao funil certo.
+            </span>
+          </label>
           {materials.length > 0 && (
             <fieldset className="m-0 grid max-h-[220px] gap-1.5 overflow-auto rounded-xl border border-line p-3 text-[13px]">
               <legend className="px-1 text-xs text-muted">Imagens que vão junto (opcional)</legend>
@@ -109,7 +118,7 @@ export function QuickRepliesManager({
             </fieldset>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" loading={pending} onClick={() => run(() => saveQuickReply(slug, { id: editing?.id, shortcut, body, materialIds: attach }), () => edit(null))}>
+            <Button variant="primary" loading={pending} onClick={() => run(() => saveQuickReply(slug, { id: editing?.id, shortcut, body, materialIds: attach, withMenu }), () => edit(null))}>
               {editing ? "Salvar alteração" : "Incluir resposta"}
             </Button>
             {editing && (

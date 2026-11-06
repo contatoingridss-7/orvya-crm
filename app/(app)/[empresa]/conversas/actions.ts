@@ -11,7 +11,7 @@ import { formatBRL } from "@/lib/format";
 import { formatPhone, toE164 } from "@/lib/phone";
 import { budgetBlock, loadPaidBudget } from "@/lib/whatsapp/budget";
 import { phoneCandidates } from "@/lib/whatsapp/payload";
-import { markAsRead, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
+import { markAsRead, sendButtonsMessage, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
 import {
   deliverTemplate,
   recordOutboundMessage,
@@ -897,4 +897,41 @@ export async function transferLead(slug: string, input: z.input<typeof transferS
   revalidatePath(`/${slug}/conversas`);
   revalidatePath(`/${slug}/funil`);
   return { ok: true, message: `Lead transferido para ${pipeline.name}, com ${who}.` };
+}
+
+const menuSchema = z.object({ conversationId: z.uuid(), text: z.string().trim().min(1, "Escreva a mensagem.").max(1024, "Texto de no máximo 1.024 caracteres.") });
+
+/**
+ * Resposta com os botões de assunto (ex.: /saudacao): o texto vai com os botões da triagem da
+ * empresa (Automações → Triagem no WhatsApp). O botão tocado leva o lead ao funil certo.
+ */
+export async function sendMenuReply(slug: string, input: z.input<typeof menuSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = menuSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const prep = await prepareMediaSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+
+  const { data: cfg } = await ctx.supabase
+    .from("whatsapp_triage")
+    .select("options")
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<{ options: { title?: string; pipeline_id?: string | null }[] | null }>();
+  const options = (cfg?.options ?? []).filter((o) => o.title?.trim() && o.pipeline_id).slice(0, 3);
+  if (!options.length) return { ok: false, error: "Cadastre os botões em Automações → Triagem no WhatsApp." };
+
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) =>
+      sendButtonsMessage(phoneNumberId, token, dest, parsed.data.text, options.map((o) => ({ id: `TRIAGEM:${o.pipeline_id}`, title: o.title!.trim() }))),
+    );
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const body = `${parsed.data.text}\nOpções: ${options.map((o) => o.title!.trim()).join(" · ")}`;
+  const rec = await recordOutboundMessage(conv, { wamid, body, msgType: "text" }, ctx.viewer.id);
+  revalidatePath(`/${slug}/conversas`);
+  return rec.ok ? { ok: true } : rec;
 }

@@ -20,7 +20,7 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, AudioRecorder, EmojiButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
-import { assumeConversation, sendMaterial, transferLead, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
+import { assumeConversation, sendMaterial, sendMenuReply, transferLead, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -379,12 +379,23 @@ function Thread({
 
   // Imagens da resposta rápida escolhida: vão junto ao enviar.
   const [attachIds, setAttachIds] = useState<string[]>([]);
+  const [withMenu, setWithMenu] = useState(false);
   const attached = attachIds.map((id) => materials.find((m) => m.id === id)).filter((m): m is Material => !!m);
 
   const send = useCallback(() => {
     const body = text.trim();
     if (!body) return;
     startSending(async () => {
+      // Resposta com botões de assunto (ex.: /saudacao).
+      if (withMenu) {
+        const r = await sendMenuReply(slug, { conversationId: c.id, text: body });
+        if (!r.ok) return toast(r.error, "bad");
+        setText("");
+        setWithMenu(false);
+        setAttachIds([]);
+        router.refresh();
+        return;
+      }
       // Uma imagem: vai a imagem com o texto como legenda (uma mensagem só).
       if (attached.length === 1 && attached[0]!.kind === "imagem" && body.length <= 1024) {
         const r = await sendMaterial(slug, { conversationId: c.id, id: attached[0]!.id, caption: body });
@@ -401,7 +412,7 @@ function Thread({
       setAttachIds([]);
       router.refresh();
     });
-  }, [text, slug, c.id, router, toast, attached]);
+  }, [text, slug, c.id, router, toast, attached, withMenu]);
 
   // Emoji entra onde está o cursor da caixa de mensagem.
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -422,7 +433,11 @@ function Thread({
   const clearPasted = useCallback(() => setPasted(null), []);
 
   // "/" na caixa de texto abre as respostas rápidas.
-  const qr = useQuickReplies({ slug, text, setText, replies: quickReplies, contactName: c.contactName, viewerName, onAttach: setAttachIds });
+  const qr = useQuickReplies({ slug, text, setText, replies: quickReplies, contactName: c.contactName, viewerName, onAttach: (ids, menu) => {
+      setAttachIds(ids);
+      setWithMenu(menu);
+    },
+  });
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (qr.onKeyDown(e)) return;
@@ -694,6 +709,14 @@ function Thread({
               </button>
             )}
           </div>
+          {withMenu && (
+            <div className="win flex flex-wrap items-center gap-2">
+              <span>Vai com os botões de assunto (o cliente toca e o lead vai para o funil certo).</span>
+              <button type="button" className="ml-auto underline" onClick={() => setWithMenu(false)}>
+                Enviar sem os botões
+              </button>
+            </div>
+          )}
           {attached.length > 0 && (
             <div className="win flex flex-wrap items-center gap-2">
               <span>
