@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { quickReplyUsed, searchProducts, sendMaterial, sendPhoto, sendProduct } from "./actions";
+import { createClient } from "@/lib/supabase/client";
+import { prepareVideoUpload, quickReplyUsed, searchProducts, sendMaterial, sendPhoto, sendProduct, sendUploadedVideo } from "./actions";
 
 export type QuickReply = { id: string; shortcut: string; body: string; uses: number };
 export type Material = { id: string; title: string; fileName: string; kind: "pdf" | "imagem" };
@@ -100,12 +101,27 @@ async function shrinkPhoto(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("foto"))), "image/jpeg", 0.82));
 }
 
-/** Anexar: foto do aparelho, material da empresa (PDF ou imagem) ou produto do catálogo (foto com nome e preço). */
-export function AttachButton({ slug, conversationId, materials, onSent }: { slug: string; conversationId: string; materials: Material[]; onSent: () => void }) {
+/** Anexar: foto ou vídeo (escolhido ou colado com Ctrl+V), material da empresa ou produto do catálogo. */
+export function AttachButton({
+  slug,
+  conversationId,
+  materials,
+  onSent,
+  pasted,
+  onPastedHandled,
+}: {
+  slug: string;
+  conversationId: string;
+  materials: Material[];
+  onSent: () => void;
+  /** Arquivo colado na caixa de mensagem: abre direto a prévia de envio. */
+  pasted?: File | null;
+  onPastedHandled?: () => void;
+}) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"foto" | "materiais" | "produto">("foto");
-  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
+  const [tab, setTab] = useState<"midia" | "materiais" | "produto">("midia");
+  const [media, setMedia] = useState<{ kind: "image" | "video"; blob: Blob; mime: string; url: string } | null>(null);
   const [caption, setCaption] = useState("");
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<Awaited<ReturnType<typeof searchProducts>>>([]);
@@ -121,28 +137,67 @@ export function AttachButton({ slug, conversationId, materials, onSent }: { slug
     return () => clearTimeout(t);
   }, [term, tab, slug]);
 
+  /** Foto é reduzida aqui; vídeo vai como está (até 16 MB, limite do WhatsApp). */
+  const loadFile = useCallback(
+    async (f: File) => {
+      const swap = (next: { kind: "image" | "video"; blob: Blob; mime: string }) =>
+        setMedia((old) => {
+          if (old) URL.revokeObjectURL(old.url);
+          return { ...next, url: URL.createObjectURL(next.blob) };
+        });
+      if (f.type.startsWith("video/")) {
+        if (!["video/mp4", "video/3gpp", "video/quicktime"].includes(f.type)) return toast("Envie o vídeo em MP4 (o formato da câmera do celular).", "bad");
+        if (f.size > 16 * 1024 * 1024) return toast("Vídeo grande demais: o WhatsApp aceita até 16 MB.", "bad");
+        return swap({ kind: "video", blob: f, mime: f.type });
+      }
+      if (!f.type.startsWith("image/")) return toast("Escolha uma foto ou um vídeo.", "bad");
+      try {
+        swap({ kind: "image", blob: await shrinkPhoto(f), mime: "image/jpeg" });
+      } catch {
+        toast("Não foi possível abrir esta imagem. Use uma foto em JPG ou PNG.", "bad");
+      }
+    },
+    [toast],
+  );
+
+  useEffect(() => {
+    if (!pasted) return;
+    setTab("midia");
+    setOpen(true);
+    void loadFile(pasted);
+    onPastedHandled?.();
+  }, [pasted, loadFile, onPastedHandled]);
+
   function send(fn: () => Promise<{ ok: true } | { ok: false; error: string }>, what: string) {
     startSend(async () => {
       const r = await fn();
       if (r.ok) {
         toast(`${what} enviado.`, "ok");
         setOpen(false);
-        setPhoto(null);
+        setMedia(null);
         setCaption("");
         onSent();
       } else toast(r.error, "bad");
     });
   }
 
+  async function sendVideo(blob: Blob, mime: string): Promise<{ ok: true } | { ok: false; error: string }> {
+    const prep = await prepareVideoUpload(slug, { conversationId, mime, size: blob.size });
+    if (!prep.ok) return prep;
+    const { error } = await createClient().storage.from("whatsapp-media").uploadToSignedUrl(prep.path, prep.token, blob, { contentType: "video/mp4" });
+    if (error) return { ok: false, error: "Não foi possível subir o vídeo. Confira a internet e tente de novo." };
+    return sendUploadedVideo(slug, { conversationId, path: prep.path, caption });
+  }
+
   return (
     <>
-      <Button aria-label="Enviar foto, catálogo, material ou produto" title="Enviar foto, catálogo, material ou produto" onClick={() => setOpen(true)}>
+      <Button aria-label="Enviar foto, vídeo, catálogo, material ou produto" title="Enviar foto, vídeo, catálogo, material ou produto (ou cole com Ctrl+V)" onClick={() => setOpen(true)}>
         Anexar
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Enviar para o cliente">
         <nav className="tabs mb-3" aria-label="O que enviar">
-          <button type="button" aria-current={tab === "foto" ? "page" : undefined} onClick={() => setTab("foto")}>
-            Foto
+          <button type="button" aria-current={tab === "midia" ? "page" : undefined} onClick={() => setTab("midia")}>
+            Foto ou vídeo
           </button>
           <button type="button" aria-current={tab === "materiais" ? "page" : undefined} onClick={() => setTab("materiais")}>
             Catálogos e materiais
@@ -152,50 +207,48 @@ export function AttachButton({ slug, conversationId, materials, onSent }: { slug
           </button>
         </nav>
 
-        {tab === "foto" ? (
+        {tab === "midia" ? (
           <div className="grid gap-3">
             <label className="btn w-fit cursor-pointer">
-              {photo ? "Trocar foto" : "Escolher foto"}
+              {media ? "Trocar arquivo" : "Escolher foto ou vídeo"}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,video/mp4,video/3gpp,video/quicktime"
                 className="sr-only"
-                onChange={async (e) => {
+                onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
-                  if (!f) return;
-                  try {
-                    const blob = await shrinkPhoto(f);
-                    setPhoto((old) => {
-                      if (old) URL.revokeObjectURL(old.url);
-                      return { blob, url: URL.createObjectURL(blob) };
-                    });
-                  } catch {
-                    toast("Não foi possível abrir esta imagem. Use uma foto em JPG ou PNG.", "bad");
-                  }
+                  if (f) void loadFile(f);
                 }}
               />
             </label>
-            {photo && (
+            {!media && <small className="text-xs text-muted">Dica: na caixa de mensagem, Ctrl+V cola a foto ou o vídeo copiado.</small>}
+            {media && (
               <>
-                {/* eslint-disable-next-line @next/next/no-img-element -- prévia local (blob) */}
-                <img src={photo.url} alt="Prévia da foto" className="max-h-[40vh] w-auto rounded-xl border border-line object-contain" />
+                {media.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob)
+                  <img src={media.url} alt="Prévia da foto" className="max-h-[40vh] w-auto rounded-xl border border-line object-contain" />
+                ) : (
+                  <video src={media.url} controls className="max-h-[40vh] w-auto rounded-xl border border-line" />
+                )}
                 <input className="inp" value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={1000} placeholder="Legenda (opcional)" aria-label="Legenda" />
                 <div>
                   <Button
                     variant="primary"
                     loading={sending}
                     onClick={() =>
-                      send(() => {
-                        const fd = new FormData();
-                        fd.set("conversationId", conversationId);
-                        fd.set("caption", caption);
-                        fd.set("file", new File([photo.blob], "foto.jpg", { type: "image/jpeg" }));
-                        return sendPhoto(slug, fd);
-                      }, "Foto")
+                      media.kind === "video"
+                        ? send(() => sendVideo(media.blob, media.mime), "Vídeo")
+                        : send(() => {
+                            const fd = new FormData();
+                            fd.set("conversationId", conversationId);
+                            fd.set("caption", caption);
+                            fd.set("file", new File([media.blob], "foto.jpg", { type: "image/jpeg" }));
+                            return sendPhoto(slug, fd);
+                          }, "Foto")
                     }
                   >
-                    Enviar foto
+                    {media.kind === "video" ? "Enviar vídeo" : "Enviar foto"}
                   </Button>
                 </div>
               </>

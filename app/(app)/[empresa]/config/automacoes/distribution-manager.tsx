@@ -19,7 +19,11 @@ export type Distribution = {
   breaks: Record<string, [string, string][]>;
   /** Funis em que o vendedor recebe leads pelo rodízio (ausente = os que ele enxerga). */
   rotationPipelines: Record<string, string[]>;
+  /** Minutos sem resposta antes de repassar o lead ao próximo do rodízio (ausente = nunca). */
+  reassignMinutes: Record<string, number>;
 };
+
+const REASSIGN_OPTIONS = [3, 5, 10, 15, 30];
 
 const DAYS = [
   { n: 1, label: "Seg" },
@@ -64,6 +68,9 @@ export function DistributionManager({
   const [rotation, setRotation] = useState<Record<string, string[] | null>>(() =>
     Object.fromEntries(sellers.map((s) => [s.id, settings?.rotationPipelines?.[s.id] ?? null])),
   );
+  const [reassign, setReassign] = useState<Record<string, number | null>>(() =>
+    Object.fromEntries(sellers.map((s) => [s.id, settings?.reassignMinutes?.[s.id] ?? null])),
+  );
   const [error, setError] = useState<string>();
 
   /** Funis que o vendedor enxerga (restrição de Equipe). */
@@ -97,6 +104,7 @@ export function DistributionManager({
         workDays,
         breaks: Object.fromEntries(Object.entries(breaks).map(([id, b]) => [id, b ? [b] : []])),
         rotationPipelines: rotation,
+        reassignMinutes: reassign,
       });
       if (r.ok) {
         toast(r.message, "ok");
@@ -187,6 +195,22 @@ export function DistributionManager({
                         {p.name}
                       </label>
                     ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-[86px] text-xs font-semibold text-muted">Repasse</span>
+                    <select
+                      className="inp !w-auto"
+                      aria-label={`Repasse automático de ${s.name}`}
+                      value={reassign[s.id] ?? ""}
+                      onChange={(e) => setReassign((x) => ({ ...x, [s.id]: e.target.value ? Number(e.target.value) : null }))}
+                    >
+                      <option value="">Nunca repassar</option>
+                      {REASSIGN_OPTIONS.map((m) => (
+                        <option key={m} value={m}>
+                          Sem resposta em {m} min → próximo do rodízio
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               );

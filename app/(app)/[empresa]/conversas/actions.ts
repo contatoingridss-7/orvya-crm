@@ -74,7 +74,7 @@ async function prepareSend(ctx: Ctx, conversationId: string): Promise<{ ok: true
 async function recordOutbound(
   ctx: Ctx,
   conv: ConvRow,
-  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image"; templateName?: string },
+  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image" | "video"; templateName?: string },
 ): Promise<ActionResult> {
   const r = await recordOutboundMessage(conv, msg, ctx.viewer.id);
   return r.ok ? { ok: true } : r;
@@ -624,6 +624,69 @@ export async function sendPhoto(slug: string, form: FormData): Promise<ActionRes
     const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.${ext}`;
     const { error: mv } = await bucket.move(tmp, final);
     await admin.from("messages").update({ media_path: mv ? tmp : final, media_mime: file.type }).eq("id", rec.messageId);
+  }
+  revalidatePath(`/${slug}/conversas`);
+  return rec.ok ? { ok: true } : rec;
+}
+
+/** Vídeo aceito pelo WhatsApp: MP4/3GP até 16 MB (o .mov do iPhone vai como MP4). */
+const VIDEO_TYPES = ["video/mp4", "video/3gpp", "video/quicktime"];
+const VIDEO_MAX = 16 * 1024 * 1024;
+const videoUploadSchema = z.object({ conversationId: z.uuid(), mime: z.string(), size: z.number().int().positive() });
+
+/**
+ * Vídeo é grande demais para passar pelo servidor: a tela pede aqui um link de envio de uso único
+ * para o bucket privado (só depois de conferir acesso e janela) e manda o arquivo direto.
+ */
+export async function prepareVideoUpload(
+  slug: string,
+  input: z.input<typeof videoUploadSchema>,
+): Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = videoUploadSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  if (!VIDEO_TYPES.includes(parsed.data.mime)) return { ok: false, error: "Envie o vídeo em MP4 (o formato da câmera do celular)." };
+  if (parsed.data.size > VIDEO_MAX) return { ok: false, error: "Vídeo grande demais: o WhatsApp aceita até 16 MB. Grave mais curto ou envie pelo celular." };
+  const prep = await prepareMediaSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) return prep;
+  const path = `${ctx.company.id}/${prep.p.conv.id}/envio-${crypto.randomUUID()}.mp4`;
+  const { data, error } = await createAdminClient().storage.from("whatsapp-media").createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: "Não foi possível preparar o envio. Tente de novo." };
+  return { ok: true, path: data.path, token: data.token };
+}
+
+const videoSendSchema = z.object({ conversationId: z.uuid(), path: z.string().max(300), caption: z.string().max(1000) });
+
+/** Envia o vídeo já guardado (prepareVideoUpload) e registra na conversa. */
+export async function sendUploadedVideo(slug: string, input: z.input<typeof videoSendSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = videoSendSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Dados inválidos." };
+  const d = parsed.data;
+  const prep = await prepareMediaSend(ctx, d.conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+  // Só aceita o arquivo que esta conversa acabou de receber.
+  if (!new RegExp(`^${ctx.company.id}/${conv.id}/envio-[0-9a-f-]{36}\.mp4$`).test(d.path)) return { ok: false, error: "Arquivo inválido." };
+
+  const bucket = createAdminClient().storage.from("whatsapp-media");
+  const { data: signed } = await bucket.createSignedUrl(d.path, 900);
+  if (!signed) return { ok: false, error: "O vídeo não chegou. Tente enviar de novo." };
+  const caption = d.caption.trim();
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind: "video", link: signed.signedUrl, caption: caption || undefined }));
+  } catch (e) {
+    await bucket.remove([d.path]);
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const rec = await recordOutboundMessage(conv, { wamid, body: caption ? `[Vídeo] ${caption}` : "[Vídeo]", msgType: "video" }, ctx.viewer.id);
+  if (rec.ok) {
+    const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.mp4`;
+    const { error: mv } = await bucket.move(d.path, final);
+    await createAdminClient().from("messages").update({ media_path: mv ? d.path : final, media_mime: "video/mp4" }).eq("id", rec.messageId);
   }
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;

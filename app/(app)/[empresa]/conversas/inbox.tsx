@@ -378,6 +378,10 @@ function Thread({
     });
   }, [text, slug, c.id, router, toast]);
 
+  // Foto ou vídeo colado (Ctrl+V) abre a prévia de envio do Anexar.
+  const [pasted, setPasted] = useState<File | null>(null);
+  const clearPasted = useCallback(() => setPasted(null), []);
+
   // "/" na caixa de texto abre as respostas rápidas.
   const qr = useQuickReplies({ slug, text, setText, replies: quickReplies, contactName: c.contactName, viewerName });
 
@@ -562,14 +566,20 @@ function Thread({
             )}
           </div>
           <div className="composer">
-            <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} />
+            <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
             <div className="qr-wrap">
               {qr.menu}
               <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={`Responder ${firstName(c.contactName)}… (/ para respostas rápidas, Enter envia)`}
+              onPaste={(e) => {
+                const f = Array.from(e.clipboardData.files).find((x) => x.type.startsWith("image/") || x.type.startsWith("video/"));
+                if (!f) return;
+                e.preventDefault();
+                setPasted(f);
+              }}
+              placeholder={`Responder ${firstName(c.contactName)}… (/ para respostas rápidas, Ctrl+V cola foto ou vídeo)`}
               aria-label="Mensagem"
               rows={1}
               maxLength={4096}

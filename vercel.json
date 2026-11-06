@@ -7,6 +7,6 @@
     { "path": "/api/jobs/relatorio-semanal", "schedule": "0 11 * * 6" },
     { "path": "/api/jobs/trafego", "schedule": "0 9 * * *" },
     { "path": "/api/jobs/trafego?turno=tarde", "schedule": "0 16 * * *" },
-    { "path": "/api/jobs/rodizio", "schedule": "*/15 11-21 * * 1-6" }
+    { "path": "/api/jobs/rodizio", "schedule": "* 11-21 * * 1-6" }
   ]
 }

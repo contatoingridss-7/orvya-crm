@@ -16,6 +16,7 @@ const schema = z.object({
   workDays: z.record(z.uuid(), z.array(z.number().int().min(1).max(7)).max(7)),
   breaks: z.record(z.uuid(), z.array(z.tuple([z.string().regex(HHMM), z.string().regex(HHMM)])).max(3)),
   rotationPipelines: z.record(z.uuid(), z.array(z.uuid()).max(20).nullable()),
+  reassignMinutes: z.record(z.uuid(), z.number().int().min(1).max(240).nullable()),
 });
 
 /** Rodízio e direcionamento por palavra-chave: admin, ou gestor com acesso às configurações (o RLS confere de novo). */
@@ -38,14 +39,16 @@ export async function saveDistribution(slug: string, input: z.input<typeof schem
   const rotation = Object.fromEntries(Object.entries(d.rotationPipelines).filter(([, ids]) => ids && ids.length > 0));
   if (Object.values(d.rotationPipelines).some((ids) => ids && ids.length === 0)) return { ok: false, error: "Escolha pelo menos um funil para cada vendedor no rodízio." };
 
+  const reassign = Object.fromEntries(Object.entries(d.reassignMinutes).filter(([, m]) => m !== null));
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("lead_distribution")
     .upsert(
-      { company_id: company.id, enabled: d.enabled, routes, work_days: workDays, breaks, rotation_pipelines: rotation, updated_at: new Date().toISOString() },
+      { company_id: company.id, enabled: d.enabled, routes, work_days: workDays, breaks, rotation_pipelines: rotation, reassign_minutes: reassign, updated_at: new Date().toISOString() },
       { onConflict: "company_id" },
     );
-  if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0024 foi rodada." };
+  if (error) return { ok: false, error: "Não foi possível salvar. Confira se as migrations 0024 e 0028 foram rodadas." };
   revalidatePath(`/${slug}/config/automacoes`);
   return { ok: true, message: d.enabled ? "Distribuição salva. O rodízio está ligado." : "Distribuição salva. O rodízio está desligado." };
 }

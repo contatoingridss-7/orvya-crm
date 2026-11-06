@@ -2,8 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// A cada 15 minutos no horário de atendimento (cron da Vercel, 8h às 18h de Teresina, segunda a sábado):
-// distribui pelo rodízio os leads que ficaram sem dono (chegaram fora do horário ou com todos no almoço).
+// A cada minuto no horário de atendimento (cron da Vercel, 8h às 18h de Teresina, segunda a sábado):
+// distribui pelo rodízio os leads que ficaram sem dono (chegaram fora do horário ou com todos no almoço)
+// e repassa o lead que o vendedor não respondeu no prazo dele (migration 0028).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,8 @@ async function handle(request: NextRequest) {
   }
   const { data, error } = await createAdminClient().rpc("distribute_pending_leads");
   if (error) return NextResponse.json({ ok: false, erro: "Falha ao distribuir. A migration 0020 já foi rodada?" }, { status: 500 });
-  return NextResponse.json({ ok: true, distribuidos: data ?? 0 });
+  const repasse = await createAdminClient().rpc("reassign_unanswered");
+  return NextResponse.json({ ok: true, distribuidos: data ?? 0, repassados: repasse.error ? "migration 0028 pendente" : (repasse.data ?? 0) });
 }
 
 export const GET = handle;

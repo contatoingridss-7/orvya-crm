@@ -71,7 +71,7 @@ export async function sendMediaMessage(
   phoneNumberId: string,
   token: string,
   to: string,
-  media: { kind: "document" | "image"; link: string; caption?: string; filename?: string },
+  media: { kind: "document" | "image" | "video"; link: string; caption?: string; filename?: string },
 ): Promise<string> {
   const payload =
     media.kind === "document"
