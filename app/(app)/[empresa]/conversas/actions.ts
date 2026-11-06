@@ -255,7 +255,7 @@ export async function sendMaterial(slug: string, input: z.input<typeof mediaSche
 
   // Link assinado curto: a Meta baixa o arquivo na hora do envio.
   const admin = createAdminClient();
-  const { data: signed } = await admin.storage.from("sales-materials").createSignedUrl(material.file_path, 600);
+  const { data: signed } = await admin.storage.from("sales-materials").createSignedUrl(material.file_path, 3600);
   if (!signed) return { ok: false, error: "Arquivo indisponível. Envie de novo em Automações → Materiais." };
   const kind = material.mime.startsWith("image/") ? "image" : material.mime.startsWith("audio/") ? "audio" : "document";
 
@@ -612,7 +612,7 @@ export async function sendPhoto(slug: string, form: FormData): Promise<ActionRes
   const tmp = `${ctx.company.id}/${conv.id}/envio-${crypto.randomUUID()}.${ext}`;
   const { error: up } = await bucket.upload(tmp, await file.arrayBuffer(), { contentType: file.type });
   if (up) return { ok: false, error: "Não foi possível guardar a foto. Tente de novo." };
-  const { data: signed } = await bucket.createSignedUrl(tmp, 600);
+  const { data: signed } = await bucket.createSignedUrl(tmp, 3600);
   if (!signed) return { ok: false, error: "Não foi possível preparar a foto. Tente de novo." };
 
   let wamid: string;
@@ -623,12 +623,9 @@ export async function sendPhoto(slug: string, form: FormData): Promise<ActionRes
     return { ok: false, error: sendErrorMessage(e) };
   }
   const rec = await recordOutboundMessage(conv, { wamid, body: caption ? `[Imagem] ${caption}` : "[Imagem]", msgType: "image" }, ctx.viewer.id);
-  if (rec.ok) {
-    // Mesmo padrão da mídia recebida: {empresa}/{conversa}/{mensagem}.{ext}
-    const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.${ext}`;
-    const { error: mv } = await bucket.move(tmp, final);
-    await admin.from("messages").update({ media_path: mv ? tmp : final, media_mime: file.type }).eq("id", rec.messageId);
-  }
+  // O arquivo NÃO muda de lugar: a Meta baixa pelo link segundos depois de aceitar o envio,
+  // e mover o arquivo antes disso faz a mensagem falhar ("Media upload error", 131053).
+  if (rec.ok) await admin.from("messages").update({ media_path: tmp, media_mime: file.type }).eq("id", rec.messageId);
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;
 }
@@ -676,7 +673,7 @@ export async function sendUploadedVideo(slug: string, input: z.input<typeof vide
   if (!new RegExp(`^${ctx.company.id}/${conv.id}/envio-[0-9a-f-]{36}\.mp4$`).test(d.path)) return { ok: false, error: "Arquivo inválido." };
 
   const bucket = createAdminClient().storage.from("whatsapp-media");
-  const { data: signed } = await bucket.createSignedUrl(d.path, 900);
+  const { data: signed } = await bucket.createSignedUrl(d.path, 3600);
   if (!signed) return { ok: false, error: "O vídeo não chegou. Tente enviar de novo." };
   const caption = d.caption.trim();
   let wamid: string;
@@ -687,11 +684,8 @@ export async function sendUploadedVideo(slug: string, input: z.input<typeof vide
     return { ok: false, error: sendErrorMessage(e) };
   }
   const rec = await recordOutboundMessage(conv, { wamid, body: caption ? `[Vídeo] ${caption}` : "[Vídeo]", msgType: "video" }, ctx.viewer.id);
-  if (rec.ok) {
-    const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.mp4`;
-    const { error: mv } = await bucket.move(d.path, final);
-    await createAdminClient().from("messages").update({ media_path: mv ? d.path : final, media_mime: "video/mp4" }).eq("id", rec.messageId);
-  }
+  // O arquivo fica onde está: a Meta baixa pelo link depois de aceitar o envio (ver sendPhoto).
+  if (rec.ok) await createAdminClient().from("messages").update({ media_path: d.path, media_mime: "video/mp4" }).eq("id", rec.messageId);
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;
 }
@@ -746,7 +740,7 @@ export async function resendMessage(slug: string, messageId: string): Promise<Ac
       return done(await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, text)));
     }
     if ((msg.msg_type === "image" || msg.msg_type === "video" || msg.msg_type === "audio") && msg.media_path) {
-      const { data: signed } = await admin.storage.from("whatsapp-media").createSignedUrl(msg.media_path, 900);
+      const { data: signed } = await admin.storage.from("whatsapp-media").createSignedUrl(msg.media_path, 3600);
       if (!signed) return { ok: false, error: "O arquivo não está mais disponível. Envie de novo pelo Anexar." };
       const kind = msg.msg_type;
       return done(await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind, link: signed.signedUrl, caption: text || undefined })));
@@ -779,7 +773,7 @@ export async function sendAudio(slug: string, form: FormData): Promise<ActionRes
   const tmp = `${ctx.company.id}/${conv.id}/envio-${crypto.randomUUID()}.ogg`;
   const { error: up } = await bucket.upload(tmp, bytes, { contentType: "audio/ogg" });
   if (up) return { ok: false, error: "Não foi possível guardar o áudio. Tente de novo." };
-  const { data: signed } = await bucket.createSignedUrl(tmp, 600);
+  const { data: signed } = await bucket.createSignedUrl(tmp, 3600);
   if (!signed) return { ok: false, error: "Não foi possível preparar o áudio. Tente de novo." };
 
   let wamid: string;
@@ -790,11 +784,8 @@ export async function sendAudio(slug: string, form: FormData): Promise<ActionRes
     return { ok: false, error: sendErrorMessage(e) };
   }
   const rec = await recordOutboundMessage(conv, { wamid, body: "[Áudio]", msgType: "audio" }, ctx.viewer.id);
-  if (rec.ok) {
-    const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.ogg`;
-    const { error: mv } = await bucket.move(tmp, final);
-    await admin.from("messages").update({ media_path: mv ? tmp : final, media_mime: "audio/ogg" }).eq("id", rec.messageId);
-  }
+  // O arquivo fica onde está: a Meta baixa pelo link depois de aceitar o envio (ver sendPhoto).
+  if (rec.ok) await admin.from("messages").update({ media_path: tmp, media_mime: "audio/ogg" }).eq("id", rec.messageId);
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;
 }
