@@ -66,9 +66,9 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       .maybeSingle<{ enabled: boolean; hours: unknown; message: string }>(),
     supabase
       .from("lead_distribution")
-      .select("enabled, routes, work_days, breaks, rotation_pipelines, reassign_minutes")
+      .select("enabled, routes, work_days, breaks, rotation_pipelines, reassign_minutes, priority")
       .eq("company_id", company.id)
-      .maybeSingle<{ enabled: boolean; routes: { pipeline_id: string; keywords: string[] }[]; work_days: Record<string, number[]>; breaks: Record<string, [string, string][]> | null; rotation_pipelines: Record<string, string[]> | null; reassign_minutes: Record<string, number> | null }>(),
+      .maybeSingle<{ enabled: boolean; routes: { pipeline_id: string; keywords: string[] }[]; work_days: Record<string, number[]>; breaks: Record<string, [string, string][]> | null; rotation_pipelines: Record<string, string[]> | null; reassign_minutes: Record<string, number> | null; priority: Record<string, string[]> | null }>(),
     supabase
       .from("memberships")
       .select("user_id, pipeline_ids, profiles(full_name, email, active)")
@@ -137,7 +137,7 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
           slug={company.slug}
           pipelines={(pipelinesRes.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
           sellers={sellers}
-          settings={dist ? { enabled: dist.enabled, routes: (dist.routes ?? []).map((r) => ({ pipelineId: r.pipeline_id, keywords: r.keywords })), workDays: dist.work_days ?? {}, breaks: dist.breaks ?? {}, rotationPipelines: dist.rotation_pipelines ?? {}, reassignMinutes: dist.reassign_minutes ?? {} } : null}
+          settings={dist ? { enabled: dist.enabled, routes: (dist.routes ?? []).map((r) => ({ pipelineId: r.pipeline_id, keywords: r.keywords })), workDays: dist.work_days ?? {}, breaks: dist.breaks ?? {}, rotationPipelines: dist.rotation_pipelines ?? {}, reassignMinutes: dist.reassign_minutes ?? {}, priority: dist.priority ?? {} } : null}
           loadError={!!distRes.error}
         />
         <TriageManager
