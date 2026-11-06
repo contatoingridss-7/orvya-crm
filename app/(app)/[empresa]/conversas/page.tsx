@@ -150,6 +150,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           numbers={(numbersRes.data ?? []).map((n) => ({ id: n.id, label: n.label, phone: n.display_phone, connected: n.status === "connected" }))}
           igAccounts={igAccounts}
           people={people}
+          pipelines={(pipelinesRes.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
           viewerId={viewer.id}
           viewerName={viewer.fullName}
           templates={(templatesRes.data ?? []).map((t) => ({ id: t.id, name: t.name, category: t.category, body: t.body, variables: t.variables ?? [] }))}

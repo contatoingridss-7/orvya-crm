@@ -799,45 +799,75 @@ export async function sendAudio(slug: string, form: FormData): Promise<ActionRes
   return rec.ok ? { ok: true } : rec;
 }
 
-const correctSchema = z.object({
-  messageId: z.uuid(),
-  text: z.string().trim().min(1, "Escreva a correção.").max(4096, "Mensagem longa demais (máximo de 4.096 caracteres)."),
+const transferSchema = z.object({
+  conversationId: z.uuid(),
+  pipelineId: z.uuid("Escolha o funil."),
+  /** Pessoa que recebe; vazio = automático (rodízio ou ordem de prioridade do funil). */
+  userId: z.uuid().nullable(),
 });
 
 /**
- * "Corrigir": a API oficial não edita mensagem já enviada. O Orvya manda uma nova mensagem
- * respondendo em cima da errada (o cliente vê a correção ligada à original). Só WhatsApp,
- * mensagem de texto da equipe e com a janela de 24 h aberta.
+ * Transferir o lead: muda de funil (1ª etapa) e/ou de pessoa. Sem pessoa escolhida, quem recebe
+ * é o rodízio/ordem do funil (ex.: Varejo → CPAP cai com a Thays na IC e com a Isabela na LocPress).
+ * Vendedor transfere as conversas dele e as da fila; gestor e admin, qualquer uma.
  */
-export async function correctMessage(slug: string, input: z.input<typeof correctSchema>): Promise<ActionResult> {
+export async function transferLead(slug: string, input: z.input<typeof transferSchema>): Promise<ActionResult> {
   const ctx = await context(slug);
   if (!ctx) return NO_ACCESS;
-  const parsed = correctSchema.safeParse(input);
+  const parsed = transferSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  const { data: msg } = await ctx.supabase
-    .from("messages")
-    .select("id, conversation_id, direction, sender, msg_type, status, wa_message_id")
-    .eq("id", parsed.data.messageId)
-    .eq("company_id", ctx.company.id)
-    .maybeSingle<{ id: string; conversation_id: string; direction: string; sender: string; msg_type: string; status: string; wa_message_id: string | null }>();
-  if (!msg || msg.direction !== "out" || msg.sender !== "user" || msg.msg_type !== "text") return { ok: false, error: "Só dá para corrigir mensagens de texto enviadas pela equipe." };
-  if (msg.status === "failed" || !msg.wa_message_id) return { ok: false, error: "Esta mensagem não foi enviada. Use Reenviar." };
+  const d = parsed.data;
 
-  const prep = await prepareSend(ctx, msg.conversation_id);
-  if (!prep.ok) return prep;
-  const { conv, phoneNumberId, token, to } = prep.p;
-  if (conv.channel !== "whatsapp") return { ok: false, error: "Corrigir está disponível só no WhatsApp." };
-  if (!isWindowOpen(conv.last_inbound_at)) return { ok: false, error: "A janela de 24 horas está fechada. Fora dela, só modelos de mensagem aprovados." };
+  const conv = await loadConversation(ctx, d.conversationId);
+  if (!conv) return { ok: false, error: "Conversa não encontrada." };
+  if (!ctx.manager && conv.assigned_to && conv.assigned_to !== ctx.viewer.id) return { ok: false, error: "Esta conversa é de outro vendedor." };
+  if (!conv.lead_id) return { ok: false, error: "Esta conversa não tem lead." };
 
-  const body = `*Correção:* ${parsed.data.text}`;
-  let wamid: string;
-  try {
-    wamid = await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, body, msg.wa_message_id!));
-  } catch (e) {
-    return { ok: false, error: sendErrorMessage(e) };
+  const admin = createAdminClient();
+  const { data: lead } = await admin.from("leads").select("id, pipeline_id, owner_id, closed_at").eq("id", conv.lead_id).eq("company_id", ctx.company.id).maybeSingle<{ id: string; pipeline_id: string; owner_id: string | null; closed_at: string | null }>();
+  if (!lead || lead.closed_at) return { ok: false, error: "O lead já foi finalizado." };
+  const { data: pipeline } = await admin.from("pipelines").select("id, name").eq("id", d.pipelineId).eq("company_id", ctx.company.id).maybeSingle<{ id: string; name: string }>();
+  if (!pipeline) return { ok: false, error: "Funil não encontrado." };
+  let personName: string | null = null;
+  if (d.userId) {
+    const { data: m } = await admin.from("memberships").select("user_id, profiles(full_name, active)").eq("company_id", ctx.company.id).eq("user_id", d.userId).maybeSingle<{ user_id: string; profiles: { full_name: string | null; active: boolean } | null }>();
+    if (!m?.profiles?.active) return { ok: false, error: "Esta pessoa não faz parte da equipe ativa da empresa." };
+    personName = m.profiles.full_name;
   }
-  const rec = await recordOutboundMessage(conv, { wamid, body, msgType: "text" }, ctx.viewer.id);
-  if (rec.ok) await createAdminClient().from("messages").update({ reply_to_wa_id: msg.wa_message_id }).eq("id", rec.messageId);
+
+  // 1) Funil: a 1ª etapa aberta do funil novo. O banco passa o lead para quem recebe nesse funil.
+  if (pipeline.id !== lead.pipeline_id) {
+    const { data: stage } = await admin.from("stages").select("id").eq("pipeline_id", pipeline.id).eq("kind", "open").order("position").limit(1).maybeSingle<{ id: string }>();
+    if (!stage) return { ok: false, error: "O funil não tem etapa aberta." };
+    const { error } = await admin.from("leads").update({ pipeline_id: pipeline.id, stage_id: stage.id }).eq("id", lead.id);
+    if (error) return { ok: false, error: "Não foi possível mudar o funil." };
+  }
+  // 2) Pessoa: escolhida, ou o próximo do rodízio/ordem (quando continua no mesmo funil).
+  if (d.userId) {
+    await admin.from("leads").update({ owner_id: d.userId }).eq("id", lead.id);
+    await admin.from("conversations").update({ assigned_to: d.userId }).eq("id", conv.id);
+  } else if (pipeline.id === lead.pipeline_id) {
+    await admin.from("leads").update({ owner_id: null }).eq("id", lead.id);
+    await admin.from("conversations").update({ assigned_to: null }).eq("id", conv.id);
+    const { data: next } = await admin.rpc("assign_lead_by_rotation", { p_lead: lead.id });
+    if (!next) {
+      // Ninguém disponível agora: volta para quem estava, para não ficar sem dono.
+      await admin.from("leads").update({ owner_id: lead.owner_id }).eq("id", lead.id);
+      await admin.from("conversations").update({ assigned_to: lead.owner_id }).eq("id", conv.id);
+      return { ok: false, error: "Ninguém disponível neste funil agora. O lead continua com quem estava." };
+    }
+  }
+
+  const { data: after } = await admin.from("leads").select("owner_id, profiles:owner_id(full_name)").eq("id", lead.id).maybeSingle<{ owner_id: string | null; profiles: { full_name: string | null } | null }>();
+  const who = personName ?? after?.profiles?.full_name ?? "a fila";
+  await admin.from("activities").insert({
+    company_id: ctx.company.id,
+    lead_id: lead.id,
+    kind: "assignment",
+    user_id: ctx.viewer.id,
+    body: `Transferido por ${ctx.viewer.fullName}: funil ${pipeline.name}, com ${who}.`,
+  });
   revalidatePath(`/${slug}/conversas`);
-  return rec.ok ? { ok: true, message: "Correção enviada." } : rec;
+  revalidatePath(`/${slug}/funil`);
+  return { ok: true, message: `Lead transferido para ${pipeline.name}, com ${who}.` };
 }

@@ -20,7 +20,7 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, AudioRecorder, EmojiButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
-import { assumeConversation, correctMessage, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
+import { assumeConversation, transferLead, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -60,6 +60,7 @@ type Props = {
   numbers: InboxNumber[];
   igAccounts: InboxIgAccount[];
   people: Person[];
+  pipelines: { id: string; name: string }[];
   viewerId: string;
   viewerName: string;
   templates: InboxTemplate[];
@@ -258,6 +259,8 @@ export function Inbox(props: Props) {
           manager={manager}
           quickReplies={quickReplies}
           materials={materials}
+          pipelines={props.pipelines}
+          people={props.people}
           onBack={() => {
             setSelectedId(null);
             window.history.replaceState(null, "", window.location.pathname);
@@ -282,6 +285,8 @@ function Thread({
   manager,
   quickReplies,
   materials,
+  pipelines,
+  people,
   onBack,
 }: {
   slug: string;
@@ -295,6 +300,8 @@ function Thread({
   manager: boolean;
   quickReplies: QuickReply[];
   materials: Material[];
+  pipelines: { id: string; name: string }[];
+  people: Person[];
   onBack: () => void;
 }) {
   const router = useRouter();
@@ -305,8 +312,9 @@ function Thread({
   const [sending, startSending] = useTransition();
   const [assuming, startAssuming] = useTransition();
   const [usingTemplate, setUsingTemplate] = useState(false);
-  const [correcting, setCorrecting] = useState<{ id: string; text: string } | null>(null);
-  const [fixing, startFixing] = useTransition();
+  const [transferring, setTransferring] = useState<{ pipelineId: string; userId: string } | null>(null);
+  const [moving, startMoving] = useTransition();
+  const camRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -415,44 +423,61 @@ function Thread({
   return (
     <section className="thread" aria-label={`Conversa com ${c.contactName}`}>
       <Modal
-        open={!!correcting}
-        onClose={() => setCorrecting(null)}
-        title="Corrigir mensagem"
+        open={!!transferring}
+        onClose={() => setTransferring(null)}
+        title={`Transferir o lead de ${c.contactName}`}
         actions={
           <>
-            <Button onClick={() => setCorrecting(null)}>Cancelar</Button>
+            <Button onClick={() => setTransferring(null)}>Cancelar</Button>
             <Button
               variant="primary"
-              loading={fixing}
-              disabled={!correcting?.text.trim()}
+              loading={moving}
+              disabled={!transferring?.pipelineId}
               onClick={() =>
-                correcting &&
-                startFixing(async () => {
-                  const r = await correctMessage(slug, { messageId: correcting.id, text: correcting.text });
+                transferring &&
+                startMoving(async () => {
+                  const r = await transferLead(slug, { conversationId: c.id, pipelineId: transferring.pipelineId, userId: transferring.userId || null });
                   if (r.ok) {
-                    toast(r.message ?? "Correção enviada.", "ok");
-                    setCorrecting(null);
+                    toast(r.message ?? "Lead transferido.", "ok");
+                    setTransferring(null);
                     router.refresh();
                   } else toast(r.error, "bad");
                 })
               }
             >
-              Enviar correção
+              Transferir
             </Button>
           </>
         }
       >
-        <p className="mt-0 text-[12.5px] text-muted">
-          O WhatsApp não deixa editar mensagem já enviada. A correção vai como nova mensagem, respondendo em cima da original, com “Correção:” na frente.
-        </p>
-        <textarea
-          className="inp min-h-[96px] w-full"
-          value={correcting?.text ?? ""}
-          onChange={(e) => setCorrecting((c) => (c ? { ...c, text: e.target.value } : c))}
-          maxLength={4096}
-          aria-label="Texto corrigido"
-          autoFocus
-        />
+        <div className="grid gap-3">
+          <label className="grid gap-1 text-[13px]">
+            <span className="text-muted">Funil</span>
+            <select
+              className="inp"
+              value={transferring?.pipelineId ?? ""}
+              onChange={(e) => setTransferring((t) => (t ? { ...t, pipelineId: e.target.value } : t))}
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-[13px]">
+            <span className="text-muted">Quem recebe</span>
+            <select className="inp" value={transferring?.userId ?? ""} onChange={(e) => setTransferring((t) => (t ? { ...t, userId: e.target.value } : t))}>
+              <option value="">Automático: quem atende esse funil (rodízio ou ordem)</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <small className="text-xs text-muted">O lead vai para a 1ª etapa do funil escolhido. A conversa vai junto, e fica registrado no histórico.</small>
+        </div>
       </Modal>
       <header className="th-head">
         <button type="button" className="icon-btn only-mobile" onClick={onBack} aria-label="Voltar para a lista">
@@ -484,6 +509,14 @@ function Thread({
             } else toast(r.error, "bad");
           })}>
             Assumir conversa
+          </Button>
+        )}
+        {c.lead?.open && canReply && (
+          <Button
+            size="sm"
+            onClick={() => setTransferring({ pipelineId: pipelines.find((p) => p.name === c.lead?.pipelineName)?.id ?? pipelines[0]?.id ?? "", userId: "" })}
+          >
+            Transferir
           </Button>
         )}
         {leadHref && (
@@ -552,11 +585,6 @@ function Thread({
                       }
                     : undefined
                 }
-                onCorrect={
-                  !isIg && m.direction === "out" && m.sender === "user" && m.msg_type === "text" && m.status !== "failed" && windowOpen
-                    ? () => setCorrecting({ id: m.id, text: (m.body ?? "").replace(/^\*Correção:\* /, "") })
-                    : undefined
-                }
               />
             );
           })
@@ -593,6 +621,10 @@ function Thread({
                 onKeyDown={onKeyDown}
                 placeholder={`Responder ${firstName(c.contactName)} no Direct… (Enter envia, Shift+Enter quebra linha)`}
                 aria-label="Mensagem"
+              lang="pt-BR"
+              spellCheck
+              autoCorrect="on"
+              autoCapitalize="sentences"
                 rows={1}
                 maxLength={1000}
                 disabled={sending}
@@ -651,6 +683,26 @@ function Thread({
           <div className="composer">
             <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
             <AudioRecorder slug={slug} conversationId={c.id} onSent={() => router.refresh()} />
+            <Button className="only-mobile" aria-label="Câmera: tirar foto ou gravar vídeo" title="Câmera" onClick={() => camRef.current?.click()}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+            </Button>
+            <input
+              ref={camRef}
+              type="file"
+              accept="image/*,video/*"
+              capture="environment"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) setPasted(f);
+              }}
+            />
             <EmojiButton onPick={insertEmoji} disabled={sending} />
             <div className="qr-wrap">
               {qr.menu}
@@ -667,6 +719,10 @@ function Thread({
               }}
               placeholder={`Responder ${firstName(c.contactName)}… (/ para respostas rápidas, Ctrl+V cola foto ou vídeo)`}
               aria-label="Mensagem"
+              lang="pt-BR"
+              spellCheck
+              autoCorrect="on"
+              autoCapitalize="sentences"
               rows={1}
               maxLength={4096}
               disabled={sending}
@@ -696,13 +752,11 @@ function MessageRow({
   newDay,
   author,
   onResend,
-  onCorrect,
 }: {
   m: Message;
   newDay: boolean;
   author: string | null;
   onResend?: () => Promise<void>;
-  onCorrect?: () => void;
 }) {
   const [resending, setResending] = useState(false);
   const kind = m.direction === "in" ? "lead" : m.sender === "ai" ? "ai" : m.source === "celular" ? "phone" : "human";
@@ -734,14 +788,6 @@ function MessageRow({
         {body}
         <small suppressHydrationWarning>
           {[who, m.template_name ? `modelo ${m.template_name}` : "", hhmm(m.sent_at), m.direction === "out" ? STATUS_TEXT[m.status] : ""].filter(Boolean).join(" · ")}
-          {onCorrect && (
-            <>
-              {" · "}
-              <button type="button" className="underline" onClick={onCorrect}>
-                Corrigir
-              </button>
-            </>
-          )}
           {onResend && (
             <>
               {" · "}

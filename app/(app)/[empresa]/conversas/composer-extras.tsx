@@ -363,6 +363,36 @@ export function AttachButton({
                 }}
               />
             </label>
+            <span className="only-mobile flex flex-wrap gap-2">
+              <label className="btn cursor-pointer">
+                Tirar foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void loadFile(f);
+                  }}
+                />
+              </label>
+              <label className="btn cursor-pointer">
+                Gravar vídeo
+                <input
+                  type="file"
+                  accept="video/*"
+                  capture="environment"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void loadFile(f);
+                  }}
+                />
+              </label>
+            </span>
             {!media && <small className="text-xs text-muted">Dica: na caixa de mensagem, Ctrl+V cola a foto ou o vídeo copiado.</small>}
             {media && (
               <>
