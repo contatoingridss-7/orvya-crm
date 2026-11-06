@@ -18,7 +18,7 @@ import { templateCost, type TemplateCategory } from "@/lib/whatsapp/pricing";
 import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNames } from "@/lib/whatsapp/templates";
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
-import { AttachButton, AudioRecorder, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
+import { AttachButton, AudioRecorder, EmojiButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
 import { assumeConversation, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
@@ -378,6 +378,20 @@ function Thread({
     });
   }, [text, slug, c.id, router, toast]);
 
+  // Emoji entra onde está o cursor da caixa de mensagem.
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  function insertEmoji(emoji: string) {
+    const el = taRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    setText((t) => t.slice(0, start) + emoji + t.slice(end));
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      el.selectionStart = el.selectionEnd = start + emoji.length;
+    });
+  }
+
   // Foto ou vídeo colado (Ctrl+V) abre a prévia de envio do Anexar.
   const [pasted, setPasted] = useState<File | null>(null);
   const clearPasted = useCallback(() => setPasted(null), []);
@@ -521,9 +535,11 @@ function Thread({
                 : `Passou de 24 horas: a resposta vai como atendimento da equipe, permitido até ${igEnd ? formatInTimeZone(igEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}.`}
             </div>
             <div className="composer">
+              <EmojiButton onPick={insertEmoji} disabled={sending} />
               <div className="qr-wrap">
                 {qr.menu}
                 <textarea
+                ref={taRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={onKeyDown}
@@ -587,9 +603,11 @@ function Thread({
           <div className="composer">
             <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
             <AudioRecorder slug={slug} conversationId={c.id} onSent={() => router.refresh()} />
+            <EmojiButton onPick={insertEmoji} disabled={sending} />
             <div className="qr-wrap">
               {qr.menu}
               <textarea
+              ref={taRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}

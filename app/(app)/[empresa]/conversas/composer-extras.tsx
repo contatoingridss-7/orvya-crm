@@ -446,3 +446,54 @@ export function AttachButton({
     </>
   );
 }
+
+/** Emojis mais usados no atendimento (o cliente recebe como texto normal). */
+const EMOJIS = [
+  "😊", "😀", "😃", "😉", "🙂", "😍", "🥰", "😘",
+  "🤗", "😅", "😂", "🤩", "🙏", "👍", "👏", "👋",
+  "🤝", "💪", "👌", "✌️", "👆🏼", "👇🏼", "👉🏼", "✅",
+  "✔️", "❌", "⚠️", "❗", "❓", "⭐", "✨", "🔥",
+  "💙", "💚", "❤️", "🎉", "🎁", "📦", "🚚", "🏠",
+  "📍", "📞", "📲", "💬", "📝", "📄", "📸", "💳",
+  "💰", "🕐", "📅", "⏰", "▶️", "◼️", "▪️", "🔹",
+];
+
+/** Botão de emojis da caixa de mensagem: o emoji entra onde está o cursor. */
+export function EmojiButton({ onPick, disabled }: { onPick: (emoji: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent | globalThis.KeyboardEvent) => {
+      if ("key" in e ? e.key === "Escape" : !wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  return (
+    <span className="emoji-wrap" ref={wrapRef}>
+      <Button aria-label="Emojis" title="Emojis" aria-expanded={open} disabled={disabled} onClick={() => setOpen((o) => !o)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
+          <path d="M9 9.5h.01M15 9.5h.01" />
+        </svg>
+      </Button>
+      {open && (
+        <span className="emoji-pop" role="listbox" aria-label="Escolha um emoji">
+          {EMOJIS.map((e) => (
+            <button key={e} type="button" role="option" aria-selected={false} onClick={() => onPick(e)}>
+              {e}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
