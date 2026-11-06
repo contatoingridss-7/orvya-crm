@@ -10,7 +10,7 @@ import { fillTemplate } from "./templates";
 
 /** Colunas da conversa necessárias para enviar (vale para o cliente do usuário e o admin). */
 export const SEND_CONVERSATION_SELECT =
-  "id, company_id, channel, assigned_to, lead_id, last_inbound_at, whatsapp_number_id, instagram_account_id, contacts(phone_e164, instagram_id), whatsapp_numbers(phone_number_id, status)";
+  "id, company_id, channel, assigned_to, lead_id, last_inbound_at, whatsapp_number_id, instagram_account_id, contacts(phone_e164, instagram_id, messenger_id), whatsapp_numbers(phone_number_id, status)";
 
 export type SendConversation = {
   id: string;
@@ -21,7 +21,7 @@ export type SendConversation = {
   last_inbound_at: string | null;
   whatsapp_number_id: string | null;
   instagram_account_id: string | null;
-  contacts: { phone_e164: string | null; instagram_id: string | null } | null;
+  contacts: { phone_e164: string | null; instagram_id: string | null; messenger_id?: string | null } | null;
   whatsapp_numbers: { phone_number_id: string | null; status: string } | null;
 };
 

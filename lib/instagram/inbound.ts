@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { routePipeline } from "@/lib/crm/routing";
-import { fetchIgProfile, sendDirectText, sendPrivateReply } from "./graph";
+import { fetchIgProfile, fetchMessengerProfile, sendDirectText, sendPrivateReply } from "./graph";
 import { fillLinkReply, menuChoice, menuQuickReplies, whatsappLink } from "./menu";
 
 // Eventos do Instagram (object = "instagram") já gravados em webhook_events.
@@ -28,7 +28,10 @@ export type IgWebhookPayload = {
 };
 
 type Account = { id: string; company_id: string; ig_user_id: string; page_id: string; default_pipeline_id: string | null };
-type Ctx = { admin: SupabaseClient; account: Account; token: string };
+export type DirectChannel = "instagram" | "messenger";
+type Ctx = { admin: SupabaseClient; account: Account; token: string; channel: DirectChannel };
+/** Coluna do contato com o id da pessoa no canal. */
+const idColumn = (ctx: Ctx) => (ctx.channel === "messenger" ? "messenger_id" : "instagram_id");
 type Rule = { id: string; trigger: "welcome" | "dm_keyword" | "comment_keyword"; keywords: string[]; reply: string };
 /** Menu de boas-vindas pronto para usar (só existe se ligado e com número de WhatsApp conectado). */
 type Menu = { intro: string; options: string[]; linkReply: string; phone: string };
@@ -53,11 +56,11 @@ export function matchRule(rules: Rule[], trigger: Rule["trigger"], text: string)
   return rules.find((r) => r.trigger === trigger && (r.keywords.includes("*") || r.keywords.some((k) => k && t.includes(normalizeText(k)))));
 }
 
-export async function processInstagramEvent(admin: SupabaseClient, eventId: number, payload: IgWebhookPayload): Promise<void> {
+export async function processInstagramEvent(admin: SupabaseClient, eventId: number, payload: IgWebhookPayload, channel: DirectChannel = "instagram"): Promise<void> {
   const errors: string[] = [];
   for (const entry of payload.entry ?? []) {
     try {
-      const ctx = await loadAccount(admin, entry.id ?? "");
+      const ctx = await loadAccount(admin, entry.id ?? "", channel);
       if (!ctx) {
         errors.push(`Conta do Instagram não cadastrada no Orvya: ${entry.id ?? "?"}`);
         continue;
@@ -85,7 +88,7 @@ async function safe(errors: string[], fn: () => Promise<void>) {
   }
 }
 
-async function loadAccount(admin: SupabaseClient, igUserId: string): Promise<Ctx | null> {
+async function loadAccount(admin: SupabaseClient, igUserId: string, channel: DirectChannel): Promise<Ctx | null> {
   if (!igUserId) return null;
   const { data: account } = await admin
     .from("instagram_accounts")
@@ -96,7 +99,7 @@ async function loadAccount(admin: SupabaseClient, igUserId: string): Promise<Ctx
   if (!account) return null;
   const { data: cred } = await admin.from("instagram_credentials").select("page_access_token").eq("account_id", account.id).maybeSingle<{ page_access_token: string }>();
   if (!cred) return null;
-  return { admin, account, token: cred.page_access_token };
+  return { admin, account, token: cred.page_access_token, channel };
 }
 
 async function loadRules(ctx: Ctx): Promise<Rule[]> {
@@ -135,19 +138,21 @@ async function loadMenu(ctx: Ctx): Promise<Menu | null> {
 // ---------------------------------------------------------------------
 async function findOrCreateContact(ctx: Ctx, igsid: string): Promise<{ id: string; created: boolean }> {
   const find = () =>
-    ctx.admin.from("contacts").select("id").eq("company_id", ctx.account.company_id).eq("instagram_id", igsid).maybeSingle<{ id: string }>();
+    ctx.admin.from("contacts").select("id").eq("company_id", ctx.account.company_id).eq(idColumn(ctx), igsid).maybeSingle<{ id: string }>();
   const { data: found } = await find();
   if (found) return { id: found.id, created: false };
 
-  const profile = await fetchIgProfile(igsid, ctx.token);
+  const row =
+    ctx.channel === "messenger"
+      ? { name: (await fetchMessengerProfile(igsid, ctx.token)).name || "Contato do Messenger", messenger_id: igsid }
+      : await fetchIgProfile(igsid, ctx.token).then((profile) => ({
+          name: profile.name || (profile.username ? `@${profile.username}` : "Contato do Instagram"),
+          instagram_id: igsid,
+          instagram_username: profile.username,
+        }));
   const { data } = await ctx.admin
     .from("contacts")
-    .insert({
-      company_id: ctx.account.company_id,
-      name: profile.name || (profile.username ? `@${profile.username}` : "Contato do Instagram"),
-      instagram_id: igsid,
-      instagram_username: profile.username,
-    })
+    .insert({ company_id: ctx.account.company_id, ...row })
     .select("id")
     .single<{ id: string }>();
   if (data) return { id: data.id, created: true };
@@ -163,13 +168,13 @@ async function findOrCreateConversation(ctx: Ctx, contactId: string): Promise<{ 
       .select("id, lead_id")
       .eq("company_id", ctx.account.company_id)
       .eq("contact_id", contactId)
-      .eq("channel", "instagram")
+      .eq("channel", ctx.channel)
       .maybeSingle<{ id: string; lead_id: string | null }>();
   const { data: found } = await query();
   if (found) return { ...found, created: false };
   const { data } = await ctx.admin
     .from("conversations")
-    .insert({ company_id: ctx.account.company_id, contact_id: contactId, channel: "instagram", instagram_account_id: ctx.account.id })
+    .insert({ company_id: ctx.account.company_id, contact_id: contactId, channel: ctx.channel, instagram_account_id: ctx.account.id })
     .select("id, lead_id")
     .single<{ id: string; lead_id: string | null }>();
   if (data) return { ...data, created: true };
@@ -206,7 +211,7 @@ async function ensureOpenLead(ctx: Ctx, contactId: string, referral: IgReferral 
     .from("lead_sources")
     .select("id")
     .eq("company_id", ctx.account.company_id)
-    .eq("name", fromAd ? "Meta Ads" : "Instagram Direct")
+    .eq("name", fromAd ? "Meta Ads" : ctx.channel === "messenger" ? "Messenger" : "Instagram Direct")
     .maybeSingle<{ id: string }>();
 
   const { data: lead, error } = await ctx.admin
@@ -219,7 +224,7 @@ async function ensureOpenLead(ctx: Ctx, contactId: string, referral: IgReferral 
       owner_id: null,
       source_id: source?.id ?? null,
       // Mesmo formato do WhatsApp (source_id = anúncio), para o Tráfego ligar o lead à campanha.
-      ad_referral: fromAd ? { ...referral, source_type: "ad", source_id: referral!.ad_id, channel: "instagram" } : null,
+      ad_referral: fromAd ? { ...referral, source_type: "ad", source_id: referral!.ad_id, channel: ctx.channel } : null,
       last_contact_at: new Date().toISOString(),
     })
     .select("id")
@@ -262,13 +267,13 @@ async function handleMessaging(ctx: Ctx, rules: Rule[], menu: Menu | null, ev: I
 
   // Eco: mensagem enviada pela empresa. Se foi pelo Orvya, já está gravada (mesmo mid);
   // se foi pelo app do Instagram no celular, registra como enviada pela equipe.
-  // Conversa que não está no Orvya (ficou só no Instagram): a resposta do celular também fica lá.
+  // Contato marcado com "Tirar do Orvya": a resposta do celular fica só no app.
   if (m.is_echo) {
     const igsid = ev.recipient?.id;
     if (!igsid) return;
     const tracked = await trackedConversation(ctx, igsid);
-    if (!tracked || tracked === "ignored") return;
-    const conv = tracked;
+    if (tracked === "ignored") return;
+    const conv = tracked ?? (await findOrCreateConversation(ctx, (await findOrCreateContact(ctx, igsid)).id));
     const id = await insertMessage(ctx, {
       conversation_id: conv.id,
       direction: "out",
@@ -287,19 +292,8 @@ async function handleMessaging(ctx: Ctx, rules: Rule[], menu: Menu | null, ev: I
   const igsid = ev.sender?.id;
   if (!igsid || igsid === ctx.account.ig_user_id) return;
 
-  // Triagem: só entra no Orvya quem veio de anúncio ou escreveu uma palavra-chave. Os demais
-  // (equipe, sócios, clientes antigos) recebem o menu e continuam só no app do Instagram.
-  const tracked = await trackedConversation(ctx, igsid);
-  if (tracked === "ignored") return;
-  if (!tracked) {
-    const fromAd = !!(m.referral ?? ev.referral)?.ad_id;
-    const keyword =
-      !!m.text && (!!matchRule(rules, "dm_keyword", m.text) || !!(await routePipeline(ctx.admin, ctx.account.company_id, m.text).catch(() => null)));
-    if (!fromAd && !keyword) {
-      await triageReply(ctx, menu, rules, igsid, m.quick_reply?.payload);
-      return;
-    }
-  }
+  // Todas as conversas entram no Orvya; só fica de fora quem foi marcado com "Tirar do Orvya".
+  if ((await trackedConversation(ctx, igsid)) === "ignored") return;
 
   const contact = await findOrCreateContact(ctx, igsid);
   const conv = await findOrCreateConversation(ctx, contact.id);
@@ -346,7 +340,7 @@ async function trackedConversation(ctx: Ctx, igsid: string): Promise<{ id: strin
     .from("contacts")
     .select("id, crm_ignored")
     .eq("company_id", ctx.account.company_id)
-    .eq("instagram_id", igsid)
+    .eq(idColumn(ctx), igsid)
     .maybeSingle<{ id: string; crm_ignored: boolean }>();
   if (!contact) return null;
   if (contact.crm_ignored) return "ignored";
@@ -355,28 +349,9 @@ async function trackedConversation(ctx: Ctx, igsid: string): Promise<{ id: strin
     .select("id, lead_id")
     .eq("company_id", ctx.account.company_id)
     .eq("contact_id", contact.id)
-    .eq("channel", "instagram")
+    .eq("channel", ctx.channel)
     .maybeSingle<{ id: string; lead_id: string | null }>();
   return conv ? { ...conv, created: false } : null;
-}
-
-/**
- * Atendimento automático de quem não entrou no Orvya: botão do menu tocado → link do WhatsApp
- * (a pessoa chega ao Orvya pelo WhatsApp); primeira mensagem → menu (ou boas-vindas), uma vez só.
- * Nada é gravado no Orvya.
- */
-async function triageReply(ctx: Ctx, menu: Menu | null, rules: Rule[], igsid: string, payload: string | undefined) {
-  const choice = menu ? menuChoice(menu.options, payload) : null;
-  if (menu && choice) {
-    await sendDirectText(ctx.account.page_id, ctx.token, igsid, fillLinkReply(menu.linkReply, whatsappLink(menu.phone, choice)), false);
-    return;
-  }
-  const welcome = menu ? null : rules.find((r) => r.trigger === "welcome");
-  if (!menu && !welcome) return;
-  const { error: seen } = await ctx.admin.from("ig_triage").insert({ account_id: ctx.account.id, igsid });
-  if (seen) return; // já recebeu o menu (ou a migration 0027 não rodou)
-  if (menu) await sendDirectText(ctx.account.page_id, ctx.token, igsid, menu.intro, false, menuQuickReplies(menu.options));
-  else if (welcome) await sendDirectText(ctx.account.page_id, ctx.token, igsid, welcome.reply, false);
 }
 
 /** Envia a resposta automática e registra como mensagem do sistema (não pausa a equipe nem assume a conversa). */

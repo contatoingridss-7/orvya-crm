@@ -51,11 +51,13 @@ export async function POST(request: NextRequest) {
     return new NextResponse("Corpo inválido", { status: 400 });
   }
 
-  const instagram = (payload as { object?: string }).object === "instagram";
+  // "instagram" = Direct; "page" = Messenger da Página do Facebook (mesma conexão da Página).
+  const object = (payload as { object?: string }).object;
+  const instagram = object === "instagram" || object === "page";
   const admin = createAdminClient();
   const { data: event, error } = await admin
     .from("webhook_events")
-    .insert({ source: instagram ? "instagram" : "whatsapp", payload })
+    .insert({ source: object === "page" ? "messenger" : instagram ? "instagram" : "whatsapp", payload })
     .select("id")
     .single<{ id: number }>();
   // Sem gravar o evento, pedimos para a Meta reenviar depois.
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
 
   after(async () => {
     try {
-      if (instagram) await processInstagramEvent(admin, event.id, payload as IgWebhookPayload);
+      if (instagram) await processInstagramEvent(admin, event.id, payload as IgWebhookPayload, object === "page" ? "messenger" : "instagram");
       else await processWebhookEvent(admin, event.id, payload);
     } catch (e) {
       // Não registra conteúdo de mensagem em log (LGPD): só o id do evento e o erro.

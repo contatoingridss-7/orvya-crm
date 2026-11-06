@@ -94,7 +94,7 @@ export async function sendText(slug: string, input: z.input<typeof sendSchema>):
 
   // Instagram Direct: mesmas regras de acesso, prazo do Instagram (24 h / 7 dias para a equipe).
   const igConv = await loadConversation(ctx, parsed.data.conversationId);
-  if (igConv?.channel === "instagram") {
+  if (igConv?.channel === "instagram" || igConv?.channel === "messenger") {
     if (!ctx.manager && igConv.assigned_to && igConv.assigned_to !== ctx.viewer.id) return { ok: false, error: "Esta conversa é de outro vendedor." };
     if (parsed.data.text.length > 1000) return { ok: false, error: "No Instagram, a mensagem pode ter até 1.000 caracteres." };
     let sent: Awaited<ReturnType<typeof sendInstagramText>>;
@@ -599,7 +599,7 @@ export async function removeFromCrm(slug: string, conversationId: string): Promi
     .maybeSingle<{ id: string; contact_id: string; channel: string }>();
   if (!conv) return { ok: false, error: "Conversa não encontrada." };
   const admin = createAdminClient();
-  if (conv.channel === "instagram") {
+  if (conv.channel === "instagram" || conv.channel === "messenger") {
     const { error } = await admin.from("contacts").update({ crm_ignored: true }).eq("id", conv.contact_id).eq("company_id", ctx.company.id);
     if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0027 foi rodada." };
   }
@@ -618,7 +618,7 @@ export async function removeFromCrm(slug: string, conversationId: string): Promi
   revalidatePath(`/${slug}/funil`);
   return {
     ok: true,
-    message: conv.channel === "instagram" ? "Contato tirado do Orvya. As próximas mensagens dele ficam só no Instagram." : "Conversa e lead excluídos do Orvya.",
+    message: conv.channel !== "whatsapp" ? "Contato tirado do Orvya. As próximas mensagens dele ficam só no app da Meta." : "Conversa e lead excluídos do Orvya.",
   };
 }
 
@@ -755,8 +755,8 @@ export async function resendMessage(slug: string, messageId: string): Promise<Ac
   };
 
   const conv = await loadConversation(ctx, msg.conversation_id);
-  if (conv?.channel === "instagram") {
-    if (msg.msg_type !== "text" || !text) return { ok: false, error: "No Instagram, só texto pode ser reenviado." };
+  if (conv?.channel === "instagram" || conv?.channel === "messenger") {
+    if (msg.msg_type !== "text" || !text) return { ok: false, error: "No Instagram e no Messenger, só texto pode ser reenviado." };
     if (!ctx.manager && conv.assigned_to && conv.assigned_to !== ctx.viewer.id) return { ok: false, error: "Esta conversa é de outro vendedor." };
     try {
       const sent = await sendInstagramText(conv, text);

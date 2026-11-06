@@ -33,7 +33,7 @@ export type InboxConversation = {
   lastPreview: string | null;
   lastDirection: "in" | "out" | null;
   unread: number;
-  channel: "whatsapp" | "instagram";
+  channel: "whatsapp" | "instagram" | "messenger";
   numberId: string | null;
   igAccountId: string | null;
   /** @ do Instagram (conversas do Direct). */
@@ -151,7 +151,7 @@ export function Inbox(props: Props) {
     const q = normalize(query.trim());
     const digits = query.replace(/\D/g, "");
     return conversations.filter((c) => {
-      if (numberFilter === IG_FILTER ? c.channel !== "instagram" : numberFilter && c.numberId !== numberFilter) return false;
+      if (numberFilter === IG_FILTER ? c.channel === "whatsapp" : numberFilter && c.numberId !== numberFilter) return false;
       if (filter === "finalizadas" ? !finished(c) : finished(c)) return false;
       if (filter === "nao-lidas" && c.unread === 0) return false;
       if (filter === "precisa" && !c.needsHuman) return false;
@@ -232,8 +232,8 @@ export function Inbox(props: Props) {
                     {companyAi && c.aiEnabled && !c.needsHuman && <Pill tone="ind">IA respondendo</Pill>}
                     {!c.assignedTo && <Pill tone="warn">Fila</Pill>}
                     {c.assignedTo && c.assignedTo !== viewerId && <Pill>{firstName(peopleById.get(c.assignedTo) ?? "Equipe")}</Pill>}
-                    {c.channel === "instagram" ? (
-                      <Pill tone="ind">Instagram</Pill>
+                    {c.channel !== "whatsapp" ? (
+                      <Pill tone="ind">{c.channel === "messenger" ? "Messenger" : "Instagram"}</Pill>
                     ) : (
                       numbers.length > 1 && c.numberId && <Pill>{numberById.get(c.numberId)?.label ?? "Número"}</Pill>
                     )}
@@ -370,7 +370,8 @@ function Thread({
   const windowEnd = windowEndsAt(c.lastInboundAt);
   const mine = c.assignedTo === viewerId;
   const canReply = manager || !c.assignedTo || mine;
-  const isIg = c.channel === "instagram";
+  // Instagram e Messenger seguem as mesmas regras (Página da Meta, 24 h / 7 dias, sem modelos).
+  const isIg = c.channel !== "whatsapp";
   const connected = isIg ? !!igAccount?.connected : !!number?.connected;
   // Direct: resposta livre até 24 h; da equipe até 7 dias (etiqueta de atendimento humano). Sem modelos.
   const igWindow = isIg ? instagramWindow(c.lastInboundAt, now) : null;
@@ -521,7 +522,7 @@ function Thread({
           <b>{c.contactName}</b>
           <small>
             {[
-              isIg ? (c.contactHandle ? `@${c.contactHandle} · Instagram` : "Instagram") : formatPhone(c.contactPhone),
+              isIg ? (c.channel === "messenger" ? "Messenger" : c.contactHandle ? `@${c.contactHandle} · Instagram` : "Instagram") : formatPhone(c.contactPhone),
               isIg ? null : number?.label,
               c.lead?.stage && `${c.lead.pipelineName} · ${c.lead.stage}`,
             ]

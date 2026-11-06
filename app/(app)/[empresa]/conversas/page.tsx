@@ -25,7 +25,7 @@ type ConvRow = {
   last_direction: "in" | "out" | null;
   unread_count: number;
   lead_id: string | null;
-  channel: "whatsapp" | "instagram";
+  channel: "whatsapp" | "instagram" | "messenger";
   whatsapp_number_id: string | null;
   instagram_account_id: string | null;
   contacts: { name: string; phone_e164: string | null; org_name: string | null; instagram_username: string | null } | null;
@@ -49,7 +49,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
         "id, assigned_to, ai_enabled, needs_human, needs_human_reason, last_inbound_at, last_message_at, last_preview, last_direction, unread_count, lead_id, channel, whatsapp_number_id, instagram_account_id, contacts(name, phone_e164, org_name, instagram_username), leads(id, closed_at, stages(name), pipelines(key, name))",
       )
       .eq("company_id", company.id)
-      .in("channel", ["whatsapp", "instagram"])
+      .in("channel", ["whatsapp", "instagram", "messenger"])
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(300)
       .returns<ConvRow[]>(),

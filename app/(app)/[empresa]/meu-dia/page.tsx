@@ -174,7 +174,7 @@ export default async function MeuDiaPage({ params }: { params: Promise<{ empresa
                       <div className="min-w-0 flex-1">
                         <b className="block truncate font-semibold text-title">{c.contacts?.name ?? "Sem nome"}</b>
                         <small className="block truncate text-xs text-muted">
-                          {c.channel === "instagram" ? "Instagram" : "WhatsApp"}
+                          {c.channel === "instagram" ? "Instagram" : c.channel === "messenger" ? "Messenger" : "WhatsApp"}
                           {c.last_preview ? ` · ${c.last_preview}` : ""}
                         </small>
                       </div>

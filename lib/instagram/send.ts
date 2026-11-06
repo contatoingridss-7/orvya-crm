@@ -9,10 +9,11 @@ import { instagramWindow } from "./window";
 export async function sendInstagramText(conv: SendConversation, text: string): Promise<{ ok: true; mid: string } | { ok: false; error: string }> {
   const window = instagramWindow(conv.last_inbound_at);
   if (window === "closed") {
-    return { ok: false, error: "O Instagram só permite responder até 7 dias depois da última mensagem do cliente. Aguarde ele escrever de novo." };
+    return { ok: false, error: "O Instagram e o Messenger só permitem responder até 7 dias depois da última mensagem do cliente. Aguarde ele escrever de novo." };
   }
-  const igsid = conv.contacts?.instagram_id;
-  if (!igsid || !conv.instagram_account_id) return { ok: false, error: "Esta conversa não está ligada a uma conta do Instagram." };
+  // Messenger usa a mesma Página (e o mesmo token) da conta do Instagram conectada.
+  const igsid = conv.channel === "messenger" ? conv.contacts?.messenger_id : conv.contacts?.instagram_id;
+  if (!igsid || !conv.instagram_account_id) return { ok: false, error: "Esta conversa não está ligada à Página da empresa." };
 
   const admin = createAdminClient();
   const [{ data: account }, { data: cred }] = await Promise.all([

@@ -94,6 +94,16 @@ export async function fetchIgProfile(igsid: string, pageToken: string): Promise<
   }
 }
 
+/** Nome de quem escreveu no Messenger da Página (perfil público básico). */
+export async function fetchMessengerProfile(psid: string, pageToken: string): Promise<{ name: string | null }> {
+  try {
+    const p = await graph<{ name?: string; first_name?: string; last_name?: string }>(`${psid}?fields=name,first_name,last_name`, pageToken);
+    return { name: p.name ?? ([p.first_name, p.last_name].filter(Boolean).join(" ") || null) };
+  } catch {
+    return { name: null };
+  }
+}
+
 export function instagramErrorText(e: unknown): string {
   if (e instanceof GraphError) {
     if (e.code === 190) return "O token da Página expirou. Reconecte o Instagram em Canais.";
