@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 import { formatInTimeZone } from "date-fns-tz";
 import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { TextField } from "@/components/ui/field";
 import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
@@ -19,7 +20,7 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, AudioRecorder, EmojiButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
-import { assumeConversation, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
+import { assumeConversation, correctMessage, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -304,6 +305,8 @@ function Thread({
   const [sending, startSending] = useTransition();
   const [assuming, startAssuming] = useTransition();
   const [usingTemplate, setUsingTemplate] = useState(false);
+  const [correcting, setCorrecting] = useState<{ id: string; text: string } | null>(null);
+  const [fixing, startFixing] = useTransition();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -411,6 +414,46 @@ function Thread({
 
   return (
     <section className="thread" aria-label={`Conversa com ${c.contactName}`}>
+      <Modal
+        open={!!correcting}
+        onClose={() => setCorrecting(null)}
+        title="Corrigir mensagem"
+        actions={
+          <>
+            <Button onClick={() => setCorrecting(null)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={fixing}
+              disabled={!correcting?.text.trim()}
+              onClick={() =>
+                correcting &&
+                startFixing(async () => {
+                  const r = await correctMessage(slug, { messageId: correcting.id, text: correcting.text });
+                  if (r.ok) {
+                    toast(r.message ?? "Correção enviada.", "ok");
+                    setCorrecting(null);
+                    router.refresh();
+                  } else toast(r.error, "bad");
+                })
+              }
+            >
+              Enviar correção
+            </Button>
+          </>
+        }
+      >
+        <p className="mt-0 text-[12.5px] text-muted">
+          O WhatsApp não deixa editar mensagem já enviada. A correção vai como nova mensagem, respondendo em cima da original, com “Correção:” na frente.
+        </p>
+        <textarea
+          className="inp min-h-[96px] w-full"
+          value={correcting?.text ?? ""}
+          onChange={(e) => setCorrecting((c) => (c ? { ...c, text: e.target.value } : c))}
+          maxLength={4096}
+          aria-label="Texto corrigido"
+          autoFocus
+        />
+      </Modal>
       <header className="th-head">
         <button type="button" className="icon-btn only-mobile" onClick={onBack} aria-label="Voltar para a lista">
           <svg viewBox="0 0 24 24" aria-hidden>
@@ -507,6 +550,11 @@ function Thread({
                           setMessages((list) => list?.map((x) => (x.id === m.id ? { ...x, status: "sent" } : x)) ?? list);
                         } else toast(r.error, "bad");
                       }
+                    : undefined
+                }
+                onCorrect={
+                  !isIg && m.direction === "out" && m.sender === "user" && m.msg_type === "text" && m.status !== "failed" && windowOpen
+                    ? () => setCorrecting({ id: m.id, text: (m.body ?? "").replace(/^\*Correção:\* /, "") })
                     : undefined
                 }
               />
@@ -643,7 +691,19 @@ const STATUS_TEXT: Record<Message["status"], string> = {
   failed: "não enviada",
 };
 
-function MessageRow({ m, newDay, author, onResend }: { m: Message; newDay: boolean; author: string | null; onResend?: () => Promise<void> }) {
+function MessageRow({
+  m,
+  newDay,
+  author,
+  onResend,
+  onCorrect,
+}: {
+  m: Message;
+  newDay: boolean;
+  author: string | null;
+  onResend?: () => Promise<void>;
+  onCorrect?: () => void;
+}) {
   const [resending, setResending] = useState(false);
   const kind = m.direction === "in" ? "lead" : m.sender === "ai" ? "ai" : m.source === "celular" ? "phone" : "human";
   const media = m.media_path ? `/api/media/${m.id}` : null;
@@ -674,6 +734,14 @@ function MessageRow({ m, newDay, author, onResend }: { m: Message; newDay: boole
         {body}
         <small suppressHydrationWarning>
           {[who, m.template_name ? `modelo ${m.template_name}` : "", hhmm(m.sent_at), m.direction === "out" ? STATUS_TEXT[m.status] : ""].filter(Boolean).join(" · ")}
+          {onCorrect && (
+            <>
+              {" · "}
+              <button type="button" className="underline" onClick={onCorrect}>
+                Corrigir
+              </button>
+            </>
+          )}
           {onResend && (
             <>
               {" · "}

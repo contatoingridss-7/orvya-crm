@@ -798,3 +798,46 @@ export async function sendAudio(slug: string, form: FormData): Promise<ActionRes
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;
 }
+
+const correctSchema = z.object({
+  messageId: z.uuid(),
+  text: z.string().trim().min(1, "Escreva a correção.").max(4096, "Mensagem longa demais (máximo de 4.096 caracteres)."),
+});
+
+/**
+ * "Corrigir": a API oficial não edita mensagem já enviada. O Orvya manda uma nova mensagem
+ * respondendo em cima da errada (o cliente vê a correção ligada à original). Só WhatsApp,
+ * mensagem de texto da equipe e com a janela de 24 h aberta.
+ */
+export async function correctMessage(slug: string, input: z.input<typeof correctSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = correctSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const { data: msg } = await ctx.supabase
+    .from("messages")
+    .select("id, conversation_id, direction, sender, msg_type, status, wa_message_id")
+    .eq("id", parsed.data.messageId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<{ id: string; conversation_id: string; direction: string; sender: string; msg_type: string; status: string; wa_message_id: string | null }>();
+  if (!msg || msg.direction !== "out" || msg.sender !== "user" || msg.msg_type !== "text") return { ok: false, error: "Só dá para corrigir mensagens de texto enviadas pela equipe." };
+  if (msg.status === "failed" || !msg.wa_message_id) return { ok: false, error: "Esta mensagem não foi enviada. Use Reenviar." };
+
+  const prep = await prepareSend(ctx, msg.conversation_id);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+  if (conv.channel !== "whatsapp") return { ok: false, error: "Corrigir está disponível só no WhatsApp." };
+  if (!isWindowOpen(conv.last_inbound_at)) return { ok: false, error: "A janela de 24 horas está fechada. Fora dela, só modelos de mensagem aprovados." };
+
+  const body = `*Correção:* ${parsed.data.text}`;
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, body, msg.wa_message_id!));
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const rec = await recordOutboundMessage(conv, { wamid, body, msgType: "text" }, ctx.viewer.id);
+  if (rec.ok) await createAdminClient().from("messages").update({ reply_to_wa_id: msg.wa_message_id }).eq("id", rec.messageId);
+  revalidatePath(`/${slug}/conversas`);
+  return rec.ok ? { ok: true, message: "Correção enviada." } : rec;
+}
