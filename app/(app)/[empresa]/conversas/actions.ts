@@ -581,3 +581,50 @@ export async function removeFromCrm(slug: string, conversationId: string): Promi
   revalidatePath(`/${slug}/funil`);
   return { ok: true, message: "Contato tirado do Orvya. As próximas mensagens dele ficam só no Instagram." };
 }
+
+const PHOTO_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png" };
+
+/**
+ * Foto do aparelho (celular ou computador) enviada na conversa do WhatsApp, com legenda opcional.
+ * A tela já reduz a foto; aqui guarda no bucket privado, manda o link assinado para a Meta e registra.
+ */
+export async function sendPhoto(slug: string, form: FormData): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const conversationId = String(form.get("conversationId") ?? "");
+  const caption = String(form.get("caption") ?? "").trim().slice(0, 1000);
+  const file = form.get("file");
+  if (!z.uuid().safeParse(conversationId).success || !(file instanceof File)) return { ok: false, error: "Dados inválidos." };
+  const ext = PHOTO_TYPES[file.type];
+  if (!ext) return { ok: false, error: "Envie uma foto em JPG ou PNG." };
+  if (file.size > 3.5 * 1024 * 1024) return { ok: false, error: "Foto grande demais (máximo de 3,5 MB)." };
+
+  const prep = await prepareMediaSend(ctx, conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+
+  const admin = createAdminClient();
+  const bucket = admin.storage.from("whatsapp-media");
+  const tmp = `${ctx.company.id}/${conv.id}/envio-${crypto.randomUUID()}.${ext}`;
+  const { error: up } = await bucket.upload(tmp, await file.arrayBuffer(), { contentType: file.type });
+  if (up) return { ok: false, error: "Não foi possível guardar a foto. Tente de novo." };
+  const { data: signed } = await bucket.createSignedUrl(tmp, 600);
+  if (!signed) return { ok: false, error: "Não foi possível preparar a foto. Tente de novo." };
+
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind: "image", link: signed.signedUrl, caption: caption || undefined }));
+  } catch (e) {
+    await bucket.remove([tmp]);
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const rec = await recordOutboundMessage(conv, { wamid, body: caption ? `[Imagem] ${caption}` : "[Imagem]", msgType: "image" }, ctx.viewer.id);
+  if (rec.ok) {
+    // Mesmo padrão da mídia recebida: {empresa}/{conversa}/{mensagem}.{ext}
+    const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.${ext}`;
+    const { error: mv } = await bucket.move(tmp, final);
+    await admin.from("messages").update({ media_path: mv ? tmp : final, media_mime: file.type }).eq("id", rec.messageId);
+  }
+  revalidatePath(`/${slug}/conversas`);
+  return rec.ok ? { ok: true } : rec;
+}

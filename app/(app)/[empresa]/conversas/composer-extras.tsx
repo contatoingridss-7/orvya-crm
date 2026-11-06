@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition, type KeyboardEvent } from 
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { quickReplyUsed, searchProducts, sendMaterial, sendProduct } from "./actions";
+import { quickReplyUsed, searchProducts, sendMaterial, sendPhoto, sendProduct } from "./actions";
 
 export type QuickReply = { id: string; shortcut: string; body: string; uses: number };
 export type Material = { id: string; title: string; fileName: string; kind: "pdf" | "imagem" };
@@ -88,11 +88,25 @@ export function useQuickReplies(opts: {
   return { menu, onKeyDown, hasReplies: replies.length > 0 };
 }
 
-/** Anexar: material da empresa (PDF ou imagem) ou produto do catálogo (foto com nome e preço). */
+/** Reduz a foto (lado maior 1600 px, JPG) para caber no envio e carregar rápido no WhatsApp do cliente. */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("foto"))), "image/jpeg", 0.82));
+}
+
+/** Anexar: foto do aparelho, material da empresa (PDF ou imagem) ou produto do catálogo (foto com nome e preço). */
 export function AttachButton({ slug, conversationId, materials, onSent }: { slug: string; conversationId: string; materials: Material[]; onSent: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"materiais" | "produto">(materials.length ? "materiais" : "produto");
+  const [tab, setTab] = useState<"foto" | "materiais" | "produto">("foto");
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
+  const [caption, setCaption] = useState("");
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<Awaited<ReturnType<typeof searchProducts>>>([]);
   const [searching, startSearch] = useTransition();
@@ -113,6 +127,8 @@ export function AttachButton({ slug, conversationId, materials, onSent }: { slug
       if (r.ok) {
         toast(`${what} enviado.`, "ok");
         setOpen(false);
+        setPhoto(null);
+        setCaption("");
         onSent();
       } else toast(r.error, "bad");
     });
@@ -120,11 +136,14 @@ export function AttachButton({ slug, conversationId, materials, onSent }: { slug
 
   return (
     <>
-      <Button aria-label="Enviar catálogo, material ou produto" title="Enviar catálogo, material ou produto" onClick={() => setOpen(true)}>
+      <Button aria-label="Enviar foto, catálogo, material ou produto" title="Enviar foto, catálogo, material ou produto" onClick={() => setOpen(true)}>
         Anexar
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Enviar para o cliente">
         <nav className="tabs mb-3" aria-label="O que enviar">
+          <button type="button" aria-current={tab === "foto" ? "page" : undefined} onClick={() => setTab("foto")}>
+            Foto
+          </button>
           <button type="button" aria-current={tab === "materiais" ? "page" : undefined} onClick={() => setTab("materiais")}>
             Catálogos e materiais
           </button>
@@ -133,7 +152,56 @@ export function AttachButton({ slug, conversationId, materials, onSent }: { slug
           </button>
         </nav>
 
-        {tab === "materiais" ? (
+        {tab === "foto" ? (
+          <div className="grid gap-3">
+            <label className="btn w-fit cursor-pointer">
+              {photo ? "Trocar foto" : "Escolher foto"}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  try {
+                    const blob = await shrinkPhoto(f);
+                    setPhoto((old) => {
+                      if (old) URL.revokeObjectURL(old.url);
+                      return { blob, url: URL.createObjectURL(blob) };
+                    });
+                  } catch {
+                    toast("Não foi possível abrir esta imagem. Use uma foto em JPG ou PNG.", "bad");
+                  }
+                }}
+              />
+            </label>
+            {photo && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- prévia local (blob) */}
+                <img src={photo.url} alt="Prévia da foto" className="max-h-[40vh] w-auto rounded-xl border border-line object-contain" />
+                <input className="inp" value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={1000} placeholder="Legenda (opcional)" aria-label="Legenda" />
+                <div>
+                  <Button
+                    variant="primary"
+                    loading={sending}
+                    onClick={() =>
+                      send(() => {
+                        const fd = new FormData();
+                        fd.set("conversationId", conversationId);
+                        fd.set("caption", caption);
+                        fd.set("file", new File([photo.blob], "foto.jpg", { type: "image/jpeg" }));
+                        return sendPhoto(slug, fd);
+                      }, "Foto")
+                    }
+                  >
+                    Enviar foto
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : tab === "materiais" ? (
           materials.length === 0 ? (
             <p className="m-0 text-[13px] text-muted">Nenhum material cadastrado. O gestor inclui os PDFs em Configurações → Automações → Materiais.</p>
           ) : (
