@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseHours } from "@/lib/whatsapp/after-hours";
 import { AfterHoursManager } from "./after-hours-manager";
 import { DistributionManager, type DistSeller } from "./distribution-manager";
+import { TriageManager } from "./triage-manager";
 import { IgMenuManager, type IgMenuNumber } from "./ig-menu-manager";
 import { IgRepliesManager, type IgReply } from "./ig-replies-manager";
 import { RulesManager, type Rule } from "./rules-manager";
@@ -76,6 +77,11 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
       .returns<{ user_id: string; pipeline_ids: string[] | null; profiles: { full_name: string | null; email: string | null; active: boolean } | null }[]>(),
   ]);
   const dist = distRes.data;
+  const triageRes = await supabase
+    .from("whatsapp_triage")
+    .select("enabled, intro, options")
+    .eq("company_id", company.id)
+    .maybeSingle<{ enabled: boolean; intro: string; options: { title: string; pipeline_id: string }[] | null }>();
   // Mesma ordem do rodízio no banco (nome, sem diferenciar maiúsculas).
   const sellers: DistSeller[] = (sellersRes.data ?? [])
     .filter((m) => m.profiles?.active !== false)
@@ -133,6 +139,13 @@ export default async function AutomacoesPage({ params }: { params: Promise<{ emp
           sellers={sellers}
           settings={dist ? { enabled: dist.enabled, routes: (dist.routes ?? []).map((r) => ({ pipelineId: r.pipeline_id, keywords: r.keywords })), workDays: dist.work_days ?? {}, breaks: dist.breaks ?? {}, rotationPipelines: dist.rotation_pipelines ?? {}, reassignMinutes: dist.reassign_minutes ?? {} } : null}
           loadError={!!distRes.error}
+        />
+        <TriageManager
+          slug={company.slug}
+          companyName={company.name}
+          pipelines={(pipelinesRes.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
+          settings={triageRes.data ? { enabled: triageRes.data.enabled, intro: triageRes.data.intro, options: (triageRes.data.options ?? []).map((o) => ({ title: o.title, pipelineId: o.pipeline_id })) } : null}
+          loadError={!!triageRes.error}
         />
         <AfterHoursManager
           slug={company.slug}

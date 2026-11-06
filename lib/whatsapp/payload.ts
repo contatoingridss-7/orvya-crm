@@ -17,7 +17,7 @@ export type WaMessage = {
   sticker?: WaMedia;
   location?: { latitude?: number; longitude?: number; name?: string; address?: string };
   contacts?: { name?: { formatted_name?: string } }[];
-  interactive?: { type?: string; button_reply?: { title?: string }; list_reply?: { title?: string } };
+  interactive?: { type?: string; button_reply?: { id?: string; title?: string }; list_reply?: { id?: string; title?: string } };
   button?: { text?: string };
   reaction?: { emoji?: string; message_id?: string };
   context?: { id?: string };

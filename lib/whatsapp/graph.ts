@@ -46,6 +46,33 @@ export function fetchPhoneNumber(phoneNumberId: string, token: string) {
 }
 
 /** Envia texto livre (só dentro da janela de 24 h). Devolve o wamid. */
+/** Mensagem com até 3 botões de resposta (só dentro da janela de 24 h; sem custo). */
+export async function sendButtonsMessage(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  body: string,
+  buttons: { id: string; title: string }[],
+): Promise<string> {
+  const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
+    method: "POST",
+    body: {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: body },
+        action: { buttons: buttons.slice(0, 3).map((b) => ({ type: "reply", reply: { id: b.id, title: b.title.slice(0, 20) } })) },
+      },
+    },
+  });
+  const id = res.messages?.[0]?.id;
+  if (!id) throw new GraphError("A Meta não confirmou o envio.", 502);
+  return id;
+}
+
 export async function sendTextMessage(phoneNumberId: string, token: string, to: string, body: string, replyTo?: string): Promise<string> {
   const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
     method: "POST",

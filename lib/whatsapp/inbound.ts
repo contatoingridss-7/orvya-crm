@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { routePipeline } from "@/lib/crm/routing";
 import { fillAfterHours, isOpen, parseHours } from "./after-hours";
-import { sendTextMessage } from "./graph";
+import { sendButtonsMessage, sendTextMessage } from "./graph";
 import { storeInboundMedia } from "./media";
 import { mapMetaStatus } from "./templates";
 import {
@@ -194,7 +194,7 @@ async function ensureOpenLead(
   referral: Record<string, unknown> | undefined,
   tracking: TrackingCode | null,
   firstText: string | null,
-): Promise<string | null> {
+): Promise<{ id: string; triage: boolean } | null> {
   const { data: open } = await ctx.admin
     .from("leads")
     .select("id")
@@ -204,10 +204,11 @@ async function ensureOpenLead(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
-  if (open) return open.id;
+  if (open) return { id: open.id, triage: false };
 
   // Palavra-chave da primeira mensagem (ex.: "cpap") pode escolher o funil; senão, o padrão do número.
-  let pipelineId = (await routePipeline(ctx.admin, ctx.number.company_id, firstText).catch(() => null)) ?? ctx.number.default_pipeline_id;
+  const routed = await routePipeline(ctx.admin, ctx.number.company_id, firstText).catch(() => null);
+  let pipelineId = routed ?? ctx.number.default_pipeline_id;
   if (!pipelineId) {
     const { data: p } = await ctx.admin.from("pipelines").select("id").eq("company_id", ctx.number.company_id).order("position").limit(1).maybeSingle<{ id: string }>();
     pipelineId = p?.id ?? null;
@@ -250,7 +251,8 @@ async function ensureOpenLead(
     .select("id")
     .single<{ id: string }>();
   if (error) throw new Error(`Não foi possível criar o lead: ${error.message}`);
-  return lead.id;
+  // Lead novo sem palavra-chave: o cliente escolhe o assunto pelos botões da triagem.
+  return { id: lead.id, triage: !routed };
 }
 
 /** Grava a mensagem uma única vez (wa_message_id). Devolve o id se for nova, null se já existia. */
@@ -297,7 +299,8 @@ async function handleInbound(ctx: Ctx, value: WaChangeValue, m: WaMessage) {
   });
   if (!messageId) return; // evento repetido
 
-  const leadId = await ensureOpenLead(ctx, contactId, m.referral, tracking, m.type === "text" ? body : null);
+  const lead = await ensureOpenLead(ctx, contactId, m.referral, tracking, m.type === "text" ? body : null);
+  const leadId = lead?.id ?? null;
   if (leadId) {
     await ctx.admin.from("leads").update({ last_contact_at: sentAt }).eq("id", leadId);
     if (conversation.lead_id !== leadId) await ctx.admin.from("conversations").update({ lead_id: leadId }).eq("id", conversation.id);
@@ -307,9 +310,72 @@ async function handleInbound(ctx: Ctx, value: WaChangeValue, m: WaMessage) {
   if (rpcError) await ctx.admin.rpc("conversation_inbound", { p_conversation: conversation.id, p_at: sentAt });
 
   await saveMedia(ctx, mediaId, conversation.id, messageId);
+  // Botão da triagem tocado: leva o lead ao funil escolhido (e ao vendedor de lá, pelo rodízio).
+  const choice = m.interactive?.button_reply?.id;
+  if (leadId && choice?.startsWith(TRIAGE_PREFIX)) await applyTriage(ctx, leadId, choice.slice(TRIAGE_PREFIX.length), body).catch(() => undefined);
   // Falha na resposta automática não pode impedir o registro da mensagem do cliente.
+  if (lead?.triage) await triageMenu(ctx, conversation.id, m.from, sentAt).catch(() => undefined);
   await afterHoursReply(ctx, conversation.id, m.from, sentAt).catch(() => undefined);
   // Fase 4: aqui o agente de IA é acionado, se estiver ligado para a empresa e para a conversa.
+}
+
+const TRIAGE_PREFIX = "TRIAGEM:";
+type TriageCfg = { enabled: boolean; intro: string; options: { title?: string; pipeline_id?: string | null }[] };
+
+async function loadTriage(ctx: Ctx): Promise<{ intro: string; options: { title: string; pipelineId: string }[] } | null> {
+  const { data } = await ctx.admin.from("whatsapp_triage").select("enabled, intro, options").eq("company_id", ctx.number.company_id).maybeSingle<TriageCfg>();
+  if (!data?.enabled) return null;
+  const options = (Array.isArray(data.options) ? data.options : [])
+    .filter((o) => o.title?.trim() && o.pipeline_id)
+    .slice(0, 3)
+    .map((o) => ({ title: o.title!.trim().slice(0, 20), pipelineId: o.pipeline_id! }));
+  return options.length ? { intro: data.intro, options } : null;
+}
+
+/** Primeiro contato sem palavra-chave: botões de assunto (dentro da janela aberta pelo cliente, sem custo). */
+async function triageMenu(ctx: Ctx, conversationId: string, to: string, sentAt: string) {
+  if (!ctx.token || Date.now() - new Date(sentAt).getTime() > 30 * 60_000) return;
+  const cfg = await loadTriage(ctx);
+  if (!cfg) return;
+  const wamid = await sendButtonsMessage(
+    ctx.number.phone_number_id,
+    ctx.token,
+    to,
+    cfg.intro,
+    cfg.options.map((o) => ({ id: `${TRIAGE_PREFIX}${o.pipelineId}`, title: o.title })),
+  );
+  await insertMessage(ctx, {
+    conversation_id: conversationId,
+    direction: "out",
+    sender: "system",
+    msg_type: "triage",
+    body: `${cfg.intro}\nOpções: ${cfg.options.map((o) => o.title).join(" · ")}`,
+    wa_message_id: wamid,
+    status: "sent",
+    source: "orvya",
+    sent_at: new Date().toISOString(),
+  });
+}
+
+/** Leva o lead ao funil do botão (só funis da configuração da triagem desta empresa). */
+async function applyTriage(ctx: Ctx, leadId: string, pipelineId: string, title: string) {
+  const cfg = await loadTriage(ctx);
+  if (!cfg?.options.some((o) => o.pipelineId === pipelineId)) return;
+  const { data: lead } = await ctx.admin.from("leads").select("id, pipeline_id, closed_at").eq("id", leadId).maybeSingle<{ id: string; pipeline_id: string; closed_at: string | null }>();
+  if (!lead || lead.closed_at || lead.pipeline_id === pipelineId) return;
+  const { data: stage } = await ctx.admin
+    .from("stages")
+    .select("id")
+    .eq("pipeline_id", pipelineId)
+    .eq("kind", "open")
+    .order("position")
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (!stage) return;
+  await ctx.admin.from("leads").update({ pipeline_id: pipelineId, stage_id: stage.id }).eq("id", leadId);
+  await ctx.admin
+    .from("activities")
+    .insert({ company_id: ctx.number.company_id, lead_id: leadId, kind: "system", body: `Triagem: o cliente escolheu “${title}”.` });
 }
 
 /**
