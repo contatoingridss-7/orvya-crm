@@ -262,11 +262,13 @@ async function handleMessaging(ctx: Ctx, rules: Rule[], menu: Menu | null, ev: I
 
   // Eco: mensagem enviada pela empresa. Se foi pelo Orvya, já está gravada (mesmo mid);
   // se foi pelo app do Instagram no celular, registra como enviada pela equipe.
+  // Conversa que não está no Orvya (ficou só no Instagram): a resposta do celular também fica lá.
   if (m.is_echo) {
     const igsid = ev.recipient?.id;
     if (!igsid) return;
-    const contact = await findOrCreateContact(ctx, igsid);
-    const conv = await findOrCreateConversation(ctx, contact.id);
+    const tracked = await trackedConversation(ctx, igsid);
+    if (!tracked || tracked === "ignored") return;
+    const conv = tracked;
     const id = await insertMessage(ctx, {
       conversation_id: conv.id,
       direction: "out",
@@ -284,6 +286,21 @@ async function handleMessaging(ctx: Ctx, rules: Rule[], menu: Menu | null, ev: I
 
   const igsid = ev.sender?.id;
   if (!igsid || igsid === ctx.account.ig_user_id) return;
+
+  // Triagem: só entra no Orvya quem veio de anúncio ou escreveu uma palavra-chave. Os demais
+  // (equipe, sócios, clientes antigos) recebem o menu e continuam só no app do Instagram.
+  const tracked = await trackedConversation(ctx, igsid);
+  if (tracked === "ignored") return;
+  if (!tracked) {
+    const fromAd = !!(m.referral ?? ev.referral)?.ad_id;
+    const keyword =
+      !!m.text && (!!matchRule(rules, "dm_keyword", m.text) || !!(await routePipeline(ctx.admin, ctx.account.company_id, m.text).catch(() => null)));
+    if (!fromAd && !keyword) {
+      await triageReply(ctx, menu, rules, igsid, m.quick_reply?.payload);
+      return;
+    }
+  }
+
   const contact = await findOrCreateContact(ctx, igsid);
   const conv = await findOrCreateConversation(ctx, contact.id);
   const messageId = await insertMessage(ctx, {
@@ -321,6 +338,45 @@ async function handleMessaging(ctx: Ctx, rules: Rule[], menu: Menu | null, ev: I
     const welcome = rules.find((r) => r.trigger === "welcome");
     if (welcome) await autoReply(ctx, conv.id, igsid, welcome.reply);
   }
+}
+
+/** Conversa do Direct já no Orvya; "ignored" = contato marcado para nunca entrar; null = fora do Orvya. */
+async function trackedConversation(ctx: Ctx, igsid: string): Promise<{ id: string; lead_id: string | null; created: boolean } | "ignored" | null> {
+  const { data: contact } = await ctx.admin
+    .from("contacts")
+    .select("id, crm_ignored")
+    .eq("company_id", ctx.account.company_id)
+    .eq("instagram_id", igsid)
+    .maybeSingle<{ id: string; crm_ignored: boolean }>();
+  if (!contact) return null;
+  if (contact.crm_ignored) return "ignored";
+  const { data: conv } = await ctx.admin
+    .from("conversations")
+    .select("id, lead_id")
+    .eq("company_id", ctx.account.company_id)
+    .eq("contact_id", contact.id)
+    .eq("channel", "instagram")
+    .maybeSingle<{ id: string; lead_id: string | null }>();
+  return conv ? { ...conv, created: false } : null;
+}
+
+/**
+ * Atendimento automático de quem não entrou no Orvya: botão do menu tocado → link do WhatsApp
+ * (a pessoa chega ao Orvya pelo WhatsApp); primeira mensagem → menu (ou boas-vindas), uma vez só.
+ * Nada é gravado no Orvya.
+ */
+async function triageReply(ctx: Ctx, menu: Menu | null, rules: Rule[], igsid: string, payload: string | undefined) {
+  const choice = menu ? menuChoice(menu.options, payload) : null;
+  if (menu && choice) {
+    await sendDirectText(ctx.account.page_id, ctx.token, igsid, fillLinkReply(menu.linkReply, whatsappLink(menu.phone, choice)), false);
+    return;
+  }
+  const welcome = menu ? null : rules.find((r) => r.trigger === "welcome");
+  if (!menu && !welcome) return;
+  const { error: seen } = await ctx.admin.from("ig_triage").insert({ account_id: ctx.account.id, igsid });
+  if (seen) return; // já recebeu o menu (ou a migration 0027 não rodou)
+  if (menu) await sendDirectText(ctx.account.page_id, ctx.token, igsid, menu.intro, false, menuQuickReplies(menu.options));
+  else if (welcome) await sendDirectText(ctx.account.page_id, ctx.token, igsid, welcome.reply, false);
 }
 
 /** Envia a resposta automática e registra como mensagem do sistema (não pausa a equipe nem assume a conversa). */

@@ -19,7 +19,7 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
-import { assumeConversation, markRead, sendTemplate, sendText } from "./actions";
+import { assumeConversation, markRead, removeFromCrm, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -429,6 +429,27 @@ function Thread({
           <Link className="btn sm" href={leadHref}>
             Ver lead
           </Link>
+        )}
+        {isIg && manager && (
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={assuming}
+            title="Para equipe, sócios e parceiros: a conversa sai do Orvya e as próximas mensagens ficam só no Instagram"
+            onClick={() => {
+              if (!window.confirm(`Tirar ${c.contactName} do Orvya? A conversa e o lead aberto sem produto serão excluídos, e as próximas mensagens ficam só no Instagram.`)) return;
+              startAssuming(async () => {
+                const r = await removeFromCrm(slug, c.id);
+                if (r.ok) {
+                  toast(r.message ?? "Contato tirado do Orvya.", "ok");
+                  onBack();
+                  router.refresh();
+                } else toast(r.error, "bad");
+              });
+            }}
+          >
+            Tirar do Orvya
+          </Button>
         )}
       </header>
 

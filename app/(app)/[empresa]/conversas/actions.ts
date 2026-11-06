@@ -543,3 +543,41 @@ export async function startConversation(slug: string, input: z.input<typeof star
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true, message: "Conversa iniciada. Quando o cliente responder, a conversa abre para texto livre.", conversationId } : rec;
 }
+
+/**
+ * Tira do Orvya um contato do Instagram que não é cliente em atendimento (dono, equipe, parceiro):
+ * o contato passa a ser ignorado pela triagem, e a conversa e os leads abertos sem produto são
+ * excluídos. As próximas mensagens dele ficam só no app do Instagram. Só gestor e admin.
+ */
+export async function removeFromCrm(slug: string, conversationId: string): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  if (!ctx.manager) return { ok: false, error: "Só gestor ou administrador tira um contato do Orvya." };
+  if (!z.uuid().safeParse(conversationId).success) return { ok: false, error: "Conversa inválida." };
+  const { data: conv } = await ctx.supabase
+    .from("conversations")
+    .select("id, contact_id, channel")
+    .eq("id", conversationId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<{ id: string; contact_id: string; channel: string }>();
+  if (!conv) return { ok: false, error: "Conversa não encontrada." };
+  if (conv.channel !== "instagram") return { ok: false, error: "Disponível só para conversas do Instagram." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("contacts").update({ crm_ignored: true }).eq("id", conv.contact_id).eq("company_id", ctx.company.id);
+  if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0027 foi rodada." };
+  const { data: leads } = await admin
+    .from("leads")
+    .select("id, lead_products(id)")
+    .eq("company_id", ctx.company.id)
+    .eq("contact_id", conv.contact_id)
+    .is("closed_at", null)
+    .returns<{ id: string; lead_products: { id: string }[] }[]>();
+  const empty = (leads ?? []).filter((l) => !l.lead_products?.length).map((l) => l.id);
+  await admin.from("conversations").delete().eq("id", conv.id);
+  if (empty.length) await admin.from("leads").delete().in("id", empty);
+
+  revalidatePath(`/${slug}/conversas`);
+  revalidatePath(`/${slug}/funil`);
+  return { ok: true, message: "Contato tirado do Orvya. As próximas mensagens dele ficam só no Instagram." };
+}
