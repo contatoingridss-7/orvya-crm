@@ -10,7 +10,7 @@ import { Pill } from "@/components/ui/pill";
 import { useToast } from "@/components/ui/toast";
 import { ROLE_LABEL, type MemberRole } from "@/lib/auth/roles";
 import { initials } from "@/lib/names";
-import { changeRole, inviteMember, resetMemberPassword, setMemberActive, setPipelineScope, setSettingsAccess, type ActionResult } from "./actions";
+import { changeRole, inviteMember, renameMember, resetMemberPassword, setMemberActive, setPipelineScope, setSettingsAccess, type ActionResult } from "./actions";
 
 export type TeamMember = {
   id: string;
@@ -41,6 +41,12 @@ export function TeamManager({ members, admins, companyId, companyName, companies
   const [toToggle, setToToggle] = useState<TeamMember | null>(null);
   const [scoping, setScoping] = useState<TeamMember | null>(null);
   const [resetting, setResetting] = useState<TeamMember | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [newName, setNewName] = useState("");
+  const openRename = (id: string, name: string) => {
+    setRenaming({ id, name });
+    setNewName(name);
+  };
   const pipelineName = new Map(pipelines.map((p) => [p.id, p.name]));
   const [pending, startTransition] = useTransition();
 
@@ -151,6 +157,9 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                     <td>{m.active ? <Pill tone="ok">Ativo</Pill> : <Pill tone="bad">Desativado</Pill>}</td>
                     {canEdit && (
                       <td className="text-right">
+                        <Button size="sm" variant="ghost" className="mr-1.5" disabled={pending} onClick={() => openRename(m.id, m.name)}>
+                          Editar nome
+                        </Button>
                         {m.id !== viewerId && m.active && (
                           <Button size="sm" variant="ghost" className="mr-1.5" disabled={pending} onClick={() => setResetting(m)}>
                             Redefinir senha
@@ -192,11 +201,42 @@ export function TeamManager({ members, admins, companyId, companyName, companies
                   <small className="text-xs text-muted">{a.email}</small>
                 </div>
                 <Pill tone="ind">Administrador</Pill>
+                <Button size="sm" variant="ghost" disabled={pending} onClick={() => openRename(a.id, a.name)}>
+                  Editar nome
+                </Button>
               </div>
             ))}
           </div>
         </Panel>
       )}
+
+      <Modal
+        open={!!renaming}
+        onClose={() => setRenaming(null)}
+        title="Editar nome"
+        actions={
+          <>
+            <Button onClick={() => setRenaming(null)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={pending}
+              disabled={newName.trim().length < 2}
+              onClick={() => renaming && run(() => renameMember({ userId: renaming.id, fullName: newName }), () => setRenaming(null))}
+            >
+              Salvar
+            </Button>
+          </>
+        }
+      >
+        <TextField
+          label="Nome"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          maxLength={80}
+          autoFocus
+          hint="Aparece na saudação, nas conversas e no {{vendedor}} das mensagens."
+        />
+      </Modal>
 
       {canEdit && (
         <InviteModal

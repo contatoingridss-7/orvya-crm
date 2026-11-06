@@ -691,3 +691,64 @@ export async function sendUploadedVideo(slug: string, input: z.input<typeof vide
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;
 }
+
+type FailedRow = { id: string; conversation_id: string; direction: string; sender: string; msg_type: string; body: string | null; media_path: string | null; status: string };
+
+/**
+ * Reenvia uma mensagem da equipe que não foi entregue à Meta ("não enviada"): texto, foto ou vídeo.
+ * A mesma mensagem passa a valer com o novo envio (sem duplicar na conversa). Modelos não entram
+ * aqui: os campos não ficam guardados, então o modelo é enviado de novo pelo seletor.
+ */
+export async function resendMessage(slug: string, messageId: string): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  if (!z.uuid().safeParse(messageId).success) return { ok: false, error: "Mensagem inválida." };
+  const { data: msg } = await ctx.supabase
+    .from("messages")
+    .select("id, conversation_id, direction, sender, msg_type, body, media_path, status")
+    .eq("id", messageId)
+    .eq("company_id", ctx.company.id)
+    .maybeSingle<FailedRow>();
+  if (!msg || msg.direction !== "out" || msg.status !== "failed") return { ok: false, error: "Esta mensagem não está como não enviada." };
+  if (msg.msg_type === "template") return { ok: false, error: "Para modelos, envie de novo pelo seletor de modelos (os campos precisam ser preenchidos)." };
+  const text = (msg.body ?? "").replace(/^\[(Imagem|Vídeo)\]\s*/, "").trim();
+
+  const admin = createAdminClient();
+  const done = async (newId: string) => {
+    await admin.from("messages").update({ wa_message_id: newId, status: "sent", error: null, sent_at: new Date().toISOString() }).eq("id", msg.id);
+    revalidatePath(`/${slug}/conversas`);
+    return { ok: true as const, message: "Mensagem reenviada." };
+  };
+
+  const conv = await loadConversation(ctx, msg.conversation_id);
+  if (conv?.channel === "instagram") {
+    if (msg.msg_type !== "text" || !text) return { ok: false, error: "No Instagram, só texto pode ser reenviado." };
+    if (!ctx.manager && conv.assigned_to && conv.assigned_to !== ctx.viewer.id) return { ok: false, error: "Esta conversa é de outro vendedor." };
+    try {
+      const sent = await sendInstagramText(conv, text);
+      if (!sent.ok) return sent;
+      return done(sent.mid);
+    } catch (e) {
+      return { ok: false, error: instagramErrorText(e) };
+    }
+  }
+
+  const prep = await prepareMediaSend(ctx, msg.conversation_id);
+  if (!prep.ok) return prep;
+  const { phoneNumberId, token, to } = prep.p;
+  try {
+    if (msg.msg_type === "text") {
+      if (!text) return { ok: false, error: "Mensagem vazia." };
+      return done(await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, text)));
+    }
+    if ((msg.msg_type === "image" || msg.msg_type === "video") && msg.media_path) {
+      const { data: signed } = await admin.storage.from("whatsapp-media").createSignedUrl(msg.media_path, 900);
+      if (!signed) return { ok: false, error: "O arquivo não está mais disponível. Envie de novo pelo Anexar." };
+      const kind = msg.msg_type;
+      return done(await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind, link: signed.signedUrl, caption: text || undefined })));
+    }
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  return { ok: false, error: "Este tipo de mensagem não pode ser reenviado. Envie de novo pelo Anexar." };
+}

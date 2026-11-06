@@ -19,7 +19,7 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
-import { assumeConversation, markRead, removeFromCrm, sendTemplate, sendText } from "./actions";
+import { assumeConversation, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
   id: string;
@@ -476,7 +476,23 @@ function Thread({
           messages.map((m, i) => {
             const newDay = i === 0 || dayKey(messages[i - 1]!.sent_at) !== dayKey(m.sent_at);
             return (
-              <MessageRow key={m.id} m={m} newDay={newDay} author={m.user_id ? (peopleById.get(m.user_id) ?? "Equipe") : null} />
+              <MessageRow
+                key={m.id}
+                m={m}
+                newDay={newDay}
+                author={m.user_id ? (peopleById.get(m.user_id) ?? "Equipe") : null}
+                onResend={
+                  m.direction === "out" && m.status === "failed" && m.msg_type !== "template"
+                    ? async () => {
+                        const r = await resendMessage(slug, m.id);
+                        if (r.ok) {
+                          toast(r.message ?? "Mensagem reenviada.", "ok");
+                          setMessages((list) => list?.map((x) => (x.id === m.id ? { ...x, status: "sent" } : x)) ?? list);
+                        } else toast(r.error, "bad");
+                      }
+                    : undefined
+                }
+              />
             );
           })
         )}
@@ -605,7 +621,8 @@ const STATUS_TEXT: Record<Message["status"], string> = {
   failed: "não enviada",
 };
 
-function MessageRow({ m, newDay, author }: { m: Message; newDay: boolean; author: string | null }) {
+function MessageRow({ m, newDay, author, onResend }: { m: Message; newDay: boolean; author: string | null; onResend?: () => Promise<void> }) {
+  const [resending, setResending] = useState(false);
   const kind = m.direction === "in" ? "lead" : m.sender === "ai" ? "ai" : m.source === "celular" ? "phone" : "human";
   const media = m.media_path ? `/api/media/${m.id}` : null;
   // O corpo de mídia vem como "[Imagem] legenda": com o arquivo na tela, mostra só a legenda.
@@ -635,6 +652,26 @@ function MessageRow({ m, newDay, author }: { m: Message; newDay: boolean; author
         {body}
         <small suppressHydrationWarning>
           {[who, m.template_name ? `modelo ${m.template_name}` : "", hhmm(m.sent_at), m.direction === "out" ? STATUS_TEXT[m.status] : ""].filter(Boolean).join(" · ")}
+          {onResend && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className="font-semibold underline"
+                disabled={resending}
+                onClick={async () => {
+                  setResending(true);
+                  try {
+                    await onResend();
+                  } finally {
+                    setResending(false);
+                  }
+                }}
+              >
+                {resending ? "reenviando…" : "Reenviar"}
+              </button>
+            </>
+          )}
         </small>
       </div>
     </>

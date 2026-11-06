@@ -218,3 +218,24 @@ export async function setMemberActive(input: z.input<typeof activeSchema>): Prom
   refresh();
   return { ok: true, message: active ? "Acesso reativado." : "Acesso desativado." };
 }
+
+const renameSchema = z.object({ userId: z.uuid(), fullName: z.string().trim().min(2, "Informe o nome.").max(80, "Nome longo demais.") });
+
+/** Nome exibido no Orvya (saudação, conversas, modelos com {{vendedor}}): o administrador edita o de qualquer pessoa, inclusive o próprio. */
+export async function renameMember(input: z.input<typeof renameSchema>): Promise<ActionResult> {
+  const viewer = await requireAdmin();
+  if (!viewer) return NOT_ALLOWED;
+  const parsed = renameSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Nome inválido." };
+  const { userId, fullName } = parsed.data;
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").update({ full_name: fullName }).eq("id", userId);
+  if (error) return { ok: false, error: "Não foi possível salvar o nome." };
+  // Mantém o cadastro de login com o mesmo nome (convites e e-mails do Supabase).
+  await admin.auth.admin.updateUserById(userId, { user_metadata: { full_name: fullName } });
+
+  refresh();
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Nome atualizado." };
+}
