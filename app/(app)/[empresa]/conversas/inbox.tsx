@@ -434,14 +434,17 @@ function Thread({
             Ver lead
           </Link>
         )}
-        {isIg && manager && (
+        {manager && (
           <Button
             size="sm"
             variant="ghost"
             loading={assuming}
-            title="Para equipe, sócios e parceiros: a conversa sai do Orvya e as próximas mensagens ficam só no Instagram"
+            title="Para equipe, sócios, parceiros e testes: a conversa e o lead saem do Orvya"
             onClick={() => {
-              if (!window.confirm(`Tirar ${c.contactName} do Orvya? A conversa e o lead aberto sem produto serão excluídos, e as próximas mensagens ficam só no Instagram.`)) return;
+              const detail = isIg
+                ? "As próximas mensagens dele ficam só no Instagram."
+                : "Se ele escrever de novo no WhatsApp, volta como contato novo.";
+              if (!window.confirm(`Tirar ${c.contactName} do Orvya? A conversa e o lead aberto sem produto serão excluídos. ${detail}`)) return;
               startAssuming(async () => {
                 const r = await removeFromCrm(slug, c.id);
                 if (r.ok) {

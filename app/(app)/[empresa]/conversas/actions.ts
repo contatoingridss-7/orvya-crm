@@ -545,9 +545,10 @@ export async function startConversation(slug: string, input: z.input<typeof star
 }
 
 /**
- * Tira do Orvya um contato do Instagram que não é cliente em atendimento (dono, equipe, parceiro):
- * o contato passa a ser ignorado pela triagem, e a conversa e os leads abertos sem produto são
- * excluídos. As próximas mensagens dele ficam só no app do Instagram. Só gestor e admin.
+ * Tira do Orvya um contato que não é cliente em atendimento (dono, equipe, parceiro, teste):
+ * a conversa e os leads abertos sem produto são excluídos. No Instagram, o contato passa a ser
+ * ignorado pela triagem (as próximas mensagens ficam só no app). No WhatsApp não dá para ignorar
+ * (o número oficial só existe no Orvya): se escrever de novo, volta como contato novo. Só gestor e admin.
  */
 export async function removeFromCrm(slug: string, conversationId: string): Promise<ActionResult> {
   const ctx = await context(slug);
@@ -561,11 +562,11 @@ export async function removeFromCrm(slug: string, conversationId: string): Promi
     .eq("company_id", ctx.company.id)
     .maybeSingle<{ id: string; contact_id: string; channel: string }>();
   if (!conv) return { ok: false, error: "Conversa não encontrada." };
-  if (conv.channel !== "instagram") return { ok: false, error: "Disponível só para conversas do Instagram." };
-
   const admin = createAdminClient();
-  const { error } = await admin.from("contacts").update({ crm_ignored: true }).eq("id", conv.contact_id).eq("company_id", ctx.company.id);
-  if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0027 foi rodada." };
+  if (conv.channel === "instagram") {
+    const { error } = await admin.from("contacts").update({ crm_ignored: true }).eq("id", conv.contact_id).eq("company_id", ctx.company.id);
+    if (error) return { ok: false, error: "Não foi possível salvar. Confira se a migration 0027 foi rodada." };
+  }
   const { data: leads } = await admin
     .from("leads")
     .select("id, lead_products(id)")
@@ -579,7 +580,10 @@ export async function removeFromCrm(slug: string, conversationId: string): Promi
 
   revalidatePath(`/${slug}/conversas`);
   revalidatePath(`/${slug}/funil`);
-  return { ok: true, message: "Contato tirado do Orvya. As próximas mensagens dele ficam só no Instagram." };
+  return {
+    ok: true,
+    message: conv.channel === "instagram" ? "Contato tirado do Orvya. As próximas mensagens dele ficam só no Instagram." : "Conversa e lead excluídos do Orvya.",
+  };
 }
 
 const PHOTO_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png" };
