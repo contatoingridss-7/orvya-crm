@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/env";
 import { safeNext } from "@/lib/auth/safe-next";
+import { WALLPAPERS } from "@/lib/wallpapers";
 
 export type FormState = { error?: string; success?: string } | undefined;
 
@@ -61,4 +62,30 @@ export async function saveTheme(theme: "light" | "dark") {
   } = await supabase.auth.getUser();
   if (!user) return;
   await supabase.from("profiles").update({ theme }).eq("id", user.id);
+}
+
+/** Foto do perfil: o arquivo já subiu para avatars/{id do usuário}/...; aqui grava o caminho (null remove). */
+export async function saveAvatar(path: string | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Entre de novo no Orvya." };
+  if (path !== null && !new RegExp(`^${user.id}/[0-9a-f-]{36}\\.jpg$`).test(path)) return { ok: false, error: "Arquivo inválido." };
+  const { data: old } = await supabase.from("profiles").select("avatar_path").eq("id", user.id).maybeSingle<{ avatar_path: string | null }>();
+  const { error } = await supabase.from("profiles").update({ avatar_path: path }).eq("id", user.id);
+  if (error) return { ok: false, error: "Não foi possível salvar a foto. A migration 0031 já foi rodada?" };
+  if (old?.avatar_path && old.avatar_path !== path) await supabase.storage.from("avatars").remove([old.avatar_path]);
+  return { ok: true };
+}
+
+/** Papel de parede das conversas (null = sem papel de parede). */
+export async function saveWallpaper(value: string | null): Promise<void> {
+  if (value !== null && !(WALLPAPERS as readonly string[]).includes(value)) return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("profiles").update({ chat_wallpaper: value }).eq("id", user.id);
 }

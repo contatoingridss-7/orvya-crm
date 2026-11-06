@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import { ProfileMenu } from "@/components/profile-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { getViewer } from "@/lib/auth/viewer";
 
 type PageHeaderProps = {
   title: string;
@@ -9,7 +11,8 @@ type PageHeaderProps = {
 };
 
 /** Topo de toda tela do app: título, ações e a alternância claro/escuro. */
-export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
+export async function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
+  const viewer = await getViewer();
   return (
     <header className="top">
       <div className="min-w-0">
@@ -19,6 +22,7 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
       <div className="flex-1" />
       {actions}
       <ThemeToggle persist />
+      {viewer?.active && <ProfileMenu userId={viewer.id} name={viewer.fullName} avatarUrl={viewer.avatarUrl} />}
       {/* No celular a lateral some com o botão Sair; ele aparece aqui. */}
       <form action="/auth/sair" method="post" className="only-mobile">
         <button type="submit" className="icon-btn" aria-label="Sair" title="Sair">

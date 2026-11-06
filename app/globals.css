@@ -3755,3 +3755,147 @@ h3,
     font-size: 11.5px;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Perfil: foto redonda no topo com o arco verde mineral girando
+   --------------------------------------------------------------------- */
+@layer components {
+  .me-btn {
+    border: 0;
+    padding: 0;
+    background: none;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .me-av {
+    position: relative;
+    isolation: isolate;
+    display: inline-grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+  .me-av::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    border-radius: 50%;
+    background: conic-gradient(from 0turn, transparent 0turn 0.5turn, var(--accent) 0.82turn, var(--v-in) 0.9turn, transparent 1turn);
+    animation: me-spin 3.6s linear infinite;
+  }
+  .me-av::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    border-radius: 50%;
+    background: var(--bg);
+  }
+  .me-av img,
+  .me-av .me-ini {
+    width: calc(100% - 6px);
+    height: calc(100% - 6px);
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .me-av .me-ini {
+    display: grid;
+    place-items: center;
+    background: var(--tint);
+    color: var(--tint-ink);
+    font: 600 13px/1 var(--font-title);
+  }
+  .me-av.lg {
+    width: 104px;
+    height: 104px;
+  }
+  .me-av.lg::after {
+    inset: 3px;
+  }
+  .me-av.lg .me-ini {
+    font-size: 30px;
+  }
+  @keyframes me-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .me-av::before {
+      animation: none;
+    }
+  }
+
+  /* -------------------------------------------------------------------
+     Papel de parede das conversas (html[data-wall], escolhido por pessoa)
+     ------------------------------------------------------------------- */
+  html[data-wall="vertices"] .msgs,
+  [data-wall-preview="vertices"] {
+    background-image: var(--wall-vertices);
+  }
+  html[data-wall="topografia"] .msgs,
+  [data-wall-preview="topografia"] {
+    background-image: var(--wall-topografia);
+  }
+  html[data-wall="pontos"] .msgs,
+  [data-wall-preview="pontos"] {
+    background-image: var(--wall-pontos);
+  }
+  html[data-wall="aurora"] .msgs,
+  [data-wall-preview="aurora"] {
+    background-image: var(--wall-aurora);
+  }
+  .wall-opt {
+    display: grid;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: none;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+  .wall-opt[aria-pressed="true"] {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .wall-thumb {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 112px;
+    padding: 10px;
+    overflow: hidden;
+    border-radius: 10px;
+    background-color: var(--surface-2);
+  }
+  .wall-thumb .bub {
+    max-width: 85%;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+}
+
+:root {
+  --wall-vertices: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104'%3E%3Cpath d='M22 78 60 26 98 78' fill='none' stroke='%2312233A' stroke-opacity='.08' stroke-width='1.2'/%3E%3Ccircle cx='22' cy='78' r='2.4' fill='%2312233A' fill-opacity='.12'/%3E%3Ccircle cx='60' cy='26' r='2.8' fill='%232C7366' fill-opacity='.28'/%3E%3Ccircle cx='98' cy='78' r='2.4' fill='%2312233A' fill-opacity='.12'/%3E%3C/svg%3E");
+  --wall-topografia: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Cg fill='none' stroke='%2312233A' stroke-opacity='.07' stroke-width='1.2'%3E%3Cpath d='M0 20Q40 4 80 20T160 20'/%3E%3Cpath d='M0 50Q40 34 80 50T160 50'/%3E%3Cpath d='M0 80Q40 64 80 80T160 80'/%3E%3Cpath d='M0 110Q40 94 80 110T160 110'/%3E%3C/g%3E%3C/svg%3E");
+  --wall-pontos: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='%2312233A' fill-opacity='.13'%3E%3Ccircle cx='3' cy='3' r='1.3'/%3E%3Ccircle cx='15' cy='15' r='1.3'/%3E%3C/g%3E%3C/svg%3E");
+  --wall-aurora: radial-gradient(70% 60% at 0% 0%, rgba(39, 59, 143, 0.1), transparent 65%), radial-gradient(60% 55% at 100% 100%, rgba(114, 197, 181, 0.16), transparent 65%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --wall-vertices: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104'%3E%3Cpath d='M22 78 60 26 98 78' fill='none' stroke='%23F4F2ED' stroke-opacity='.06' stroke-width='1.2'/%3E%3Ccircle cx='22' cy='78' r='2.4' fill='%23F4F2ED' fill-opacity='.09'/%3E%3Ccircle cx='60' cy='26' r='2.8' fill='%2372C5B5' fill-opacity='.3'/%3E%3Ccircle cx='98' cy='78' r='2.4' fill='%23F4F2ED' fill-opacity='.09'/%3E%3C/svg%3E");
+    --wall-topografia: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Cg fill='none' stroke='%23F4F2ED' stroke-opacity='.05' stroke-width='1.2'%3E%3Cpath d='M0 20Q40 4 80 20T160 20'/%3E%3Cpath d='M0 50Q40 34 80 50T160 50'/%3E%3Cpath d='M0 80Q40 64 80 80T160 80'/%3E%3Cpath d='M0 110Q40 94 80 110T160 110'/%3E%3C/g%3E%3C/svg%3E");
+    --wall-pontos: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='%23F4F2ED' fill-opacity='.08'%3E%3Ccircle cx='3' cy='3' r='1.3'/%3E%3Ccircle cx='15' cy='15' r='1.3'/%3E%3C/g%3E%3C/svg%3E");
+    --wall-aurora: radial-gradient(70% 60% at 0% 0%, rgba(39, 59, 143, 0.22), transparent 65%), radial-gradient(60% 55% at 100% 100%, rgba(114, 197, 181, 0.12), transparent 65%);
+  }
+}
+[data-theme="dark"] {
+  --wall-vertices: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104'%3E%3Cpath d='M22 78 60 26 98 78' fill='none' stroke='%23F4F2ED' stroke-opacity='.06' stroke-width='1.2'/%3E%3Ccircle cx='22' cy='78' r='2.4' fill='%23F4F2ED' fill-opacity='.09'/%3E%3Ccircle cx='60' cy='26' r='2.8' fill='%2372C5B5' fill-opacity='.3'/%3E%3Ccircle cx='98' cy='78' r='2.4' fill='%23F4F2ED' fill-opacity='.09'/%3E%3C/svg%3E");
+  --wall-topografia: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Cg fill='none' stroke='%23F4F2ED' stroke-opacity='.05' stroke-width='1.2'%3E%3Cpath d='M0 20Q40 4 80 20T160 20'/%3E%3Cpath d='M0 50Q40 34 80 50T160 50'/%3E%3Cpath d='M0 80Q40 64 80 80T160 80'/%3E%3Cpath d='M0 110Q40 94 80 110T160 110'/%3E%3C/g%3E%3C/svg%3E");
+  --wall-pontos: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg fill='%23F4F2ED' fill-opacity='.08'%3E%3Ccircle cx='3' cy='3' r='1.3'/%3E%3Ccircle cx='15' cy='15' r='1.3'/%3E%3C/g%3E%3C/svg%3E");
+  --wall-aurora: radial-gradient(70% 60% at 0% 0%, rgba(39, 59, 143, 0.22), transparent 65%), radial-gradient(60% 55% at 100% 100%, rgba(114, 197, 181, 0.12), transparent 65%);
+}

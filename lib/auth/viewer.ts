@@ -1,4 +1,6 @@
 import "server-only";
+import { publicEnv } from "@/lib/env";
+import type { Wallpaper } from "@/lib/wallpapers";
 
 import { cache } from "react";
 import { redirect } from "next/navigation";
@@ -23,6 +25,9 @@ export type Viewer = {
   isAdmin: boolean;
   active: boolean;
   theme: "light" | "dark" | null;
+  /** Foto do perfil (URL pública do bucket avatars) e papel de parede das conversas. */
+  avatarUrl: string | null;
+  chatWallpaper: Wallpaper | null;
   /** Entrou com senha provisória (criada ou redefinida pelo admin): precisa criar a própria antes de usar. */
   mustChangePassword: boolean;
   companies: CompanyAccess[];
@@ -35,6 +40,8 @@ type ProfileRow = {
   is_platform_admin: boolean;
   active: boolean;
   theme: "light" | "dark" | null;
+  avatar_path?: string | null;
+  chat_wallpaper?: Wallpaper | null;
 };
 type CompanyRow = { id: string; slug: string; name: string; short_name: string; segment: string | null };
 type MembershipRow = { company_id: string; role: MemberRole; settings_access?: boolean };
@@ -53,7 +60,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   const [profileRes, companiesRes, membershipsRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, email, is_platform_admin, active, theme")
+      .select("id, full_name, email, is_platform_admin, active, theme, avatar_path, chat_wallpaper")
       .eq("id", user.id)
       .maybeSingle<ProfileRow>(),
     supabase.from("companies").select("id, slug, name, short_name, segment").order("name").returns<CompanyRow[]>(),
@@ -79,6 +86,8 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     // Sem perfil = algo deu errado no cadastro; tratar como sem acesso.
     active: profile?.active ?? false,
     theme: profile?.theme ?? null,
+    avatarUrl: profile?.avatar_path ? `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${profile.avatar_path}` : null,
+    chatWallpaper: profile?.chat_wallpaper ?? null,
     mustChangePassword: user.user_metadata?.must_change_password === true,
     companies,
   };

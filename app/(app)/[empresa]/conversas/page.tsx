@@ -8,6 +8,7 @@ import type { Person } from "@/lib/crm/types";
 import { createClient } from "@/lib/supabase/server";
 import { loadPaidBudget } from "@/lib/whatsapp/budget";
 import { NewConversationButton } from "./new-conversation";
+import { WallpaperPicker } from "./wallpaper-picker";
 import { Inbox, type InboxConversation, type InboxTemplate } from "./inbox";
 
 export const metadata: Metadata = { title: "Conversas" };
@@ -126,6 +127,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
                 Respostas e materiais
               </Link>
             )}
+            <WallpaperPicker initial={viewer.chatWallpaper} />
             <NewConversationButton
               slug={company.slug}
               viewerName={viewer.fullName}
