@@ -98,6 +98,7 @@ Em etapa da expedição: bloco **Entrega/Adaptação com a expedição** com dat
   - Janela aberta: texto livre + anexo; aviso "Janela aberta até HH:MM".
   - Janela fechada: seletor de modelo aprovado, prévia preenchida, custo estimado, botão Enviar modelo.
   - Número não conectado: compositor bloqueado com aviso.
+  - **Áudio**: botão de microfone grava (até 4 min), ouve antes e envia como mensagem de voz; Anexar e Respostas e materiais aceitam arquivo de áudio. Tudo é convertido no servidor (`/api/audio/voz`, ffmpeg local, sem serviço externo) para OGG/Opus.
   - **Anexar → Foto ou vídeo** (ou Ctrl+V na caixa de mensagem): foto reduzida a 1600 px; vídeo MP4 até 16 MB enviado direto ao bucket por link de uso único. Só com a janela aberta.
 - **Nova conversa** (botão redondo "+" no topo, dica "Nova conversa"): nome, WhatsApp, funil e número. Cria (ou reaproveita) contato, lead com quem iniciou como responsável e conversa sem IA. Dois caminhos:
   - **Link grátis** (padrão): gera a saudação do vendedor ("Olá, Maria! Aqui é Renato, da IC Supra Hospitalar. Tudo bem?…") com link `wa.me` do número da empresa e a mensagem do cliente pronta. O vendedor manda por SMS, compartilhar ou copiar; quando o cliente envia, a conversa começa por ele (sem custo) e cai com o vendedor.

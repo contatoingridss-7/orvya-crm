@@ -71,12 +71,14 @@ export async function sendMediaMessage(
   phoneNumberId: string,
   token: string,
   to: string,
-  media: { kind: "document" | "image" | "video"; link: string; caption?: string; filename?: string },
+  media: { kind: "document" | "image" | "video" | "audio"; link: string; caption?: string; filename?: string },
 ): Promise<string> {
   const payload =
     media.kind === "document"
       ? { link: media.link, ...(media.filename ? { filename: media.filename } : {}), ...(media.caption ? { caption: media.caption } : {}) }
-      : { link: media.link, ...(media.caption ? { caption: media.caption } : {}) };
+      : media.kind === "audio"
+        ? { link: media.link } // áudio não aceita legenda
+        : { link: media.link, ...(media.caption ? { caption: media.caption } : {}) };
   const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
     method: "POST",
     body: { messaging_product: "whatsapp", recipient_type: "individual", to, type: media.kind, [media.kind]: payload },

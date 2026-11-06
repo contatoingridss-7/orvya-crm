@@ -18,7 +18,7 @@ import { templateCost, type TemplateCategory } from "@/lib/whatsapp/pricing";
 import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNames } from "@/lib/whatsapp/templates";
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
-import { AttachButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
+import { AttachButton, AudioRecorder, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
 import { assumeConversation, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
@@ -583,6 +583,7 @@ function Thread({
           </div>
           <div className="composer">
             <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
+            <AudioRecorder slug={slug} conversationId={c.id} onSent={() => router.refresh()} />
             <div className="qr-wrap">
               {qr.menu}
               <textarea
@@ -590,7 +591,7 @@ function Thread({
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}
               onPaste={(e) => {
-                const f = Array.from(e.clipboardData.files).find((x) => x.type.startsWith("image/") || x.type.startsWith("video/"));
+                const f = Array.from(e.clipboardData.files).find((x) => /^(image|video|audio)\//.test(x.type));
                 if (!f) return;
                 e.preventDefault();
                 setPasted(f);

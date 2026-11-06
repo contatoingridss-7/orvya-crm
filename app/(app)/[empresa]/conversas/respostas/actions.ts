@@ -64,9 +64,9 @@ export async function deleteQuickReply(slug: string, id: string): Promise<Action
 
 const materialSchema = z.object({
   title: z.string().trim().min(1, "Dê um nome ao material.").max(120),
-  filePath: z.string().regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(pdf|jpg|jpeg|png)$/),
+  filePath: z.string().regex(/^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(pdf|jpg|jpeg|png|ogg)$/),
   fileName: z.string().trim().min(1).max(120),
-  mime: z.enum(["application/pdf", "image/jpeg", "image/png"]),
+  mime: z.enum(["application/pdf", "image/jpeg", "image/png", "audio/ogg"]),
   size: z.number().int().min(1).max(16 * 1024 * 1024),
 });
 

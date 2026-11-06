@@ -8,6 +8,7 @@ import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
+import { convertToVoice } from "../composer-extras";
 import { addMaterial, deleteMaterial, deleteQuickReply, saveQuickReply, type ActionResult } from "./actions";
 
 export type ReplyRow = { id: string; shortcut: string; body: string; uses: number };
@@ -99,17 +100,29 @@ export function MaterialsManager({ slug, companyId, materials, loadError }: { sl
 
   async function upload() {
     if (!file) return toast("Escolha o arquivo.", "bad");
-    const ext = TYPES[file.type];
-    if (!ext) return toast("Envie PDF, JPG ou PNG.", "bad");
-    if (file.size > MAX_BYTES) return toast("Arquivo acima de 16 MB. Reduza o PDF e tente de novo.", "bad");
+    const isAudio = file.type.startsWith("audio/");
+    const ext = isAudio ? "ogg" : TYPES[file.type];
+    if (!ext) return toast("Envie PDF, JPG, PNG ou áudio.", "bad");
+    if (file.size > (isAudio ? 4 * 1024 * 1024 : MAX_BYTES)) return toast(isAudio ? "Áudio acima de 4 MB." : "Arquivo acima de 16 MB. Reduza o PDF e tente de novo.", "bad");
     const name = title.trim() || file.name.replace(/\.[^.]+$/, "");
     setUploading(true);
+    // Áudio vira mensagem de voz do WhatsApp (OGG/Opus) antes de subir.
+    let body: Blob = file;
+    if (isAudio) {
+      try {
+        body = await convertToVoice(file);
+      } catch (e) {
+        setUploading(false);
+        return toast(e instanceof Error ? e.message : "Não foi possível converter o áudio.", "bad");
+      }
+    }
+    const mime = isAudio ? "audio/ogg" : file.type;
     const path = `${companyId}/${crypto.randomUUID()}.${ext}`;
-    const up = await createClient().storage.from("sales-materials").upload(path, file, { contentType: file.type });
+    const up = await createClient().storage.from("sales-materials").upload(path, body, { contentType: mime });
     setUploading(false);
-    if (up.error) return toast("Não foi possível enviar o arquivo. A migration 0021 já foi rodada?", "bad");
+    if (up.error) return toast(isAudio ? "Não foi possível enviar o áudio. A migration 0029 já foi rodada?" : "Não foi possível enviar o arquivo. A migration 0021 já foi rodada?", "bad");
     run(
-      () => addMaterial(slug, { title: name, filePath: path, fileName: file.name.slice(0, 120), mime: file.type as "application/pdf", size: file.size }),
+      () => addMaterial(slug, { title: name, filePath: path, fileName: file.name.slice(0, 120), mime: mime as "application/pdf", size: body.size }),
       () => {
         setTitle("");
         setFile(null);
@@ -119,7 +132,7 @@ export function MaterialsManager({ slug, companyId, materials, loadError }: { sl
   }
 
   return (
-    <Panel title="Catálogos e materiais" subtitle="PDFs e imagens que a equipe envia ao cliente pelo botão Anexar da conversa. Até 16 MB cada.">
+    <Panel title="Catálogos e materiais" subtitle="PDFs, imagens e áudios que a equipe envia ao cliente pelo botão Anexar da conversa. Até 16 MB cada.">
       {loadError && <Notice tone="bad">Não foi possível carregar. Rode a migration 0021 no Supabase.</Notice>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <ul className="m-0 grid list-none content-start gap-2 p-0">
@@ -129,7 +142,7 @@ export function MaterialsManager({ slug, companyId, materials, loadError }: { sl
               <span className="min-w-0 flex-1">
                 <b className="block truncate font-semibold text-title">{m.title}</b>
                 <small className="text-xs text-muted">
-                  {m.mime === "application/pdf" ? "PDF" : "Imagem"} · {kb(m.size)} · enviado {m.uses === 1 ? "1 vez" : `${m.uses} vezes`}
+                  {m.mime === "application/pdf" ? "PDF" : m.mime.startsWith("audio/") ? "Áudio" : "Imagem"} · {kb(m.size)} · enviado {m.uses === 1 ? "1 vez" : `${m.uses} vezes`}
                 </small>
               </span>
               <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => deleteMaterial(slug, m.id))}>
@@ -143,7 +156,7 @@ export function MaterialsManager({ slug, companyId, materials, loadError }: { sl
           <TextField label="Nome" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex.: Catálogo de ortopédicos 2026" maxLength={120} />
           <label className="field">
             <span>Arquivo (PDF, JPG ou PNG)</span>
-            <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
           <div>
             <Button variant="primary" loading={uploading || pending} onClick={upload}>

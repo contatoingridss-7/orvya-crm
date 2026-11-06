@@ -155,7 +155,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           companyAi={aiRes.data?.enabled ?? false}
           initialId={sp.c ?? null}
           quickReplies={quickRes.data ?? []}
-          materials={(materialsRes.data ?? []).map((m) => ({ id: m.id, title: m.title, fileName: m.file_name, kind: m.mime === "application/pdf" ? "pdf" : "imagem" }))}
+          materials={(materialsRes.data ?? []).map((m) => ({ id: m.id, title: m.title, fileName: m.file_name, kind: m.mime === "application/pdf" ? "pdf" : m.mime.startsWith("audio/") ? "audio" : "imagem" }))}
         />
       </div>
     </>

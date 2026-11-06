@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
-import { prepareVideoUpload, quickReplyUsed, searchProducts, sendMaterial, sendPhoto, sendProduct, sendUploadedVideo } from "./actions";
+import { prepareVideoUpload, quickReplyUsed, searchProducts, sendAudio, sendMaterial, sendPhoto, sendProduct, sendUploadedVideo } from "./actions";
 
 export type QuickReply = { id: string; shortcut: string; body: string; uses: number };
-export type Material = { id: string; title: string; fileName: string; kind: "pdf" | "imagem" };
+export type Material = { id: string; title: string; fileName: string; kind: "pdf" | "imagem" | "audio" };
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const first = (name: string) => name.trim().split(/\s+/)[0] ?? "";
@@ -89,6 +89,143 @@ export function useQuickReplies(opts: {
   return { menu, onKeyDown, hasReplies: replies.length > 0 };
 }
 
+/** Converte no servidor para mensagem de voz do WhatsApp (OGG/Opus). */
+export async function convertToVoice(blob: Blob): Promise<Blob> {
+  const res = await fetch("/api/audio/voz", { method: "POST", headers: { "content-type": blob.type || "audio/webm" }, body: blob });
+  if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { erro?: string } | null)?.erro ?? "Não foi possível converter o áudio.");
+  return res.blob();
+}
+
+async function sendVoice(slug: string, conversationId: string, blob: Blob): Promise<{ ok: true } | { ok: false; error: string }> {
+  let ogg: Blob;
+  try {
+    ogg = await convertToVoice(blob);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Não foi possível converter o áudio." };
+  }
+  const fd = new FormData();
+  fd.set("conversationId", conversationId);
+  fd.set("file", new File([ogg], "audio.ogg", { type: "audio/ogg" }));
+  return sendAudio(slug, fd);
+}
+
+const REC_MAX_S = 240;
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/** Gravar áudio na conversa: grava, ouve antes e envia como mensagem de voz. */
+export function AudioRecorder({ slug, conversationId, onSent }: { slug: string; conversationId: string; onSent: () => void }) {
+  const toast = useToast();
+  const [state, setState] = useState<"idle" | "rec" | "ready">("idle");
+  const [seconds, setSeconds] = useState(0);
+  const [clip, setClip] = useState<{ blob: Blob; url: string } | null>(null);
+  const [sending, startSend] = useTransition();
+  const recRef = useRef<MediaRecorder | null>(null);
+  const discardRef = useRef(false);
+
+  useEffect(() => {
+    if (state !== "rec") return;
+    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [state]);
+
+  useEffect(() => {
+    if (state === "rec" && seconds >= REC_MAX_S) recRef.current?.stop();
+  }, [seconds, state]);
+
+  async function start() {
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      toast("Este navegador não grava áudio. Use o Chrome, o Safari ou o Edge atualizados.", "bad");
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      toast("Libere o microfone para o Orvya no navegador e tente de novo.", "bad");
+      return;
+    }
+    const mime = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks: Blob[] = [];
+    discardRef.current = false;
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      if (discardRef.current) return setState("idle");
+      const blob = new Blob(chunks, { type: rec.mimeType || mime || "audio/webm" });
+      setClip({ blob, url: URL.createObjectURL(blob) });
+      setState("ready");
+    };
+    recRef.current = rec;
+    setSeconds(0);
+    rec.start();
+    setState("rec");
+  }
+
+  function reset() {
+    if (clip) URL.revokeObjectURL(clip.url);
+    setClip(null);
+    setState("idle");
+  }
+
+  if (state === "rec") {
+    return (
+      <span className="flex items-center gap-2 text-[13px]" role="status">
+        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--lost)" }} aria-hidden />
+        <span className="tabular-nums">Gravando {mmss(seconds)}</span>
+        <Button size="sm" variant="primary" onClick={() => recRef.current?.stop()}>
+          Parar
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            discardRef.current = true;
+            recRef.current?.stop();
+          }}
+        >
+          Cancelar
+        </Button>
+      </span>
+    );
+  }
+  if (state === "ready" && clip) {
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <audio controls src={clip.url} className="h-9 max-w-[220px]" />
+        <Button
+          size="sm"
+          variant="primary"
+          loading={sending}
+          onClick={() =>
+            startSend(async () => {
+              const r = await sendVoice(slug, conversationId, clip.blob);
+              if (r.ok) {
+                toast("Áudio enviado.", "ok");
+                reset();
+                onSent();
+              } else toast(r.error, "bad");
+            })
+          }
+        >
+          Enviar áudio
+        </Button>
+        <Button size="sm" variant="ghost" disabled={sending} onClick={reset}>
+          Descartar
+        </Button>
+      </span>
+    );
+  }
+  return (
+    <Button aria-label="Gravar áudio" title="Gravar áudio" onClick={start}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="9" y="3" width="6" height="12" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+      </svg>
+    </Button>
+  );
+}
+
 /** Reduz a foto (lado maior 1600 px, JPG) para caber no envio e carregar rápido no WhatsApp do cliente. */
 async function shrinkPhoto(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
@@ -121,7 +258,7 @@ export function AttachButton({
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"midia" | "materiais" | "produto">("midia");
-  const [media, setMedia] = useState<{ kind: "image" | "video"; blob: Blob; mime: string; url: string } | null>(null);
+  const [media, setMedia] = useState<{ kind: "image" | "video" | "audio"; blob: Blob; mime: string; url: string } | null>(null);
   const [caption, setCaption] = useState("");
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<Awaited<ReturnType<typeof searchProducts>>>([]);
@@ -140,7 +277,7 @@ export function AttachButton({
   /** Foto é reduzida aqui; vídeo vai como está (até 16 MB, limite do WhatsApp). */
   const loadFile = useCallback(
     async (f: File) => {
-      const swap = (next: { kind: "image" | "video"; blob: Blob; mime: string }) =>
+      const swap = (next: { kind: "image" | "video" | "audio"; blob: Blob; mime: string }) =>
         setMedia((old) => {
           if (old) URL.revokeObjectURL(old.url);
           return { ...next, url: URL.createObjectURL(next.blob) };
@@ -150,7 +287,11 @@ export function AttachButton({
         if (f.size > 16 * 1024 * 1024) return toast("Vídeo grande demais: o WhatsApp aceita até 16 MB.", "bad");
         return swap({ kind: "video", blob: f, mime: f.type });
       }
-      if (!f.type.startsWith("image/")) return toast("Escolha uma foto ou um vídeo.", "bad");
+      if (f.type.startsWith("audio/")) {
+        if (f.size > 4 * 1024 * 1024) return toast("Áudio grande demais (máximo de 4 MB).", "bad");
+        return swap({ kind: "audio", blob: f, mime: f.type });
+      }
+      if (!f.type.startsWith("image/")) return toast("Escolha uma foto, um vídeo ou um áudio.", "bad");
       try {
         swap({ kind: "image", blob: await shrinkPhoto(f), mime: "image/jpeg" });
       } catch {
@@ -197,7 +338,7 @@ export function AttachButton({
       <Modal open={open} onClose={() => setOpen(false)} title="Enviar para o cliente">
         <nav className="tabs mb-3" aria-label="O que enviar">
           <button type="button" aria-current={tab === "midia" ? "page" : undefined} onClick={() => setTab("midia")}>
-            Foto ou vídeo
+            Foto, vídeo ou áudio
           </button>
           <button type="button" aria-current={tab === "materiais" ? "page" : undefined} onClick={() => setTab("materiais")}>
             Catálogos e materiais
@@ -210,10 +351,10 @@ export function AttachButton({
         {tab === "midia" ? (
           <div className="grid gap-3">
             <label className="btn w-fit cursor-pointer">
-              {media ? "Trocar arquivo" : "Escolher foto ou vídeo"}
+              {media ? "Trocar arquivo" : "Escolher foto, vídeo ou áudio"}
               <input
                 type="file"
-                accept="image/*,video/mp4,video/3gpp,video/quicktime"
+                accept="image/*,video/mp4,video/3gpp,video/quicktime,audio/*"
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -228,16 +369,20 @@ export function AttachButton({
                 {media.kind === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob)
                   <img src={media.url} alt="Prévia da foto" className="max-h-[40vh] w-auto rounded-xl border border-line object-contain" />
-                ) : (
+                ) : media.kind === "video" ? (
                   <video src={media.url} controls className="max-h-[40vh] w-auto rounded-xl border border-line" />
+                ) : (
+                  <audio src={media.url} controls className="w-full" />
                 )}
-                <input className="inp" value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={1000} placeholder="Legenda (opcional)" aria-label="Legenda" />
+                {media.kind !== "audio" && <input className="inp" value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={1000} placeholder="Legenda (opcional)" aria-label="Legenda" />}
                 <div>
                   <Button
                     variant="primary"
                     loading={sending}
                     onClick={() =>
-                      media.kind === "video"
+                      media.kind === "audio"
+                        ? send(() => sendVoice(slug, conversationId, media.blob), "Áudio")
+                        : media.kind === "video"
                         ? send(() => sendVideo(media.blob, media.mime), "Vídeo")
                         : send(() => {
                             const fd = new FormData();
@@ -248,7 +393,7 @@ export function AttachButton({
                           }, "Foto")
                     }
                   >
-                    {media.kind === "video" ? "Enviar vídeo" : "Enviar foto"}
+                    {media.kind === "audio" ? "Enviar áudio" : media.kind === "video" ? "Enviar vídeo" : "Enviar foto"}
                   </Button>
                 </div>
               </>
@@ -264,7 +409,7 @@ export function AttachButton({
                   <span className="min-w-0 flex-1">
                     <b className="block truncate font-semibold text-title">{m.title}</b>
                     <small className="text-xs text-muted">
-                      {m.kind === "pdf" ? "PDF" : "Imagem"} · {m.fileName}
+                      {m.kind === "pdf" ? "PDF" : m.kind === "audio" ? "Áudio" : "Imagem"} · {m.fileName}
                     </small>
                   </span>
                   <Button size="sm" variant="primary" disabled={sending} onClick={() => send(() => sendMaterial(slug, { conversationId, id: m.id }), "Material")}>

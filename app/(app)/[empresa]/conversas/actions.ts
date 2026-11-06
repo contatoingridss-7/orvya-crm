@@ -74,7 +74,7 @@ async function prepareSend(ctx: Ctx, conversationId: string): Promise<{ ok: true
 async function recordOutbound(
   ctx: Ctx,
   conv: ConvRow,
-  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image" | "video"; templateName?: string },
+  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image" | "video" | "audio"; templateName?: string },
 ): Promise<ActionResult> {
   const r = await recordOutboundMessage(conv, msg, ctx.viewer.id);
   return r.ok ? { ok: true } : r;
@@ -257,7 +257,7 @@ export async function sendMaterial(slug: string, input: z.input<typeof mediaSche
   const admin = createAdminClient();
   const { data: signed } = await admin.storage.from("sales-materials").createSignedUrl(material.file_path, 600);
   if (!signed) return { ok: false, error: "Arquivo indisponível. Envie de novo em Automações → Materiais." };
-  const kind = material.mime.startsWith("image/") ? "image" : "document";
+  const kind = material.mime.startsWith("image/") ? "image" : material.mime.startsWith("audio/") ? "audio" : "document";
 
   let wamid: string;
   try {
@@ -269,7 +269,7 @@ export async function sendMaterial(slug: string, input: z.input<typeof mediaSche
   }
   const { data: count } = await admin.from("sales_materials").select("uses").eq("id", material.id).maybeSingle<{ uses: number }>();
   await admin.from("sales_materials").update({ uses: (count?.uses ?? 0) + 1 }).eq("id", material.id);
-  const r = await recordOutbound(ctx, conv, { wamid, body: `[${kind === "image" ? "Imagem" : "Documento"}] ${material.title}`, msgType: kind });
+  const r = await recordOutbound(ctx, conv, { wamid, body: `[${kind === "image" ? "Imagem" : kind === "audio" ? "Áudio" : "Documento"}] ${material.title}`, msgType: kind });
   revalidatePath(`/${slug}/conversas`);
   return r;
 }
@@ -711,7 +711,7 @@ export async function resendMessage(slug: string, messageId: string): Promise<Ac
     .maybeSingle<FailedRow>();
   if (!msg || msg.direction !== "out" || msg.status !== "failed") return { ok: false, error: "Esta mensagem não está como não enviada." };
   if (msg.msg_type === "template") return { ok: false, error: "Para modelos, envie de novo pelo seletor de modelos (os campos precisam ser preenchidos)." };
-  const text = (msg.body ?? "").replace(/^\[(Imagem|Vídeo)\]\s*/, "").trim();
+  const text = (msg.body ?? "").replace(/^\[(Imagem|Vídeo|Áudio)\]\s*/, "").trim();
 
   const admin = createAdminClient();
   const done = async (newId: string) => {
@@ -741,7 +741,7 @@ export async function resendMessage(slug: string, messageId: string): Promise<Ac
       if (!text) return { ok: false, error: "Mensagem vazia." };
       return done(await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, text)));
     }
-    if ((msg.msg_type === "image" || msg.msg_type === "video") && msg.media_path) {
+    if ((msg.msg_type === "image" || msg.msg_type === "video" || msg.msg_type === "audio") && msg.media_path) {
       const { data: signed } = await admin.storage.from("whatsapp-media").createSignedUrl(msg.media_path, 900);
       if (!signed) return { ok: false, error: "O arquivo não está mais disponível. Envie de novo pelo Anexar." };
       const kind = msg.msg_type;
@@ -751,4 +751,46 @@ export async function resendMessage(slug: string, messageId: string): Promise<Ac
     return { ok: false, error: sendErrorMessage(e) };
   }
   return { ok: false, error: "Este tipo de mensagem não pode ser reenviado. Envie de novo pelo Anexar." };
+}
+
+/**
+ * Mensagem de voz: a tela grava (ou escolhe um arquivo), converte em /api/audio/voz para OGG/Opus
+ * e manda aqui. Guarda no bucket privado, envia por link assinado e registra na conversa.
+ */
+export async function sendAudio(slug: string, form: FormData): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const conversationId = String(form.get("conversationId") ?? "");
+  const file = form.get("file");
+  if (!z.uuid().safeParse(conversationId).success || !(file instanceof File)) return { ok: false, error: "Dados inválidos." };
+  if (file.size > 3.5 * 1024 * 1024) return { ok: false, error: "Áudio grande demais." };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (String.fromCharCode(...bytes.subarray(0, 4)) !== "OggS") return { ok: false, error: "Formato de áudio inválido. Grave de novo." };
+
+  const prep = await prepareMediaSend(ctx, conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+  const admin = createAdminClient();
+  const bucket = admin.storage.from("whatsapp-media");
+  const tmp = `${ctx.company.id}/${conv.id}/envio-${crypto.randomUUID()}.ogg`;
+  const { error: up } = await bucket.upload(tmp, bytes, { contentType: "audio/ogg" });
+  if (up) return { ok: false, error: "Não foi possível guardar o áudio. Tente de novo." };
+  const { data: signed } = await bucket.createSignedUrl(tmp, 600);
+  if (!signed) return { ok: false, error: "Não foi possível preparar o áudio. Tente de novo." };
+
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind: "audio", link: signed.signedUrl }));
+  } catch (e) {
+    await bucket.remove([tmp]);
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const rec = await recordOutboundMessage(conv, { wamid, body: "[Áudio]", msgType: "audio" }, ctx.viewer.id);
+  if (rec.ok) {
+    const final = `${ctx.company.id}/${conv.id}/${rec.messageId}.ogg`;
+    const { error: mv } = await bucket.move(tmp, final);
+    await admin.from("messages").update({ media_path: mv ? tmp : final, media_mime: "audio/ogg" }).eq("id", rec.messageId);
+  }
+  revalidatePath(`/${slug}/conversas`);
+  return rec.ok ? { ok: true } : rec;
 }
