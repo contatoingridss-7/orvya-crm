@@ -39,14 +39,20 @@ export function useQuickReplies(opts: {
 
   const matches = useMemo(() => {
     if (query === null) return [];
+    // Só "/": todas as respostas, em ordem alfabética (o menu rola). Digitando: as que combinam, as mais usadas primeiro.
+    if (!query) return [...replies].sort((a, b) => a.shortcut.localeCompare(b.shortcut));
     return replies
-      .filter((r) => !query || r.shortcut.includes(query) || norm(r.body).includes(query))
-      .sort((a, b) => Number(b.shortcut.startsWith(query)) - Number(a.shortcut.startsWith(query)) || b.uses - a.uses || a.shortcut.localeCompare(b.shortcut))
-      .slice(0, 8);
+      .filter((r) => r.shortcut.includes(query) || norm(r.body).includes(query))
+      .sort((a, b) => Number(b.shortcut.startsWith(query)) - Number(a.shortcut.startsWith(query)) || b.uses - a.uses || a.shortcut.localeCompare(b.shortcut));
   }, [query, replies]);
   const open = query !== null && matches.length > 0 && closedFor !== text;
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setIndex(0), [query]);
+  // Com as setas, a opção escolhida acompanha a rolagem do menu.
+  useEffect(() => {
+    menuRef.current?.querySelector("button.on")?.scrollIntoView({ block: "nearest" });
+  }, [index, open]);
 
   function pick(r: QuickReply) {
     setText(fillQuickReply(r.body, contactName, viewerName));
@@ -67,7 +73,7 @@ export function useQuickReplies(opts: {
   }
 
   const menu = open ? (
-    <div className="qr-menu" role="listbox" aria-label="Respostas rápidas">
+    <div ref={menuRef} className="qr-menu" role="listbox" aria-label="Respostas rápidas">
       {matches.map((r, i) => (
         <button
           key={r.id}
