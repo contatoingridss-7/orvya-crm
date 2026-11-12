@@ -20,6 +20,8 @@ import { CATEGORY_LABEL, fillTemplate, prefillValues, variableLabel, variableNam
 import { instagramWindow, instagramWindowEndsAt, IG_WINDOW_MS } from "@/lib/instagram/window";
 import { isWindowOpen, windowEndsAt } from "@/lib/whatsapp/window";
 import { AttachButton, AudioRecorder, EmojiButton, useQuickReplies, type Material, type QuickReply } from "./composer-extras";
+import { LocationButton, LocationCard, type SavedPlace } from "./location";
+import { parseLocationBody } from "@/lib/location";
 import { assumeConversation, sendMaterial, sendMenuReply, transferLead, markRead, removeFromCrm, resendMessage, sendTemplate, sendText } from "./actions";
 
 export type InboxConversation = {
@@ -69,6 +71,8 @@ type Props = {
   initialId: string | null;
   quickReplies: QuickReply[];
   materials: Material[];
+  /** Locais salvos da empresa para enviar como localização (migration 0040). */
+  places: SavedPlace[];
 };
 
 type Message = {
@@ -259,6 +263,7 @@ export function Inbox(props: Props) {
           manager={manager}
           quickReplies={quickReplies}
           materials={materials}
+          places={props.places}
           pipelines={props.pipelines}
           people={props.people}
           onBack={() => {
@@ -285,6 +290,7 @@ function Thread({
   manager,
   quickReplies,
   materials,
+  places,
   pipelines,
   people,
   onBack,
@@ -300,6 +306,7 @@ function Thread({
   manager: boolean;
   quickReplies: QuickReply[];
   materials: Material[];
+  places: SavedPlace[];
   pipelines: { id: string; name: string }[];
   people: Person[];
   onBack: () => void;
@@ -641,6 +648,7 @@ function Thread({
                 : `Passou de 24 horas: a resposta vai como atendimento da equipe, permitido até ${igEnd ? formatInTimeZone(igEnd, TIMEZONE, "dd/MM 'às' HH:mm") : ""}.`}
             </div>
             <div className="composer">
+              <LocationButton slug={slug} conversationId={c.id} channel={c.channel} manager={manager} places={places} onSent={() => router.refresh()} />
               <EmojiButton onPick={insertEmoji} disabled={sending} />
               <div className="qr-wrap">
                 {qr.menu}
@@ -730,7 +738,7 @@ function Thread({
             </div>
           )}
           <div className="composer">
-            <AttachButton slug={slug} conversationId={c.id} materials={materials} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
+            <AttachButton slug={slug} conversationId={c.id} materials={materials} manager={manager} places={places} onSent={() => router.refresh()} pasted={pasted} onPastedHandled={clearPasted} />
             <AudioRecorder slug={slug} conversationId={c.id} onSent={() => router.refresh()} />
             <Button className="only-mobile" aria-label="Câmera: tirar foto ou gravar vídeo" title="Câmera" onClick={() => camRef.current?.click()}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -811,7 +819,9 @@ function MessageRow({
   const kind = m.direction === "in" ? "lead" : m.sender === "ai" ? "ai" : m.source === "celular" ? "phone" : "human";
   const media = m.media_path ? `/api/media/${m.id}` : null;
   // O corpo de mídia vem como "[Imagem] legenda": com o arquivo na tela, mostra só a legenda.
-  const body = media ? (m.body ?? "").replace(/^\[[^\]]+\]\s*/, "") : m.body;
+  // Localização (recebida ou enviada): cartão que abre o ponto no mapa.
+  const place = media ? null : parseLocationBody(m.body);
+  const body = media ? (m.body ?? "").replace(/^\[[^\]]+\]\s*/, "") : place ? null : m.body;
   // Respostas automáticas (fora do horário, boas-vindas do Instagram) aparecem do lado da empresa.
   const who = m.direction === "in" ? null : m.sender === "ai" ? "IA" : m.sender === "system" ? "resposta automática" : m.source === "celular" ? "pelo celular" : m.source === "historico" ? "histórico" : author;
 
@@ -834,6 +844,7 @@ function MessageRow({
             Abrir documento
           </a>
         )}
+        {place && <LocationCard place={place} />}
         {body}
         <small suppressHydrationWarning>
           {[who, m.template_name ? `modelo ${m.template_name}` : "", hhmm(m.sent_at), m.direction === "out" ? STATUS_TEXT[m.status] : ""].filter(Boolean).join(" · ")}

@@ -122,3 +122,12 @@ A cobrança é por modelo enviado, conforme a categoria e a tabela vigente da Me
 - Envio de texto com janela aberta; bloqueio com janela fechada; envio de modelo.
 - Status enviado → entregue → lido refletindo na bolha.
 - Vendedor não consegue enviar em conversa de outro vendedor (403).
+
+## 8. Localização
+
+- **Recebida:** a mensagem `location` vira `[Localização] nome — endereço` + link do mapa em `messages.body` (`lib/location.ts`); a conversa mostra um cartão que abre o ponto no Google Maps.
+- **Enviada (Anexar → Localização):** local salvo da empresa, localização atual de quem atende (GPS do aparelho) ou link do Google Maps / coordenadas. No WhatsApp vai como mensagem `location` (cartão com mapa); no Instagram e no Messenger, como texto com o link.
+- **Pedido ao cliente:** mensagem interativa `location_request_message` com o botão "Enviar localização" (só WhatsApp).
+- **Regras:** mensagem livre, só dentro da janela de 24 h (conferida no servidor). Localização em tempo real não existe na API oficial.
+- **Locais salvos:** tabela `company_places` (migration 0040). A equipe lê; só a gestão cadastra e exclui.
+- **Link curto do Maps (`maps.app.goo.gl`):** o servidor segue o redirecionamento apenas entre endereços do Google para ler as coordenadas.

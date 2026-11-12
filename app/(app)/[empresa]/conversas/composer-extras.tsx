@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
+import { LocationPanel, type SavedPlace } from "./location";
 import { prepareVideoUpload, quickReplyUsed, searchProducts, sendAudio, sendMaterial, sendPhoto, sendProduct, sendUploadedVideo } from "./actions";
 
 export type QuickReply = { id: string; shortcut: string; body: string; uses: number; materialIds?: string[]; withMenu?: boolean };
@@ -255,18 +256,23 @@ export function AttachButton({
   onSent,
   pasted,
   onPastedHandled,
+  manager,
+  places,
 }: {
   slug: string;
   conversationId: string;
   materials: Material[];
   onSent: () => void;
+  manager: boolean;
+  /** Locais salvos da empresa (aba Localização). */
+  places: SavedPlace[];
   /** Arquivo colado na caixa de mensagem: abre direto a prévia de envio. */
   pasted?: File | null;
   onPastedHandled?: () => void;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"midia" | "materiais" | "produto">("midia");
+  const [tab, setTab] = useState<"midia" | "materiais" | "produto" | "local">("midia");
   const [media, setMedia] = useState<{ kind: "image" | "video" | "audio"; blob: Blob; mime: string; url: string } | null>(null);
   const [caption, setCaption] = useState("");
   const [term, setTerm] = useState("");
@@ -341,7 +347,7 @@ export function AttachButton({
 
   return (
     <>
-      <Button aria-label="Enviar foto, vídeo, catálogo, material ou produto" title="Enviar foto, vídeo, catálogo, material ou produto (ou cole com Ctrl+V)" onClick={() => setOpen(true)}>
+      <Button aria-label="Enviar foto, vídeo, catálogo, material, produto ou localização" title="Enviar foto, vídeo, catálogo, material, produto ou localização (ou cole com Ctrl+V)" onClick={() => setOpen(true)}>
         Anexar
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Enviar para o cliente">
@@ -355,9 +361,24 @@ export function AttachButton({
           <button type="button" aria-current={tab === "produto" ? "page" : undefined} onClick={() => setTab("produto")}>
             Produto do catálogo
           </button>
+          <button type="button" aria-current={tab === "local" ? "page" : undefined} onClick={() => setTab("local")}>
+            Localização
+          </button>
         </nav>
 
-        {tab === "midia" ? (
+        {tab === "local" ? (
+          <LocationPanel
+            slug={slug}
+            conversationId={conversationId}
+            channel="whatsapp"
+            manager={manager}
+            places={places}
+            onSent={() => {
+              setOpen(false);
+              onSent();
+            }}
+          />
+        ) : tab === "midia" ? (
           <div className="grid gap-3">
             <label className="btn w-fit cursor-pointer">
               {media ? "Trocar arquivo" : "Escolher foto, vídeo ou áudio"}

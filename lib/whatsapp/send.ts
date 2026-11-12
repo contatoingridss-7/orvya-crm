@@ -105,7 +105,14 @@ export async function deliverTemplate(d: Destination, tpl: ApprovedTemplate, val
  */
 export async function recordOutboundMessage(
   conv: SendConversation,
-  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image" | "video" | "audio"; templateName?: string },
+  msg: {
+    wamid: string;
+    body: string;
+    msgType: "text" | "template" | "document" | "image" | "video" | "audio" | "location" | "interactive";
+    templateName?: string;
+    /** Texto da lista de conversas, quando o corpo não serve (ex.: localização com o link do mapa). */
+    preview?: string;
+  },
   userId: string | null,
   opts: { preferLeadOwner?: boolean } = {},
 ): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
@@ -143,7 +150,7 @@ export async function recordOutboundMessage(
       needs_human: false,
       assigned_to: assignee,
       last_message_at: now,
-      last_preview: msg.body.slice(0, 160),
+      last_preview: (msg.preview ?? msg.body).slice(0, 160),
       last_direction: "out",
     })
     .eq("id", conv.id);

@@ -41,7 +41,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes, quickRes, materialsRes, pipelinesRes, myScopeRes] = await Promise.all([
+  const [convRes, numbersRes, membersRes, aiRes, templatesRes, igRes, quickRes, materialsRes, pipelinesRes, myScopeRes, placesRes] = await Promise.all([
     // O RLS já filtra: vendedor vê as dele e as da fila; gestor/admin, todas.
     supabase
       .from("conversations")
@@ -81,6 +81,13 @@ export default async function ConversasPage({ params, searchParams }: { params: 
     // Funis para a nova conversa (o vendedor só os liberados para ele em Equipe).
     supabase.from("pipelines").select("id, name").eq("company_id", company.id).order("position").returns<{ id: string; name: string }[]>(),
     supabase.from("memberships").select("pipeline_ids").eq("company_id", company.id).eq("user_id", viewer.id).maybeSingle<{ pipeline_ids: string[] | null }>(),
+    // Locais salvos para enviar como localização (migration 0040; sem ela, lista vazia).
+    supabase
+      .from("company_places")
+      .select("id, name, address, latitude, longitude")
+      .eq("company_id", company.id)
+      .order("name")
+      .returns<{ id: string; name: string; address: string | null; latitude: number; longitude: number }[]>(),
   ]);
   const myPipelines = myScopeRes.data?.pipeline_ids?.length && !isManager(company.role) ? new Set(myScopeRes.data.pipeline_ids) : null;
   const startPipelines = (pipelinesRes.data ?? []).filter((p) => !myPipelines || myPipelines.has(p.id)).map((p) => ({ id: p.id, label: p.name }));
@@ -158,6 +165,7 @@ export default async function ConversasPage({ params, searchParams }: { params: 
           companyAi={aiRes.data?.enabled ?? false}
           initialId={sp.c ?? null}
           quickReplies={(quickRes.data ?? []).map((r) => ({ id: r.id, shortcut: r.shortcut, body: r.body, uses: r.uses, materialIds: r.material_ids ?? [], withMenu: r.with_menu ?? false }))}
+          places={placesRes.data ?? []}
           materials={(materialsRes.data ?? []).map((m) => ({ id: m.id, title: m.title, fileName: m.file_name, kind: m.mime === "application/pdf" ? "pdf" : m.mime.startsWith("audio/") ? "audio" : "imagem" }))}
         />
       </div>

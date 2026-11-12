@@ -1,6 +1,8 @@
 // Formato (parcial) dos eventos do webhook da WhatsApp Cloud API.
 // Tudo opcional: a Meta pode mandar campos novos ou omitir os conhecidos.
 
+import { locationBody, placeLabel } from "@/lib/location";
+
 export type WaMedia = { id?: string; mime_type?: string; caption?: string; filename?: string };
 
 export type WaMessage = {
@@ -78,9 +80,14 @@ export function describeMessage(m: WaMessage): { body: string; mediaId: string |
     case "text":
       return { body: m.text?.body ?? "", mediaId: null };
     case "location": {
+      // Com as coordenadas, a conversa mostra o cartão com o link do mapa (lib/location.ts).
       const l = m.location;
-      const place = [l?.name, l?.address].filter(Boolean).join(" — ");
-      return { body: `[Localização] ${place || `${l?.latitude}, ${l?.longitude}`}`, mediaId: null };
+      const latitude = Number(l?.latitude);
+      const longitude = Number(l?.longitude);
+      if (l?.latitude != null && l?.longitude != null && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        return { body: locationBody({ latitude, longitude, name: l.name, address: l.address }), mediaId: null };
+      }
+      return { body: `[Localização] ${placeLabel({ name: l?.name, address: l?.address })}`.trim(), mediaId: null };
     }
     case "contacts":
       return { body: `[Contato] ${m.contacts?.map((c) => c.name?.formatted_name).filter(Boolean).join(", ") ?? ""}`, mediaId: null };

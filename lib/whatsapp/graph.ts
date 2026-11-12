@@ -115,6 +115,50 @@ export async function sendMediaMessage(
   return id;
 }
 
+/** Localização (cartão com mapa; só dentro da janela de 24 h). Devolve o wamid. */
+export async function sendLocationMessage(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  place: { latitude: number; longitude: number; name?: string | null; address?: string | null },
+): Promise<string> {
+  const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
+    method: "POST",
+    body: {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "location",
+      location: {
+        latitude: place.latitude.toFixed(6),
+        longitude: place.longitude.toFixed(6),
+        ...(place.name ? { name: place.name } : {}),
+        ...(place.address ? { address: place.address } : {}),
+      },
+    },
+  });
+  const id = res.messages?.[0]?.id;
+  if (!id) throw new GraphError("A Meta não confirmou o envio.", 502);
+  return id;
+}
+
+/** Pede a localização do cliente: mensagem com o botão "Enviar localização" (só dentro da janela de 24 h). */
+export async function sendLocationRequest(phoneNumberId: string, token: string, to: string, body: string): Promise<string> {
+  const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
+    method: "POST",
+    body: {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "interactive",
+      interactive: { type: "location_request_message", body: { text: body }, action: { name: "send_location" } },
+    },
+  });
+  const id = res.messages?.[0]?.id;
+  if (!id) throw new GraphError("A Meta não confirmou o envio.", 502);
+  return id;
+}
+
 /** Marca a mensagem do cliente como lida (os dois tiques azuis no celular dele). */
 export function markAsRead(phoneNumberId: string, token: string, wamid: string) {
   return graph<{ success?: boolean }>(`${phoneNumberId}/messages`, token, {

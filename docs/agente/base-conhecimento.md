@@ -14,9 +14,10 @@ Fonte: definições da Ingrid (gestão) entre 06 e 09/11/2026. O agente consulta
 ## IC Supra Hospitalar
 
 - Razão social: IC L Lopes Mendes Ltda · CNPJ 63.980.482/0001-03
-- Endereço: R. Coelho de Resende, 412, Teresina (PI) · *falta: bairro, ponto de referência, link do Maps*
+- Endereço: R. Coelho de Resende, 412, Centro (Sul), Teresina (PI), esquina com a Rua Olavo Bilac, atrás da Otorrinos. Estacionamento ao lado. · *falta: link do Maps*
 - Telefone: (86) 9977-5120 (*confirmar*)
-- Horário: segunda a sexta, 8h às 18h; sábado, 8h às 11h
+- Horário: segunda a sexta, 8h às 18h; sábado, 8h às 11h. Não fecha para almoço.
+- Entrega: via aplicativo (Uber / 99). O vendedor pede endereço, observação (casa, bloco, setor, ponto comercial), nome, telefone e forma de pagamento (PIX ou transferência).
 - Pagamento: não trabalha com link de pagamento. PIX ou transferência; na entrega, PIX ou dinheiro. Cartão na entrega para compras a partir de R$ 500.
 - Parcelamento no cartão (tabela da loja): acima de R$ 100 em 2x · R$ 180 em 3x · R$ 400 em 4x · R$ 900 em 5x · R$ 1.800 em 6x · R$ 5.000 em 8x · R$ 6.000 em 10x.
 - Fisioterapeuta (Thays): segunda a sexta, 8h–12h e 14h–18h; sábado, 8h–11h. Adaptação e ajuste de CPAP sem custo adicional.

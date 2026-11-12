@@ -11,7 +11,8 @@ import { formatBRL } from "@/lib/format";
 import { formatPhone, toE164 } from "@/lib/phone";
 import { budgetBlock, loadPaidBudget } from "@/lib/whatsapp/budget";
 import { phoneCandidates } from "@/lib/whatsapp/payload";
-import { markAsRead, sendButtonsMessage, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
+import { markAsRead, sendButtonsMessage, sendLocationMessage, sendLocationRequest, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
+import { isGoogleMapsHost, locationBody, mapsUrl, parseCoordinates, parseLocationBody, placeLabel, type Coordinates } from "@/lib/location";
 import {
   deliverTemplate,
   recordOutboundMessage,
@@ -74,7 +75,7 @@ async function prepareSend(ctx: Ctx, conversationId: string): Promise<{ ok: true
 async function recordOutbound(
   ctx: Ctx,
   conv: ConvRow,
-  msg: { wamid: string; body: string; msgType: "text" | "template" | "document" | "image" | "video" | "audio"; templateName?: string },
+  msg: Parameters<typeof recordOutboundMessage>[1],
 ): Promise<ActionResult> {
   const r = await recordOutboundMessage(conv, msg, ctx.viewer.id);
   return r.ok ? { ok: true } : r;
@@ -775,6 +776,11 @@ export async function resendMessage(slug: string, messageId: string): Promise<Ac
       if (!text) return { ok: false, error: "Mensagem vazia." };
       return done(await sendWithNinthDigitRetry(to, (dest) => sendTextMessage(phoneNumberId, token, dest, text)));
     }
+    const place = msg.msg_type === "location" ? parseLocationBody(msg.body) : null;
+    if (place) {
+      // O nome e o endereço ficam juntos no texto guardado: no reenvio vão como nome do local.
+      return done(await sendWithNinthDigitRetry(to, (dest) => sendLocationMessage(phoneNumberId, token, dest, { ...place, name: place.label || null })));
+    }
     if ((msg.msg_type === "image" || msg.msg_type === "video" || msg.msg_type === "audio") && msg.media_path) {
       const { data: signed } = await admin.storage.from("whatsapp-media").createSignedUrl(msg.media_path, 3600);
       if (!signed) return { ok: false, error: "O arquivo não está mais disponível. Envie de novo pelo Anexar." };
@@ -934,4 +940,194 @@ export async function sendMenuReply(slug: string, input: z.input<typeof menuSche
   const rec = await recordOutboundMessage(conv, { wamid, body, msgType: "text" }, ctx.viewer.id);
   revalidatePath(`/${slug}/conversas`);
   return rec.ok ? { ok: true } : rec;
+}
+
+// ---------------------------------------------------------------------
+// Localização: enviar um ponto (loja, endereço de entrega, onde a pessoa está), pedir a do
+// cliente e manter os locais salvos da empresa (migration 0040).
+// ---------------------------------------------------------------------
+
+const coord = { latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) };
+const optionalText = (max: number, what: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${what} longo demais (máximo de ${max} caracteres).`)
+    .optional()
+    .transform((v) => v || null);
+
+const locationSchema = z.object({
+  conversationId: z.uuid(),
+  ...coord,
+  name: optionalText(80, "Nome"),
+  address: optionalText(200, "Endereço"),
+});
+
+/**
+ * Envia uma localização. WhatsApp: cartão com mapa (mensagem livre, só na janela de 24 h).
+ * Instagram e Messenger não têm esse tipo de mensagem: vai o texto com o link do mapa.
+ */
+export async function sendLocation(slug: string, input: z.input<typeof locationSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = locationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Localização inválida." };
+  const { conversationId, ...place } = parsed.data;
+  const body = locationBody(place);
+  const preview = `[Localização] ${placeLabel(place)}`.trim();
+
+  const igConv = await loadConversation(ctx, conversationId);
+  if (igConv?.channel === "instagram" || igConv?.channel === "messenger") {
+    if (!ctx.manager && igConv.assigned_to && igConv.assigned_to !== ctx.viewer.id) return { ok: false, error: "Esta conversa é de outro vendedor." };
+    const text = [place.name, place.address, mapsUrl(place)].filter(Boolean).join("\n");
+    let sent: Awaited<ReturnType<typeof sendInstagramText>>;
+    try {
+      sent = await sendInstagramText(igConv, text);
+    } catch (e) {
+      return { ok: false, error: instagramErrorText(e) };
+    }
+    if (!sent.ok) return sent;
+    const r = await recordOutbound(ctx, igConv, { wamid: sent.mid, body, msgType: "location", preview });
+    revalidatePath(`/${slug}/conversas`);
+    return r;
+  }
+
+  const prep = await prepareMediaSend(ctx, conversationId);
+  if (!prep.ok) return prep;
+  const { conv, phoneNumberId, token, to } = prep.p;
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendLocationMessage(phoneNumberId, token, dest, place));
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const r = await recordOutbound(ctx, conv, { wamid, body, msgType: "location", preview });
+  revalidatePath(`/${slug}/conversas`);
+  return r;
+}
+
+const requestSchema = z.object({
+  conversationId: z.uuid(),
+  text: z.string().trim().min(1, "Escreva o pedido.").max(1024, "Pedido longo demais (máximo de 1.024 caracteres)."),
+});
+
+/** Pede a localização do cliente: ele recebe o texto com o botão "Enviar localização" (só WhatsApp). */
+export async function requestLocation(slug: string, input: z.input<typeof requestSchema>): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const parsed = requestSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Pedido inválido." };
+  const prep = await prepareMediaSend(ctx, parsed.data.conversationId);
+  if (!prep.ok) {
+    // prepareSend recusa conversas do Instagram com um texto sobre modelos; aqui o motivo é outro.
+    const other = await loadConversation(ctx, parsed.data.conversationId);
+    if (other && other.channel !== "whatsapp") return { ok: false, error: "O pedido de localização com botão só existe no WhatsApp. Peça por texto." };
+    return prep;
+  }
+  const { conv, phoneNumberId, token, to } = prep.p;
+  let wamid: string;
+  try {
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendLocationRequest(phoneNumberId, token, dest, parsed.data.text));
+  } catch (e) {
+    return { ok: false, error: sendErrorMessage(e) };
+  }
+  const r = await recordOutbound(ctx, conv, {
+    wamid,
+    body: `${parsed.data.text}\n[Botão: Enviar localização]`,
+    msgType: "interactive",
+    preview: parsed.data.text,
+  });
+  revalidatePath(`/${slug}/conversas`);
+  return r;
+}
+
+const MAPS_HELP =
+  "Não encontrei as coordenadas neste link. Abra o local no Google Maps, toque em Compartilhar e copie o link, ou informe as coordenadas (ex.: -5.0892, -42.8016).";
+
+/**
+ * Coordenadas de um link do Google Maps. O link curto (maps.app.goo.gl) não traz as coordenadas:
+ * o servidor segue o redirecionamento, só entre endereços do próprio Google.
+ */
+export async function resolveMapsLink(
+  slug: string,
+  link: string,
+): Promise<{ ok: true; latitude: number; longitude: number } | { ok: false; error: string }> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  const direct = parseCoordinates(link);
+  if (direct) return { ok: true, ...direct };
+
+  let url: URL;
+  try {
+    url = new URL(link.trim());
+  } catch {
+    return { ok: false, error: MAPS_HELP };
+  }
+  let found: Coordinates | null = null;
+  try {
+    for (let hop = 0; hop < 6 && !found; hop++) {
+      if (url.protocol !== "https:" || !isGoogleMapsHost(url.hostname)) break;
+      const res = await fetch(url, { redirect: "manual", cache: "no-store", headers: { "accept-language": "pt-BR" }, signal: AbortSignal.timeout(6000) });
+      const next = res.headers.get("location");
+      if (next) {
+        url = new URL(next, url);
+        // A página de consentimento do Google leva o destino no parâmetro "continue".
+        found = parseCoordinates(url.toString()) ?? parseCoordinates(url.searchParams.get("continue") ?? "");
+        continue;
+      }
+      if (res.ok) {
+        // Sem redirecionamento: as coordenadas costumam vir na prévia do mapa dentro da página.
+        const html = (await res.text()).slice(0, 400_000);
+        const m = /center=(-?\d{1,3}\.\d+)(?:%2C|,)(-?\d{1,3}\.\d+)/.exec(html) ?? /!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/.exec(html);
+        if (m) found = parseCoordinates(`${m[1]}, ${m[2]}`);
+      }
+      break;
+    }
+  } catch {
+    return { ok: false, error: "Não foi possível abrir o link do Google Maps agora. Tente de novo ou informe as coordenadas." };
+  }
+  return found ? { ok: true, ...found } : { ok: false, error: MAPS_HELP };
+}
+
+export type SavedPlace = { id: string; name: string; address: string | null; latitude: number; longitude: number };
+
+const placeSchema = z.object({
+  ...coord,
+  name: z.string().trim().min(1, "Dê um nome ao local (ex.: Loja LocPress).").max(80, "Nome longo demais (máximo de 80 caracteres)."),
+  address: optionalText(200, "Endereço"),
+});
+
+/** Salva um local da empresa para toda a equipe enviar (só gestão; o RLS confere de novo). */
+export async function savePlace(slug: string, input: z.input<typeof placeSchema>): Promise<ActionResult & { place?: SavedPlace }> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  if (!ctx.manager) return { ok: false, error: "Só a gestão salva locais da empresa." };
+  const parsed = placeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Local inválido." };
+  const { data, error } = await ctx.supabase
+    .from("company_places")
+    .insert({ company_id: ctx.company.id, created_by: ctx.viewer.id, ...parsed.data })
+    .select("id, name, address, latitude, longitude")
+    .single<SavedPlace>();
+  if (error || !data) {
+    if (error?.code === "23505") return { ok: false, error: "Já existe um local salvo com este nome." };
+    if (error?.code === "PGRST205" || error?.code === "42P01") {
+      return { ok: false, error: "Os locais salvos ainda não foram ativados no banco (migration 0040). Enquanto isso, envie pelo link ou pela localização atual." };
+    }
+    return { ok: false, error: "Não foi possível salvar o local." };
+  }
+  revalidatePath(`/${slug}/conversas`);
+  return { ok: true, message: "Local salvo para a equipe.", place: data };
+}
+
+/** Exclui um local salvo (só gestão). */
+export async function deletePlace(slug: string, id: string): Promise<ActionResult> {
+  const ctx = await context(slug);
+  if (!ctx) return NO_ACCESS;
+  if (!ctx.manager) return { ok: false, error: "Só a gestão exclui locais da empresa." };
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: "Local inválido." };
+  const { error } = await ctx.supabase.from("company_places").delete().eq("id", id).eq("company_id", ctx.company.id);
+  if (error) return { ok: false, error: "Não foi possível excluir o local." };
+  revalidatePath(`/${slug}/conversas`);
+  return { ok: true, message: "Local excluído." };
 }
