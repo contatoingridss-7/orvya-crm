@@ -11,7 +11,7 @@ import { formatBRL } from "@/lib/format";
 import { formatPhone, toE164 } from "@/lib/phone";
 import { budgetBlock, loadPaidBudget } from "@/lib/whatsapp/budget";
 import { phoneCandidates } from "@/lib/whatsapp/payload";
-import { markAsRead, sendButtonsMessage, sendLocationMessage, sendLocationRequest, sendMediaMessage, sendTextMessage } from "@/lib/whatsapp/graph";
+import { markAsRead, sendButtonsMessage, sendLocationMessage, sendLocationRequest, sendMediaMessage, sendTextMessage, uploadMedia, VOICE_MIME } from "@/lib/whatsapp/graph";
 import { isGoogleMapsHost, locationBody, mapsUrl, parseCoordinates, parseLocationBody, placeLabel, type Coordinates } from "@/lib/location";
 import {
   deliverTemplate,
@@ -813,14 +813,25 @@ export async function sendAudio(slug: string, form: FormData): Promise<ActionRes
   const admin = createAdminClient();
   const bucket = admin.storage.from("whatsapp-media");
   const tmp = `${ctx.company.id}/${conv.id}/envio-${crypto.randomUUID()}.ogg`;
-  const { error: up } = await bucket.upload(tmp, bytes, { contentType: "audio/ogg" });
+  // A cópia guardada serve para a equipe ouvir no Orvya e como reserva do envio.
+  const { error: up } = await bucket.upload(tmp, bytes, { contentType: VOICE_MIME });
   if (up) return { ok: false, error: "Não foi possível guardar o áudio. Tente de novo." };
   const { data: signed } = await bucket.createSignedUrl(tmp, 3600);
   if (!signed) return { ok: false, error: "Não foi possível preparar o áudio. Tente de novo." };
 
+  // Mensagem de voz: o arquivo sobe direto para a Meta com o tipo exato (OGG/Opus) e vai marcado
+  // como voz, para tocar no celular do cliente como áudio gravado (inclusive no iPhone).
+  // Se a subida falhar, vai pelo link, como antes.
+  let mediaId: string | undefined;
+  try {
+    mediaId = await uploadMedia(phoneNumberId, token, bytes, VOICE_MIME, "audio.ogg");
+  } catch {
+    mediaId = undefined;
+  }
+
   let wamid: string;
   try {
-    wamid = await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind: "audio", link: signed.signedUrl }));
+    wamid = await sendWithNinthDigitRetry(to, (dest) => sendMediaMessage(phoneNumberId, token, dest, { kind: "audio", link: signed.signedUrl, mediaId, voice: true }));
   } catch (e) {
     await bucket.remove([tmp]);
     return { ok: false, error: sendErrorMessage(e) };

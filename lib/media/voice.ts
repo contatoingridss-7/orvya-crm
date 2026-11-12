@@ -17,7 +17,7 @@ export async function toVoiceNote(input: ArrayBuffer): Promise<Buffer> {
   try {
     await writeFile(src, Buffer.from(input));
     await new Promise<void>((resolve, reject) => {
-      const p = spawn(ffmpegPath as string, ["-hide_banner", "-loglevel", "error", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", "32k", "-application", "voip", out]);
+      const p = spawn(ffmpegPath as string, ["-hide_banner", "-loglevel", "error", "-y", "-i", src, "-vn", "-map", "0:a:0", "-map_metadata", "-1", "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", "32k", "-application", "voip", out]);
       let err = "";
       p.stderr.on("data", (d: Buffer) => (err += d.toString()));
       p.on("error", reject);

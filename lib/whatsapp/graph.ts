@@ -98,13 +98,22 @@ export async function sendMediaMessage(
   phoneNumberId: string,
   token: string,
   to: string,
-  media: { kind: "document" | "image" | "video" | "audio"; link: string; caption?: string; filename?: string },
+  media: {
+    kind: "document" | "image" | "video" | "audio";
+    link: string;
+    caption?: string;
+    filename?: string;
+    /** Áudio já enviado para a Meta (uploadMedia): vai pelo id, sem depender do link. */
+    mediaId?: string;
+    /** Mensagem de voz (microfone, toca direto no celular). Só para OGG/Opus. */
+    voice?: boolean;
+  },
 ): Promise<string> {
   const payload =
     media.kind === "document"
       ? { link: media.link, ...(media.filename ? { filename: media.filename } : {}), ...(media.caption ? { caption: media.caption } : {}) }
       : media.kind === "audio"
-        ? { link: media.link } // áudio não aceita legenda
+        ? { ...(media.mediaId ? { id: media.mediaId } : { link: media.link }), ...(media.voice ? { voice: true } : {}) } // áudio não aceita legenda
         : { link: media.link, ...(media.caption ? { caption: media.caption } : {}) };
   const res = await graph<{ messages?: { id: string }[] }>(`${phoneNumberId}/messages`, token, {
     method: "POST",
@@ -113,6 +122,27 @@ export async function sendMediaMessage(
   const id = res.messages?.[0]?.id;
   if (!id) throw new GraphError("A Meta não confirmou o envio.", 502);
   return id;
+}
+
+/** Tipo exato que a Meta exige para mensagem de voz ("audio/ogg" puro não é aceito como voz). */
+export const VOICE_MIME = "audio/ogg; codecs=opus";
+
+/**
+ * Sobe o arquivo para a Meta e devolve o id da mídia. Para áudio é mais confiável que o link:
+ * a Meta recebe o arquivo com o tipo exato, em vez de deduzir pelo cabeçalho de quem hospeda.
+ */
+export async function uploadMedia(phoneNumberId: string, token: string, bytes: Uint8Array, mime: string, filename: string): Promise<string> {
+  const form = new FormData();
+  form.set("messaging_product", "whatsapp");
+  form.set("type", mime);
+  form.set("file", new Blob([bytes as BlobPart], { type: mime }), filename);
+  const res = await fetch(`${graphBase()}/${phoneNumberId}/media`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form, cache: "no-store" });
+  const data = (await res.json().catch(() => ({}))) as { id?: string } & GraphErrorBody;
+  if (!res.ok || data.error || !data.id) {
+    const e = data.error;
+    throw new GraphError(e?.error_user_msg || e?.message || `Erro ${res.status} na Meta`, res.status, e?.code);
+  }
+  return data.id;
 }
 
 /** Localização (cartão com mapa; só dentro da janela de 24 h). Devolve o wamid. */
