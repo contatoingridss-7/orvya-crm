@@ -25,3 +25,6 @@ npm-debug.log*
 
 # pacote original (o conteúdo já está no repositório)
 orvya-kit.zip
+
+# exportações com dados de clientes (não vão para o repositório)
+/exports/

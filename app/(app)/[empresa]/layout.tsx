@@ -2,13 +2,13 @@ import { BottomNav } from "@/components/app-shell/bottom-nav";
 import { Sidebar, type ShellCompany } from "@/components/app-shell/sidebar";
 import { ThemeSync } from "@/components/theme-toggle";
 import { isManager } from "@/lib/auth/roles";
-import { ESCALATE_HOURS, WAIT_MINUTES } from "@/lib/crm/attention";
+import { ESCALATE_HOURS, hasOpenLead, WAIT_MINUTES } from "@/lib/crm/attention";
 import { requireCompany, type CompanyAccess } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Contador de "Precisa de mim": pedidos de atendimento + tarefas atrasadas há mais de 1 dia + conversas cuja última mensagem é do
- * cliente há mais de WAIT_MINUTES (5 min). Duas contagens baratas (head: true) pelo cliente autenticado.
+ * cliente há mais de WAIT_MINUTES (5 min), fora as de lead já fechado. Tudo pelo cliente autenticado.
  */
 async function attentionCount(companyId: string): Promise<number> {
   const supabase = await createClient();
@@ -18,14 +18,16 @@ async function attentionCount(companyId: string): Promise<number> {
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("needs_human", true),
     supabase
       .from("conversations")
-      .select("id", { count: "exact", head: true })
+      .select("id, leads(closed_at)")
       .eq("company_id", companyId)
       .eq("needs_human", false)
       .eq("last_direction", "in")
-      .lt("last_inbound_at", cutoff),
+      .lt("last_inbound_at", cutoff)
+      .limit(1000)
+      .returns<{ id: string; leads: { closed_at: string | null } | null }[]>(),
     supabase.from("tasks").select("id", { count: "exact", head: true }).eq("company_id", companyId).is("done_at", null).lt("due_at", lateCutoff),
   ]);
-  return (needs.count ?? 0) + (waiting.count ?? 0) + (late.count ?? 0);
+  return (needs.count ?? 0) + (waiting.data ?? []).filter(hasOpenLead).length + (late.count ?? 0);
 }
 
 function toShell(c: CompanyAccess): ShellCompany {

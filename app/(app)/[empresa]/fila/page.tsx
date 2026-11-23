@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { ESCALATE_HOURS, WAIT_MINUTES } from "@/lib/crm/attention";
+import { ESCALATE_HOURS, hasOpenLead, WAIT_MINUTES } from "@/lib/crm/attention";
 import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
@@ -29,7 +29,7 @@ type ConvRow = {
   last_message_at: string | null;
   last_preview: string | null;
   contacts: { name: string } | null;
-  leads: { score: number; owner_id: string | null } | null;
+  leads: { score: number; owner_id: string | null; closed_at: string | null } | null;
 };
 type MemberRow = { role: MemberRole; profiles: { id: string; full_name: string | null; email: string | null; active: boolean } | null };
 type LeadRow = {
@@ -58,7 +58,7 @@ type QueueDbRow = {
   message_templates: { name: string } | null;
 };
 
-const CONV_SELECT = "id, assigned_to, needs_human_reason, ai_summary, last_inbound_at, last_message_at, last_preview, contacts(name), leads(score, owner_id)";
+const CONV_SELECT = "id, assigned_to, needs_human_reason, ai_summary, last_inbound_at, last_message_at, last_preview, contacts(name), leads(score, owner_id, closed_at)";
 
 export default async function FilaPage({ params }: { params: Promise<{ empresa: string }> }) {
   const { viewer, company } = await requireRole((await params).empresa, ["admin", "gestor"]);
@@ -78,7 +78,7 @@ export default async function FilaPage({ params }: { params: Promise<{ empresa: 
       .eq("last_direction", "in")
       .lt("last_inbound_at", waitCutoff)
       .order("last_inbound_at", { ascending: true })
-      .limit(100)
+      .limit(400)
       .returns<ConvRow[]>(),
     supabase.from("memberships").select("role, profiles(id, full_name, email, active)").eq("company_id", company.id).returns<MemberRow[]>(),
     supabase
@@ -151,7 +151,8 @@ export default async function FilaPage({ params }: { params: Promise<{ empresa: 
     .slice()
     .sort((a, b) => (b.leads?.score ?? 0) - (a.leads?.score ?? 0) || time(a.last_inbound_at) - time(b.last_inbound_at))
     .map(toItem);
-  const waiting = (waitingRes.data ?? []).map(toItem);
+  // Lead fechado (venda ou perda) sai da espera: a conversa está em "Finalizadas".
+  const waiting = (waitingRes.data ?? []).filter(hasOpenLead).slice(0, 100).map(toItem);
 
   // Leads parados: abertos, com conversa de WhatsApp em número conectado e sem pedido de atendimento pendente.
   const convByContact = new Map<string, WaConvRow[]>();

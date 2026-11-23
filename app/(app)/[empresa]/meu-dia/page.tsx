@@ -7,6 +7,7 @@ import { Notice } from "@/components/ui/notice";
 import { Panel } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { requireRole } from "@/lib/auth/viewer";
+import { hasOpenLead } from "@/lib/crm/attention";
 import { resolvePeriod } from "@/lib/crm/period";
 import { TASK_SELECT, toTask, type TaskRow } from "@/lib/crm/tasks";
 import type { StageKind } from "@/lib/crm/types";
@@ -77,16 +78,17 @@ export default async function MeuDiaPage({ params }: { params: Promise<{ empresa
     // Minhas conversas cuja última mensagem é do cliente (esperando a minha resposta), mais antigas primeiro.
     supabase
       .from("conversations")
-      .select("id, channel, last_inbound_at, last_preview, contacts(name)")
+      .select("id, channel, last_inbound_at, last_preview, contacts(name), leads(closed_at)")
       .eq("company_id", company.id)
       .eq("assigned_to", viewer.id)
       .eq("last_direction", "in")
       .not("last_inbound_at", "is", null)
       .order("last_inbound_at", { ascending: true })
-      .limit(10)
-      .returns<{ id: string; channel: string; last_inbound_at: string; last_preview: string | null; contacts: { name: string } | null }[]>(),
+      .limit(200)
+      .returns<{ id: string; channel: string; last_inbound_at: string; last_preview: string | null; contacts: { name: string } | null; leads: { closed_at: string | null } | null }[]>(),
   ]);
-  const waiting = waitingRes.data ?? [];
+  // Lead fechado (venda ou perda) não espera resposta.
+  const waiting = (waitingRes.data ?? []).filter(hasOpenLead).slice(0, 10);
 
   const mine = mineRes.data ?? [];
   const open = mine.filter((l) => !l.closed_at);

@@ -7,6 +7,7 @@ import { Pill } from "@/components/ui/pill";
 import { homeSection, ROLE_LABEL } from "@/lib/auth/roles";
 import { requireViewer, type CompanyAccess } from "@/lib/auth/viewer";
 import { TIMEZONE } from "@/lib/format";
+import { hasOpenLead } from "@/lib/crm/attention";
 import { greeting } from "@/lib/greeting";
 import { firstName, monogram } from "@/lib/names";
 import { createClient } from "@/lib/supabase/server";
@@ -30,9 +31,16 @@ async function companyStats(company: CompanyAccess, userId: string): Promise<Sta
       .is("done_at", null)
       .lte("due_at", endOfToday),
     // O RLS já limita ao que a pessoa vê (vendedor: as dele e a fila).
-    supabase.from("conversations").select("id", { count: "exact", head: true }).eq("company_id", company.id).eq("last_direction", "in"),
+    // Conversa de lead já fechado (venda ou perda) não conta como espera.
+    supabase
+      .from("conversations")
+      .select("id, leads(closed_at)")
+      .eq("company_id", company.id)
+      .eq("last_direction", "in")
+      .limit(1000)
+      .returns<{ id: string; leads: { closed_at: string | null } | null }[]>(),
   ]);
-  return { tasks: tasks.count ?? 0, waiting: waiting.count ?? 0 };
+  return { tasks: tasks.count ?? 0, waiting: (waiting.data ?? []).filter(hasOpenLead).length };
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
